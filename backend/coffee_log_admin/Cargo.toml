@@ -1,0 +1,12 @@
+[package]
+name = "coffee_log_admin"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+coffee_log_core = { path = "../coffee_log_core" }
+worker = { version = "0.8.6", features = ["d1"] }

@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = [
+    "coffee_log",
+    "coffee_log_admin",
+    "coffee_log_core",
+    "pbt",
+]

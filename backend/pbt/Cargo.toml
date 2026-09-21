@@ -1,0 +1,9 @@
+[package]
+name = "coffee_log_pbt"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dev-dependencies]
+coffee_log_core = { path = "../coffee_log_core" }
+proptest = "1"

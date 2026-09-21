@@ -1,0 +1,6 @@
+name = "coffee-log"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-09-21"
+
+[build]
+command = "worker-build --release"

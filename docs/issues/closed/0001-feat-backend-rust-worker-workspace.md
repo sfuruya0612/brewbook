@@ -2,6 +2,7 @@
 
 Created: 2026-09-21
 Model: deepseek-v4p1-flash
+Completed: 2026-09-22
 対応 ADR: ADR-0001 (docs/adr/0001-backend-rust-on-cloudflare-workers.md)、ADR-0002 (docs/adr/0002-database-cloudflare-d1.md)、ADR-0009 (docs/adr/0009-mise-toolchain-and-tasks.md)
 関連 PRD: 制約と前提 (Backend の 3 クレート構成、成果物の規約)、成功指標 (API の応答時間のログ、エンドポイントのテスト網羅)
 依存: なし
@@ -71,3 +72,43 @@ PRD の成功指標は、Worker がリクエストごとに経路名と処理時
 - 0002 が `mise.toml` のタスクと CI を追加する。
 - 0003 が D1 のバインディングと初期スキーマを追加する。
 - 0018 が `coffee_log_admin` を実装する。
+
+## 解決方法
+
+`backend/` に 3 クレートと PBT のクレートを持つ Cargo ワークスペースを作り、利用者向けの Worker が Router で `/api/*` を処理してリクエストごとに 1 行の JSON ログを出すようにした。
+
+- `backend/Cargo.toml` で `coffee_log`、`coffee_log_admin`、`coffee_log_core`、`pbt` をメンバーにした。`coffee_log` と `coffee_log_admin` の `[lib] crate-type` は `["cdylib", "rlib"]` とした (`rlib` はネイティブの結合テストが crate をリンクするために要る)。
+- `coffee_log_core` にエラー応答 (`error.rs` の `ErrorCode`、`ErrorEnvelope`、`envelope`、`body`) と経路の台帳 (`routes.rs` の `Route`、`ROUTES`、`pattern_matches`、`match_route`、`matched`、`test_requirements`) を置き、`worker` クレートに依存させていない。
+- `coffee_log` の `src/lib.rs` で台帳から Router を組み立て、台帳に一致しないリクエスト (未実装の `/api/*` を含む) に `{"error": {"code": "not_found", "message": "route not found"}}` の 404 を返す。台帳に載っていてハンドラが未実装の経路は `handle_not_implemented` が 404 を返す。
+  `src/logging.rs` の `RequestLog` は経路名、メソッド、ステータス、処理時間だけを持ち、リクエスト本文とクエリの値を持たない。処理時間はリクエストの受信から応答の生成までを `Date::now().as_millis()` で測る。
+- `coffee_log_admin` は `coffee_log_core` と `worker` だけを使う最小の Worker とし、0018 が実装するまでの間は全てのリクエストに 404 を返す。
+- `pbt/tests/prop_routes.rs` が `pattern_matches` の一致と不一致を PBT で検証する。
+- 結合テストは `coffee_log/tests/support/mod.rs` の `DevServer` が `wrangler dev` を空きポートで起動し (`--persist-to` に一時ディレクトリを指定)、`wrangler d1 migrations apply` を実行し (D1 のバインディングは 0003 が追加するため、0001 の時点では設定が無くスキップする)、HTTP が応答するまで待ち、`Drop` で停止して一時ディレクトリを消す。`tests/dev_server.rs` が POST `/api/not-implemented` の 404 と、`wrangler dev` の出力のうち POST のリクエストのログ 1 行を JSON として検証する。
+- `tests/support/mod.rs` の `SUITE` (経路名とテスト種別) と `covers` が台帳との照合を担い、`covers` は `test_requirements` の 3 フィールドから必要な種別を導く。`tests/api_suite.rs` が照合の検査自体をサンプルの台帳とスイートで検証する (種別の欠落、経路の不一致、完全なスイートの受理)。`build_router_from` は 5 つのメソッドを含むサンプルの台帳の登録がパニックしないことを確認するテストで実行する。
+- `mise.toml` の `[tools]` に `"cargo:worker-build" = "0.8.6"` を追加した。`coffee_log/wrangler.toml` の `[build]` が `worker-build --release` を実行し、`main` は `build/worker/shim.mjs` を指す。
+- `.gitignore` を新設し、`backend/target/`、`backend/coffee_log/build/`、`backend/coffee_log/.wrangler/` を除外した (0002 が frontend 分を追加する)。
+
+完了条件の検証:
+
+- `cargo build --target wasm32-unknown-unknown -p coffee_log -p coffee_log_admin` の成功と、`target/wasm32-unknown-unknown/debug/coffee_log.wasm` と `coffee_log_admin.wasm` の生成を確認した。
+- `wrangler dev` が `POST /api/not-implemented` に `application/json` の 404 と `{"error": {"code": "not_found", "message": "route not found"}}` を返すことを `tests/dev_server.rs::dev_server_returns_json_404_and_logs_the_request` で確認した。
+- 同じテストが、POST のリクエストのログ行が 1 行だけで、JSON として `event`、`route`、`method`、`status`、`duration_ms` の 5 フィールドを持つことを確認した。
+- 台帳とスイートの照合は `tests/api_suite.rs::the_ledger_and_the_suite_match`、`the_checker_accepts_a_complete_suite`、`the_checker_detects_a_missing_test_kind`、`the_checker_detects_a_route_present_on_one_side_only` が担う。未認証 401 と入力不正 400 の要否は `coffee_log_core/tests/test_routes.rs::test_requirements_follow_the_auth_and_input_flags` が認証と入力の 4 通りの組み合わせで確認した。
+- `cargo test -p coffee_log_core` の 10 テスト (`test_error.rs` 5、`test_routes.rs` 5) が通った。
+- ハーネスの起動、マイグレーションの適用のコードパス (0001 ではスキップ)、停止、404 の確認が 1 つのテスト実行で完了することを確認した。
+- `coffee_log/tests/test_logging.rs` の 2 テストが `RequestLog` のフィールドが 5 つだけであることを確認した。
+- `cargo clippy --workspace --all-targets -- -D warnings` と `cargo fmt --all --check` が通った。
+- `mise.toml` に版固定の `"cargo:worker-build" = "0.8.6"` があることを確認した。
+- `cargo test --workspace` は 21 テストが通り、失敗は無い (api_suite 5、dev_server 1、test_logging 2、test_error 5、test_routes 5、prop_routes 3)。
+
+方針からの乖離:
+
+- `ErrorCode` に `Internal` (500) を追加した。PRD の表は受け入れ基準の 6 コードだけを定めるため、ルーティング以外の Worker の失敗を PRD の形式で返すには 500 の code が要る。
+- PBT の実行に `proptest` を `pbt` の dev-dependency に追加した (グローバルのテスト規約が PBT を求めるため)。統合テストの HTTP 呼び出しの `reqwest` (blocking) は issue の設計判断どおり。
+- 完了条件 6 の「マイグレーションの適用」は、D1 のバインディングを追加する 0003 まで設定が無いため、0001 ではハーネスが適用のコードパスを持ち、構成が無ければスキップする。実際の適用 (バインディング名 `DB`、`--persist-to` の共有) の確認は 0003 が行う。
+- 結合テストは `wrangler dev` の子プロセスから `OPENCODE`、`AGENT`、`AI_AGENT`、`CLAUDECODE` を除いて起動する。AI エージェントを検出した wrangler はログを標準出力に出さず Local Explorer に送るため、テストがログを読めない。
+
+未検証の範囲 (経路を追加する issue が確認する):
+
+- 台帳が空のため、Router の実際のディスパッチと `handle_not_implemented` の 404 は 0005 以降が最初に実行する。`pattern_matches` と Router (matchit) の照合の一致も経路の追加時に統合テストで確認する。
+- `SUITE` の宣言は実際のテスト関数と機械的には結び付いていない。経路を追加する issue は、台帳への経路の追加とスイートへの種別の追加、実際のテストの追加をセットで行い、レビューで確認する。
