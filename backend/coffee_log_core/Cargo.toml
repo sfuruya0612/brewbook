@@ -5,5 +5,10 @@ edition = "2021"
 publish = false
 
 [dependencies]
+# ADR-0004 が定める ES256 の検証の依存。既定の feature の `std` は getrandom を引き込み、
+# getrandom は wasm32-unknown-unknown のビルドに追加の設定を要求するため、無効にする。
+# 検証と (テストの) 署名に要る feature は `ecdsa` だけである。
+p256 = { version = "0.14.0", default-features = false, features = ["ecdsa"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.11.0"

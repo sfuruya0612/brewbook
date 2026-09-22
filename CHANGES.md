@@ -6,8 +6,12 @@
   - @sfuruya0612
 - [ADD] D1 のバインディングと初期スキーマを追加する
   - @sfuruya0612
+- [ADD] WebAuthn の検証コアと CBOR と COSE のパーサを追加する
+  - @sfuruya0612
 
 ### misc
 
 - [UPDATE] mise のタスクと GitHub Actions の CI を整備する
+  - @sfuruya0612
+- [UPDATE] fuzz クレートの型検査を lint に追加する
   - @sfuruya0612

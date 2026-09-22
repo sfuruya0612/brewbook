@@ -1,0 +1,27 @@
+[package]
+name = "coffee_log-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+# authenticatorData の rpIdHash を組み立てるため (検証のフラグ検査まで到達させる)。
+sha2 = "0.11"
+
+[dependencies.coffee_log_core]
+path = ".."
+
+# 親のワークスペース (backend/Cargo.toml) の members には入れない。
+# cargo fuzz は nightly を使うため、`cargo test --workspace` の対象から外す (issue 0004)。
+[workspace]
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false

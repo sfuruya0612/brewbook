@@ -22,6 +22,8 @@ run = "cargo fmt --all --check"
 description = "Rust の lint と、絵文字を使わない規約の検査を実行する"
 run = [
   "cargo clippy --manifest-path backend/Cargo.toml --workspace --all-targets -- -D warnings",
+  # fuzz のターゲットはワークスペース外のため、型検査をここで行う (実行は CI では行わない)。
+  "cargo check --manifest-path backend/coffee_log_core/fuzz/Cargo.toml --bins",
   # ripgrep が見つからない場合は検査が走らないため、先に版の確認で失敗させる。
   "rg --version",
   # .gitignore に従って走査し、絵文字が無いことを検査する。 -g '!.git' で .git の中身を除き、
