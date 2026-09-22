@@ -1,9 +1,19 @@
 //! `ids` の PBT。どんな 16 バイトからも UUID v4 の形が得られることを検証する。
 
-use coffee_log_core::ids::uuid_v4_from_bytes;
+use coffee_log_core::ids::{uuid_bytes, uuid_v4_from_bytes};
 use proptest::prelude::*;
 
 proptest! {
+    /// UUID の文字列は、バージョンと variant のビットを除いて元の 16 バイトに戻る。
+    /// WebAuthn の `user.id` に使う (ADR-0004)。
+    #[test]
+    fn a_uuid_round_trips_through_its_bytes(bytes in any::<[u8; 16]>()) {
+        let uuid = uuid_v4_from_bytes(bytes);
+        let mut expected = bytes;
+        expected[6] = (expected[6] & 0x0f) | 0x40;
+        expected[8] = (expected[8] & 0x3f) | 0x80;
+        prop_assert_eq!(uuid_bytes(&uuid), Some(expected));
+    }
     /// 36 文字の小文字 16 進で、ハイフンの位置とバージョンと variant が固定になる。
     #[test]
     fn uuid_v4_has_the_fixed_shape(bytes in any::<[u8; 16]>()) {

@@ -196,6 +196,16 @@ pub struct AuthenticationInput<'a> {
     pub cose_public_key: &'a [u8],
 }
 
+/// `clientDataJSON` (base64url) から challenge を取り出す。
+///
+/// 0005 は、署名を検証する前に対象のチャレンジの行を D1 から引くために使う
+/// (ADR-0006 の「チャレンジ値で引く」)。値は base64url の文字列のまま返す。
+pub fn client_data_challenge(client_data_json: &str) -> Result<String, Error> {
+    let decoded = base64url::decode(client_data_json).map_err(Error::Base64Url)?;
+    let client_data = parse_client_data(&decoded)?;
+    Ok(client_data.challenge.to_owned())
+}
+
 /// 登録を検証し、保存するクレデンシャルを返す (W3C WebAuthn Level 3 の 7.1)。
 pub fn verify_registration(input: &RegistrationInput<'_>) -> Result<RegisteredCredential, Error> {
     // clientDataJSON は base64url で運ばれる。復号したバイト列は ClientData が借用する。

@@ -41,7 +41,82 @@ pub struct Route {
 }
 
 /// 経路の台帳。経路は 0005 以降が追加する。
-pub const ROUTES: &[Route] = &[];
+///
+/// 認証が不要なのは、登録のチャレンジ発行と検証、ログインのチャレンジ発行と検証の 4 経路だけとし、
+/// それ以外の利用者向けの経路はセッションを必須にする (PRD のセキュリティ)。
+/// 入力を持つ経路とは、JSON の本体を読む経路を指す (ログインのチャレンジ発行は入力を持たない)。
+pub const ROUTES: &[Route] = &[
+    Route {
+        name: "auth_register_begin",
+        method: Method::Post,
+        pattern: "/api/auth/register/begin",
+        auth_required: false,
+        has_input: true,
+    },
+    Route {
+        name: "auth_register_complete",
+        method: Method::Post,
+        pattern: "/api/auth/register/complete",
+        auth_required: false,
+        has_input: true,
+    },
+    Route {
+        name: "auth_login_begin",
+        method: Method::Post,
+        pattern: "/api/auth/login/begin",
+        auth_required: false,
+        has_input: false,
+    },
+    Route {
+        name: "auth_login_complete",
+        method: Method::Post,
+        pattern: "/api/auth/login/complete",
+        auth_required: false,
+        has_input: true,
+    },
+    Route {
+        name: "auth_logout",
+        method: Method::Post,
+        pattern: "/api/auth/logout",
+        auth_required: true,
+        has_input: false,
+    },
+    Route {
+        name: "passkeys_list",
+        method: Method::Get,
+        pattern: "/api/passkeys",
+        auth_required: true,
+        has_input: false,
+    },
+    Route {
+        name: "passkeys_begin",
+        method: Method::Post,
+        pattern: "/api/passkeys/begin",
+        auth_required: true,
+        has_input: false,
+    },
+    Route {
+        name: "passkeys_complete",
+        method: Method::Post,
+        pattern: "/api/passkeys/complete",
+        auth_required: true,
+        has_input: true,
+    },
+    Route {
+        name: "passkeys_rename",
+        method: Method::Patch,
+        pattern: "/api/passkeys/:id",
+        auth_required: true,
+        has_input: true,
+    },
+    Route {
+        name: "passkeys_delete",
+        method: Method::Delete,
+        pattern: "/api/passkeys/:id",
+        auth_required: true,
+        has_input: false,
+    },
+];
 
 /// 経路が一致しなかったリクエストのログに使う経路名。
 pub const NOT_FOUND_ROUTE: &str = "not_found";

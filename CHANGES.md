@@ -8,6 +8,8 @@
   - @sfuruya0612
 - [ADD] WebAuthn の検証コアと CBOR と COSE のパーサを追加する
   - @sfuruya0612
+- [ADD] パスキーの登録とログインとセッションとパスキー管理の API を追加する
+  - @sfuruya0612
 
 ### misc
 

@@ -1,6 +1,6 @@
 //! `ids` の単体テスト。往復と形の検査は PBT (`prop_ids.rs`) が担う。
 
-use coffee_log_core::ids::uuid_v4_from_bytes;
+use coffee_log_core::ids::{uuid_bytes, uuid_v4_from_bytes};
 
 #[test]
 fn all_zero_bytes_set_the_version_and_variant_bits() {
@@ -22,4 +22,26 @@ fn a_known_byte_sequence_becomes_the_expected_lowercase_uuid() {
     ];
     let uuid = uuid_v4_from_bytes(bytes);
     assert_eq!(uuid, "12345678-9abc-4ef0-9122-334455667788");
+}
+
+#[test]
+fn the_uppercase_and_lowercase_spellings_give_the_same_bytes() {
+    assert_eq!(
+        uuid_bytes("12345678-9ABC-4EF0-9122-334455667788"),
+        uuid_bytes("12345678-9abc-4ef0-9122-334455667788")
+    );
+}
+
+#[test]
+fn a_text_that_is_not_a_uuid_has_no_bytes() {
+    // 長さの違反。
+    assert_eq!(uuid_bytes(""), None);
+    assert_eq!(uuid_bytes("12345678-9abc-4ef0-9122-33445566778"), None);
+    assert_eq!(uuid_bytes("12345678-9abc-4ef0-9122-3344556677888"), None);
+    // 区切りの位置の違反。
+    assert_eq!(uuid_bytes("1234567-89abc-4ef0-9122-334455667788"), None);
+    // 16 進でない文字。
+    assert_eq!(uuid_bytes("1234567g-9abc-4ef0-9122-334455667788"), None);
+    // 区切りがハイフンでない。
+    assert_eq!(uuid_bytes("12345678_9abc-4ef0-9122-334455667788"), None);
 }
