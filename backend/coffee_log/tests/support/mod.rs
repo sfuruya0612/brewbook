@@ -103,6 +103,12 @@ pub struct DevServer {
 impl DevServer {
     /// `wrangler dev` を起動し、マイグレーションを適用し、応答を待つ。
     pub fn start() -> Result<Self, String> {
+        Self::start_with_vars(&[])
+    }
+
+    /// `--var` で渡す vars を指定して `wrangler dev` を起動する。
+    /// 本番の vars に無い値をテストから注入するために使う。
+    pub fn start_with_vars(vars: &[(&str, &str)]) -> Result<Self, String> {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let sequence = START_COUNTER.fetch_add(1, Ordering::Relaxed);
         let persist_dir = std::env::temp_dir().join(format!(
@@ -114,7 +120,8 @@ impl DevServer {
             .map_err(|error| format!("failed to create {}: {error}", persist_dir.display()))?;
         let port = free_port()?;
 
-        let mut child = Command::new("wrangler")
+        let mut command = Command::new("wrangler");
+        command
             .arg("dev")
             .arg("--ip")
             .arg("127.0.0.1")
@@ -131,7 +138,11 @@ impl DevServer {
             .env_remove("AI_AGENT")
             .env_remove("CLAUDECODE")
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            .stderr(Stdio::piped());
+        for (key, value) in vars {
+            command.arg("--var").arg(format!("{key}:{value}"));
+        }
+        let mut child = command
             .spawn()
             .map_err(|error| format!("failed to start wrangler dev: {error}"))?;
 

@@ -55,4 +55,14 @@ run = "cargo test --workspace -- --skip wrangler_"
 [tasks."backend:test-integration"]
 description = "wrangler dev を起動する結合テストを実行する"
 dir = "backend"
-run = "cargo test -p coffee_log --test dev_server"
+run = "cargo test -p coffee_log --test dev_server --test d1_binding"
+
+[tasks."db-migrate"]
+description = "ローカルの D1 にマイグレーションを適用する"
+dir = "backend/coffee_log"
+run = "wrangler d1 migrations apply DB --local"
+
+[tasks."db-migrate-remote"]
+description = "本番の D1 にマイグレーションを適用する (デプロイ手順の中でだけ実行する)"
+dir = "backend/coffee_log"
+run = "wrangler d1 migrations apply DB --remote"

@@ -4,3 +4,13 @@ compatibility_date = "2026-09-21"
 
 [build]
 command = "worker-build --release"
+
+# D1 のバインディング (ADR-0002)。データベースは 1 つとし、管理者 Worker (0018) も同じ
+# database_id を参照する。管理者 Worker はマイグレーションを持たず、適用はこの設定から行う。
+[[d1_databases]]
+binding = "DB"
+database_name = "coffee-log"
+migrations_dir = "migrations"
+# 本番の database_id は `wrangler d1 create coffee-log` が返す値に差し替える。
+# ローカルの wrangler dev と `--local` のマイグレーションはこの値を参照しない。
+database_id = "00000000-0000-0000-0000-000000000000"

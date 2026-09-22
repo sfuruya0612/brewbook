@@ -6,13 +6,15 @@ use worker::{
     console_error, event, Context, Date, Env, Request, Response, Result, RouteContext, Router,
 };
 
+pub mod d1_check;
 pub mod logging;
+pub mod random;
 
 /// ルーティング以外で Worker が失敗したときの応答のメッセージ。
 const INTERNAL_ERROR_MESSAGE: &str = "internal error";
 
 #[event(fetch)]
-pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
+pub async fn main(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
     let started_at_ms = Date::now().as_millis();
     let method = req.method().to_string();
     let path = req.path();
@@ -22,11 +24,23 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             let (status, response) = run_router(req, env).await;
             (route.name, status, response)
         }
-        None => (
-            NOT_FOUND_ROUTE,
-            ErrorCode::NotFound.status(),
-            error_response(ErrorCode::NotFound, "route not found"),
-        ),
+        // 台帳に無い経路のうち、D1 の検証用の経路 (結合テスト専用) だけを処理する。
+        None => match d1_check::run(&mut req, &env).await {
+            Some(Ok(response)) => (d1_check::ROUTE_NAME, response.status_code(), response),
+            Some(Err(error)) => {
+                console_error!("d1 check failed: {error}");
+                (
+                    d1_check::ROUTE_NAME,
+                    ErrorCode::Internal.status(),
+                    error_response(ErrorCode::Internal, INTERNAL_ERROR_MESSAGE),
+                )
+            }
+            None => (
+                NOT_FOUND_ROUTE,
+                ErrorCode::NotFound.status(),
+                error_response(ErrorCode::NotFound, "route not found"),
+            ),
+        },
     };
 
     let duration_ms = Date::now().as_millis().saturating_sub(started_at_ms);
