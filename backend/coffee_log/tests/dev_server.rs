@@ -4,8 +4,11 @@ use std::time::Duration;
 
 /// 0001 の完了条件: `wrangler dev` の起動とマイグレーションの適用と停止を 1 つのテスト実行で行い、
 /// 存在しない経路の 404 と、リクエスト 1 件ごとのログを確認する。
+///
+/// テスト名は、`wrangler dev` を起動するテストを `backend:test` が名前で除外するための
+/// (`--skip wrangler_`)、`wrangler_` プレフィックスを持つ。
 #[test]
-fn dev_server_returns_json_404_and_logs_the_request() {
+fn wrangler_dev_server_returns_json_404_and_logs_the_request() {
     let server = support::DevServer::start().expect("wrangler dev must start");
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(10))

@@ -3,3 +3,56 @@ flutter = { version = "3.47.5", checksum_expr = '"sha256:" + filter(fromJSON(bod
 rust = { version = "1.98.1", targets = ["wasm32-unknown-unknown"] }
 "cargo:worker-build" = "0.8.6"
 wrangler = { version = "4.135.0", allow_builds = ["esbuild", "sharp", "workerd"] }
+ripgrep = "15.2.0"
+
+# ツールの版とコマンドラインは mise.toml に集約する (ADR-0009)。
+# タスクは標準のコマンドの組み合わせにし、ツールの版は [tools] だけが持つ。
+
+[tasks.setup]
+description = "開発に必要な依存を取得する"
+dir = "backend"
+run = "cargo fetch"
+
+[tasks.fmt]
+description = "Rust の整形を検査する"
+dir = "backend"
+run = "cargo fmt --all --check"
+
+[tasks.lint]
+description = "Rust の lint と、絵文字を使わない規約の検査を実行する"
+run = [
+  "cargo clippy --manifest-path backend/Cargo.toml --workspace --all-targets -- -D warnings",
+  # ripgrep が見つからない場合は検査が走らないため、先に版の確認で失敗させる。
+  "rg --version",
+  # .gitignore に従って走査し、絵文字が無いことを検査する。 -g '!.git' で .git の中身を除き、
+  # U+FE0F (絵文字表示セレクタ) で絵文字表示になる文字 (U+2764 と U+FE0F の組み合わせなど) も含める。
+  # 見つけた行を出して失敗させるため ! で終了状態を反転する。
+  # 限界: ripgrep の検索中のエラー (終了コード 2) も成功になり、U+FE0F を伴わない
+  # テキスト表示の記号 (U+00A9 など) は検出しない。
+  "! rg --hidden -g '!.git' --pcre2 '(\\p{Emoji_Presentation}|\\p{Emoji}\\x{FE0F})'",
+]
+
+[tasks.test]
+description = "全ての自動テストを実行する"
+depends = ["backend:test", "backend:test-integration"]
+
+[tasks.check]
+description = "静的検査と全ての自動テストを実行する (CI と手元の共通の入口)"
+depends = ["fmt", "lint", "test"]
+
+[tasks."backend:build"]
+description = "利用者向けの Worker をビルドする"
+dir = "backend/coffee_log"
+run = "worker-build --release"
+
+[tasks."backend:test"]
+description = "wrangler dev を起動するテスト以外のネイティブテストを実行する"
+dir = "backend"
+# テストは自動で検出される。 wrangler dev を起動するテストは名前に wrangler_ を付け、
+# ここで名前で除外して backend:test-integration が実行する。
+run = "cargo test --workspace -- --skip wrangler_"
+
+[tasks."backend:test-integration"]
+description = "wrangler dev を起動する結合テストを実行する"
+dir = "backend"
+run = "cargo test -p coffee_log --test dev_server"

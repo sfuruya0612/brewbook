@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+# 検査に必要なのはリポジトリの読み取りだけとする。
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    # 外部プロセス (wrangler dev) を起動するテストがハングした場合に runner を占有し続けないようにする。
+    timeout-minutes: 30
+    steps:
+      # action の版はタグで固定する (ADR-0009)。
+      - uses: actions/checkout@v7.0.1
+      # mise を入れ、mise.toml の [tools] のツールをインストールする。
+      - uses: jdx/mise-action@v4.3.0
+      # 手元と同じ入口のタスクで、静的検査と全ての自動テストを実行する (ADR-0009)。
+      - run: mise run check

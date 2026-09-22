@@ -4,5 +4,10 @@
 # worker-build の出力
 /backend/coffee_log/build/
 
-# wrangler dev の一時ファイル
-/backend/coffee_log/.wrangler/
+# Flutter のビルド成果物
+/frontend/build/
+/frontend/.dart_tool/
+
+# wrangler のローカル状態と、開発用の環境変数
+.wrangler/
+.dev.vars
