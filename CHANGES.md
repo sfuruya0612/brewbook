@@ -14,6 +14,8 @@
   - @sfuruya0612
 - [ADD] 購入と抽出の API を追加する
   - @sfuruya0612
+- [ADD] 過去の入力値のサジェスト API を追加する
+  - @sfuruya0612
 
 ### misc
 

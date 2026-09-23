@@ -786,6 +786,121 @@ mod purchase_and_brew_queries {
     }
 }
 
+mod suggestions {
+    //! サジェストのクエリ (FR-13) の単体テスト。
+    //!
+    //! 8 つの項目名とテーブルと列の対応、値のまとめ方と並び順、`LIKE` のパターンのエスケープを
+    //! 確認する。エスケープが任意の値で往復することは PBT (`prop_query.rs`) が担う。
+
+    use super::*;
+    use coffee_log_core::query::{
+        self, parse_suggestion_field, SuggestionFieldError, SuggestionItem, SUGGESTION_LIMIT,
+    };
+
+    #[test]
+    fn the_eight_field_names_are_accepted_and_the_others_are_rejected() {
+        for (name, item) in [
+            ("producer", SuggestionItem::Producer),
+            ("origin", SuggestionItem::Origin),
+            ("region", SuggestionItem::Region),
+            ("process", SuggestionItem::Process),
+            ("variety", SuggestionItem::Variety),
+            ("roast", SuggestionItem::Roast),
+            ("method", SuggestionItem::Method),
+            ("grind_setting", SuggestionItem::GrindSetting),
+        ] {
+            assert_eq!(
+                parse_suggestion_field(name),
+                Ok(item),
+                "{name} must be accepted"
+            );
+        }
+        for name in [
+            "",
+            // 大文字と小文字を区別する (PRD の経路の表記のままだけを受け付ける)。
+            "Producer",
+            "grindSetting",
+            "GrindSetting",
+            "notes",
+            "name",
+            "shop",
+            "producers",
+            "origin_name",
+        ] {
+            assert_eq!(
+                parse_suggestion_field(name),
+                Err(SuggestionFieldError::Unknown),
+                "{name} must be rejected"
+            );
+        }
+        assert_eq!(SuggestionFieldError::Unknown.code().status(), 400);
+        assert!(!SuggestionFieldError::Unknown.message().is_empty());
+    }
+
+    #[test]
+    fn the_query_of_each_field_uses_its_table_and_column() {
+        for (item, table, column) in [
+            (SuggestionItem::Producer, "products", "producer"),
+            (SuggestionItem::Origin, "products", "origin"),
+            (SuggestionItem::Region, "products", "region"),
+            (SuggestionItem::Process, "products", "process"),
+            (SuggestionItem::Variety, "products", "variety"),
+            (SuggestionItem::Roast, "purchases", "roast"),
+            (SuggestionItem::Method, "brews", "method"),
+            (SuggestionItem::GrindSetting, "brews", "grind_setting"),
+        ] {
+            assert_eq!(item.table(), table);
+            assert_eq!(item.column(), column);
+            let statement = query::suggestions(USER_ID, item, "エチ");
+            assert!(
+                statement
+                    .sql
+                    .starts_with(&format!("SELECT {column} AS value FROM {table} ")),
+                "{}",
+                statement.sql
+            );
+        }
+    }
+
+    #[test]
+    fn a_suggestion_query_groups_the_values_and_orders_them() {
+        let statement = query::suggestions(USER_ID, SuggestionItem::Producer, "エチ");
+        assert_eq!(
+            statement.sql,
+            "SELECT producer AS value FROM products WHERE user_id = ? \
+             AND lower(producer) LIKE lower(?) || '%' ESCAPE '\\' GROUP BY producer \
+             ORDER BY MAX(updated_at) DESC, value ASC LIMIT ?"
+        );
+        assert_eq!(
+            statement.params,
+            vec![
+                Value::Text(USER_ID.to_owned()),
+                Value::Text("エチ".to_owned()),
+                Value::Integer(20),
+            ]
+        );
+        // アーカイブ済みの記録の値も候補に含めるため、archived_at の条件は付けない (FR-13)。
+        assert!(
+            !statement.sql.contains("archived_at"),
+            "the suggestion query must not filter the archived rows: {}",
+            statement.sql
+        );
+        assert_eq!(SUGGESTION_LIMIT, 20);
+    }
+
+    #[test]
+    fn the_pattern_escapes_the_wildcards_and_the_escape_character() {
+        // ワイルドカードとエスケープ文字を含む入力の正確な出力を 1 例で確認する。
+        // 任意の入力での復元は PBT (`prop_query.rs`) が担う。
+        let statement = query::suggestions(USER_ID, SuggestionItem::Method, "100%_a\\b");
+        assert_eq!(
+            statement.params[1],
+            Value::Text("100\\%\\_a\\\\b".to_owned())
+        );
+        assert_eq!(statement.params[2], Value::Integer(20));
+    }
+}
+
 mod include_archived_parameter {
     use super::*;
 
@@ -1170,6 +1285,13 @@ mod conditions {
                 default_archived: false,
             });
         }
+        // サジェストはアーカイブ済みの値も候補に含めるため、既定の一覧の条件を検査しない (FR-13)。
+        checked.push(Checked {
+            name: "suggestions",
+            statement: query::suggestions(USER_ID, query::SuggestionItem::Producer, "エチ"),
+            kind: Kind::List,
+            default_archived: false,
+        });
         checked
     }
 

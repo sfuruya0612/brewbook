@@ -1,4 +1,5 @@
-//! 店と商品と Flavor Notes のタグと、購入と抽出の API (FR-6 から FR-12)。
+//! 店と商品と Flavor Notes のタグと、購入と抽出の API (FR-6 から FR-12) と、
+//! 過去の入力値のサジェストの API (FR-13)。
 //!
 //! 入力の検証は `coffee_log_core::records`、SQL の組み立ては `coffee_log_core::query` が持つ。
 //! ここは経路の処理 (入力の読み取り、D1 の実行、応答の組み立て) だけを行う。
@@ -8,6 +9,7 @@ pub mod brews;
 pub mod products;
 pub mod purchases;
 pub mod shops;
+pub mod suggestions;
 pub mod tags;
 
 use std::collections::HashMap;

@@ -1,6 +1,7 @@
 //! 記録のクエリの組み立て (ADR-0006)。
 //!
-//! 全てのクエリに `user_id` の条件を必ず付け、一覧のクエリには `archived_at` の条件を付ける。
+//! 全てのクエリに `user_id` の条件を必ず付け、一覧のクエリには `archived_at` の条件を付ける
+//! (サジェストはアーカイブ済みの行の値も候補に含めるため付けない。FR-13)。
 //! 値は必ずプレースホルダ (`?`) で渡し、SQL に値を連結しない。テーブル名と列名はコード内の
 //! 定数だけを使い、利用者の入力は渡せない。
 //!
@@ -62,6 +63,93 @@ pub fn parse_include_archived(text: Option<&str>) -> Result<Archived, IncludeArc
         Some(_) => Err(IncludeArchivedError::NotABoolean),
     }
 }
+
+/// サジェスト (FR-13) の対象の項目。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SuggestionItem {
+    /// 商品の Producer。
+    Producer,
+    /// 商品の Origin。
+    Origin,
+    /// 商品の Region。
+    Region,
+    /// 商品の Process。
+    Process,
+    /// 商品の Variety。
+    Variety,
+    /// 購入の Roast。
+    Roast,
+    /// 抽出の抽出方法。
+    Method,
+    /// 抽出の挽き目。
+    GrindSetting,
+}
+
+impl SuggestionItem {
+    /// 対象のテーブル名。コード内の定数だけを返す。
+    pub fn table(self) -> &'static str {
+        match self {
+            SuggestionItem::Producer
+            | SuggestionItem::Origin
+            | SuggestionItem::Region
+            | SuggestionItem::Process
+            | SuggestionItem::Variety => PRODUCTS_TABLE,
+            SuggestionItem::Roast => PURCHASES_TABLE,
+            SuggestionItem::Method | SuggestionItem::GrindSetting => BREWS_TABLE,
+        }
+    }
+
+    /// 対象の列名。コード内の定数だけを返す。
+    pub fn column(self) -> &'static str {
+        match self {
+            SuggestionItem::Producer => "producer",
+            SuggestionItem::Origin => "origin",
+            SuggestionItem::Region => "region",
+            SuggestionItem::Process => "process",
+            SuggestionItem::Variety => "variety",
+            SuggestionItem::Roast => "roast",
+            SuggestionItem::Method => "method",
+            SuggestionItem::GrindSetting => "grind_setting",
+        }
+    }
+}
+
+/// サジェストの項目名の誤り。応答は 400 にする。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SuggestionFieldError {
+    /// 8 つの項目名のどれでもない。
+    Unknown,
+}
+
+impl SuggestionFieldError {
+    /// 応答のエラーの種別 (400 Bad Request)。
+    pub fn code(self) -> ErrorCode {
+        ErrorCode::BadRequest
+    }
+
+    /// 応答に載せる英語のメッセージ。
+    pub fn message(self) -> &'static str {
+        "the field must be one of producer, origin, region, process, variety, roast, method, grind_setting"
+    }
+}
+
+/// サジェストの項目名を解釈する。8 つの名前だけを受け付け、それ以外は拒否する (FR-13)。
+pub fn parse_suggestion_field(name: &str) -> Result<SuggestionItem, SuggestionFieldError> {
+    match name {
+        "producer" => Ok(SuggestionItem::Producer),
+        "origin" => Ok(SuggestionItem::Origin),
+        "region" => Ok(SuggestionItem::Region),
+        "process" => Ok(SuggestionItem::Process),
+        "variety" => Ok(SuggestionItem::Variety),
+        "roast" => Ok(SuggestionItem::Roast),
+        "method" => Ok(SuggestionItem::Method),
+        "grind_setting" => Ok(SuggestionItem::GrindSetting),
+        _ => Err(SuggestionFieldError::Unknown),
+    }
+}
+
+/// サジェストの候補の上限 (FR-13)。
+pub const SUGGESTION_LIMIT: u32 = 20;
 
 /// 並び順のキーの種類。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -926,6 +1014,53 @@ pub fn flavor_tags_list(user_id: &str) -> Statement {
         sql,
         params: vec![Value::Text(user_id.to_owned())],
     }
+}
+
+/// サジェストの候補を引く SQL を組み立てる (FR-13)。
+///
+/// 値ごとに `updated_at` の最大を取り、その降順、同じときは値の昇順 (Unicode コードポイント) で
+/// 並べ、先頭の [`SUGGESTION_LIMIT`] 件にする。
+/// アーカイブ済みの行の値も候補に含めるため `archived_at` の条件は付けず、利用者 ID の条件は付ける。
+/// `q` には前後の空白を除いた値を渡す。比較は `lower(列) LIKE lower(?) || '%' ESCAPE '\'` で行い、
+/// 大文字と小文字を区別しない。`q` の中の `%` と `_` と `\` は文字として扱う。
+///
+/// `SELECT <column> AS value FROM <table> WHERE user_id = ? \
+///  AND lower(<column>) LIKE lower(?) || '%' ESCAPE '\' GROUP BY <column> \
+///  ORDER BY MAX(updated_at) DESC, value ASC LIMIT ?`
+pub fn suggestions(user_id: &str, item: SuggestionItem, query: &str) -> Statement {
+    let column = item.column();
+    let mut sql = String::new();
+    sql.push_str("SELECT ");
+    sql.push_str(column);
+    sql.push_str(" AS value FROM ");
+    sql.push_str(item.table());
+    sql.push_str(" WHERE user_id = ? AND lower(");
+    sql.push_str(column);
+    sql.push_str(") LIKE lower(?) || '%' ESCAPE '\\' GROUP BY ");
+    sql.push_str(column);
+    sql.push_str(" ORDER BY MAX(updated_at) DESC, value ASC LIMIT ?");
+    Statement {
+        sql,
+        params: vec![
+            Value::Text(user_id.to_owned()),
+            Value::Text(escape_like(query)),
+            Value::Integer(i64::from(SUGGESTION_LIMIT)),
+        ],
+    }
+}
+
+/// LIKE のパターンにする値をエスケープする。
+///
+/// `%` と `_` を文字として扱い、エスケープ文字 (`\`) そのものも 2 つにして文字にする。
+fn escape_like(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for character in text.chars() {
+        if matches!(character, '\\' | '%' | '_') {
+            escaped.push('\\');
+        }
+        escaped.push(character);
+    }
+    escaped
 }
 
 /// 商品の Flavor Notes のタグ名を引く SQL を、束縛する値の上限に収まるよう分けて組み立てる。

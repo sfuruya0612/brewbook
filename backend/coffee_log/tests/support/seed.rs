@@ -70,6 +70,30 @@ pub struct SeededBrew {
     pub brewed_at: String,
 }
 
+/// 商品の自由記述の値 (下ごしらえ用)。`None` は NULL にする。
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ProductTexts<'a> {
+    /// Producer。
+    pub producer: Option<&'a str>,
+    /// Origin。
+    pub origin: Option<&'a str>,
+    /// Region。
+    pub region: Option<&'a str>,
+    /// Process。
+    pub process: Option<&'a str>,
+    /// Variety。
+    pub variety: Option<&'a str>,
+}
+
+/// 抽出の自由記述の値 (下ごしらえ用)。`None` は NULL にする。
+#[derive(Debug, Default, Clone, Copy)]
+pub struct BrewTexts<'a> {
+    /// 抽出方法。
+    pub method: Option<&'a str>,
+    /// 挽き目 (グラインダーの設定値)。
+    pub grind_setting: Option<&'a str>,
+}
+
 /// 下ごしらえしたパスキー。
 pub struct SeededPasskey {
     /// `passkey_credentials.id`。API のパスで指定する ID。
@@ -251,13 +275,39 @@ impl Seed {
         updated_at: &str,
         archived_at: Option<&str>,
     ) -> SeededProduct {
+        self.product_with_texts(
+            user_id,
+            name,
+            ProductTexts::default(),
+            created_at,
+            updated_at,
+            archived_at,
+        )
+    }
+
+    /// 商品の行を入れる。Producer、Origin、Region、Process、Variety を指定できる
+    /// (サジェストの下ごしらえに使う)。
+    pub fn product_with_texts(
+        &mut self,
+        user_id: &str,
+        name: &str,
+        texts: ProductTexts<'_>,
+        created_at: &str,
+        updated_at: &str,
+        archived_at: Option<&str>,
+    ) -> SeededProduct {
         let id = self.next_id();
         self.push(format!(
-            "INSERT INTO products (id, user_id, name, created_at, updated_at, archived_at) \
-             VALUES ({}, {}, {}, {}, {}, {})",
+            "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
+             created_at, updated_at, archived_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
             literal(&id),
             literal(user_id),
             literal(name),
+            texts.producer.map_or_else(|| "NULL".to_owned(), literal),
+            texts.origin.map_or_else(|| "NULL".to_owned(), literal),
+            texts.region.map_or_else(|| "NULL".to_owned(), literal),
+            texts.process.map_or_else(|| "NULL".to_owned(), literal),
+            texts.variety.map_or_else(|| "NULL".to_owned(), literal),
             literal(created_at),
             literal(updated_at),
             archived_at.map_or_else(|| "NULL".to_owned(), literal)
@@ -290,7 +340,7 @@ impl Seed {
         ));
     }
 
-    /// 購入の行を入れる。店、価格、通貨コード、重量、写真は任意。
+    /// 購入の行を入れる。店、価格、通貨コード、重量、写真、Roast は任意。
     // 下ごしらえの引数はテーブルの列をそのまま受ける (テストが列を選んで投入できるようにする)。
     #[allow(clippy::too_many_arguments)]
     pub fn purchase(
@@ -303,16 +353,43 @@ impl Seed {
         updated_at: &str,
         archived_at: Option<&str>,
     ) -> SeededPurchase {
+        self.purchase_with_roast(
+            user_id,
+            product_id,
+            shop_id,
+            purchased_on,
+            None,
+            created_at,
+            updated_at,
+            archived_at,
+        )
+    }
+
+    /// 購入の行を入れる。Roast を指定できる (サジェストの下ごしらえに使う)。
+    #[allow(clippy::too_many_arguments)]
+    pub fn purchase_with_roast(
+        &mut self,
+        user_id: &str,
+        product_id: &str,
+        shop_id: Option<&str>,
+        purchased_on: &str,
+        roast: Option<&str>,
+        created_at: &str,
+        updated_at: &str,
+        archived_at: Option<&str>,
+    ) -> SeededPurchase {
         let id = self.next_id();
         let shop = shop_id.map_or_else(|| "NULL".to_owned(), literal);
+        let roast = roast.map_or_else(|| "NULL".to_owned(), literal);
         self.push(format!(
-            "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, created_at, \
-             updated_at, archived_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {})",
+            "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, \
+             created_at, updated_at, archived_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {})",
             literal(&id),
             literal(user_id),
             literal(product_id),
             shop,
             literal(purchased_on),
+            roast,
             literal(created_at),
             literal(updated_at),
             archived_at.map_or_else(|| "NULL".to_owned(), literal)
@@ -334,14 +411,41 @@ impl Seed {
         updated_at: &str,
         archived_at: Option<&str>,
     ) -> SeededBrew {
+        self.brew_with_texts(
+            user_id,
+            purchase_id,
+            brewed_at,
+            BrewTexts::default(),
+            created_at,
+            updated_at,
+            archived_at,
+        )
+    }
+
+    /// 抽出の行を入れる。抽出方法と挽き目を指定できる (サジェストの下ごしらえに使う)。
+    #[allow(clippy::too_many_arguments)]
+    pub fn brew_with_texts(
+        &mut self,
+        user_id: &str,
+        purchase_id: &str,
+        brewed_at: &str,
+        texts: BrewTexts<'_>,
+        created_at: &str,
+        updated_at: &str,
+        archived_at: Option<&str>,
+    ) -> SeededBrew {
         let id = self.next_id();
         self.push(format!(
-            "INSERT INTO brews (id, user_id, purchase_id, brewed_at, created_at, updated_at, \
-             archived_at) VALUES ({}, {}, {}, {}, {}, {}, {})",
+            "INSERT INTO brews (id, user_id, purchase_id, brewed_at, method, grind_setting, \
+             created_at, updated_at, archived_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {})",
             literal(&id),
             literal(user_id),
             literal(purchase_id),
             literal(brewed_at),
+            texts.method.map_or_else(|| "NULL".to_owned(), literal),
+            texts
+                .grind_setting
+                .map_or_else(|| "NULL".to_owned(), literal),
             literal(created_at),
             literal(updated_at),
             archived_at.map_or_else(|| "NULL".to_owned(), literal)

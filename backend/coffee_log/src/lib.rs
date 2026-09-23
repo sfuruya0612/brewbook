@@ -128,11 +128,20 @@ async fn route_handler(
 ) -> Result<Response> {
     let env = ctx.env.clone();
     let id = ctx.param("id").cloned();
+    let field = ctx.param("field").cloned();
     if auth_required {
         let Some(session) = auth::session::resolve(&req, &env).await? else {
             return Ok(auth::unauthorized());
         };
-        return authenticated_route(name, &mut req, &env, &session, id.as_deref()).await;
+        return authenticated_route(
+            name,
+            &mut req,
+            &env,
+            &session,
+            id.as_deref(),
+            field.as_deref(),
+        )
+        .await;
     }
     unauthenticated_route(name, &mut req, &env).await
 }
@@ -155,6 +164,7 @@ async fn authenticated_route(
     env: &Env,
     session: &auth::session::Session,
     id: Option<&str>,
+    field: Option<&str>,
 ) -> Result<Response> {
     match name {
         "auth_logout" => auth::session::logout(env, session).await,
@@ -188,6 +198,7 @@ async fn authenticated_route(
         "brews_update" => records::brews::update(req, env, session, id).await,
         "brews_archive" => records::brews::archive(env, session, id, true).await,
         "brews_unarchive" => records::brews::archive(env, session, id, false).await,
+        "suggestions_list" => records::suggestions::list(req, env, session, field).await,
         _ => Ok(not_implemented()),
     }
 }

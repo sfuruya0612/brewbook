@@ -44,7 +44,8 @@ pub struct Route {
 ///
 /// 認証が不要なのは、登録のチャレンジ発行と検証、ログインのチャレンジ発行と検証の 4 経路だけとし、
 /// それ以外の利用者向けの経路はセッションを必須にする (PRD のセキュリティ)。
-/// 入力を持つ経路とは、JSON の本体を読む経路を指す (ログインのチャレンジ発行は入力を持たない)。
+/// 入力を持つ経路とは、JSON の本体かクエリパラメータを読む経路を指す
+/// (ログインのチャレンジ発行は入力を持たない)。
 pub const ROUTES: &[Route] = &[
     Route {
         name: "auth_register_begin",
@@ -121,7 +122,7 @@ pub const ROUTES: &[Route] = &[
         method: Method::Get,
         pattern: "/api/shops",
         auth_required: true,
-        has_input: false,
+        has_input: true,
     },
     Route {
         name: "shops_create",
@@ -163,7 +164,7 @@ pub const ROUTES: &[Route] = &[
         method: Method::Get,
         pattern: "/api/products",
         auth_required: true,
-        has_input: false,
+        has_input: true,
     },
     Route {
         name: "products_create",
@@ -212,7 +213,7 @@ pub const ROUTES: &[Route] = &[
         method: Method::Get,
         pattern: "/api/purchases",
         auth_required: true,
-        has_input: false,
+        has_input: true,
     },
     Route {
         name: "purchases_create",
@@ -254,7 +255,7 @@ pub const ROUTES: &[Route] = &[
         method: Method::Get,
         pattern: "/api/brews",
         auth_required: true,
-        has_input: false,
+        has_input: true,
     },
     Route {
         name: "brews_create",
@@ -290,6 +291,14 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/brews/:id/unarchive",
         auth_required: true,
         has_input: false,
+    },
+    Route {
+        name: "suggestions_list",
+        method: Method::Get,
+        pattern: "/api/suggestions/:field",
+        auth_required: true,
+        // 入力中の文字列 (`q`) を読む (項目名は経路のパラメータであり、入力には数えない)。
+        has_input: true,
     },
 ];
 

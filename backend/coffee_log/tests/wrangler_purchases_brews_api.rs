@@ -502,7 +502,7 @@ mod purchases {
 
     use super::*;
 
-    // 購入の一覧 (認証が必要、入力なし)。
+    // 購入の一覧 (認証が必要、クエリパラメータあり)。
 
     #[test]
     fn wrangler_purchases_list_ok() {
@@ -1485,7 +1485,7 @@ mod brews {
 
     use super::*;
 
-    // 抽出の一覧 (認証が必要、入力なし)。
+    // 抽出の一覧 (認証が必要、クエリパラメータあり)。
 
     #[test]
     fn wrangler_brews_list_ok() {

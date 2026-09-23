@@ -220,7 +220,7 @@ mod shops {
 
     use super::*;
 
-    // 店の一覧 (認証が必要、入力なし)。
+    // 店の一覧 (認証が必要、クエリパラメータあり)。
 
     #[test]
     fn wrangler_shops_list_ok() {
@@ -711,7 +711,7 @@ mod products {
 
     use super::*;
 
-    // 商品の一覧 (認証が必要、入力なし)。
+    // 商品の一覧 (認証が必要、クエリパラメータあり)。
 
     #[test]
     fn wrangler_products_list_ok() {
