@@ -604,6 +604,8 @@ const BREW_UPDATE_COLUMNS: &[&str] = &[
 ];
 /// アーカイブとアーカイブ解除の `UPDATE` の列 (ADR-0006)。
 const ARCHIVED_COLUMNS: &[&str] = &["archived_at", "updated_at"];
+/// 購入の写真の `UPDATE` の列 (0009)。`photo_key` は付け外しの両方がある。
+const PHOTO_KEY_COLUMNS: &[&str] = &["photo_key", "updated_at"];
 
 /// 店の入力の値。NULL は None で表す。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -918,6 +920,22 @@ pub fn purchase_set_archived(
     updated_at: &str,
 ) -> Result<Statement, QueryError> {
     set_archived(PURCHASES_TABLE, id, user_id, archived_at, updated_at)
+}
+
+/// 購入の写真の参照を付け外しする SQL を組み立てる (0009)。`None` のときは NULL にする。
+pub fn purchase_set_photo_key(
+    id: &str,
+    user_id: &str,
+    photo_key: Option<&str>,
+    updated_at: &str,
+) -> Result<Statement, QueryError> {
+    update(&UpdateQuery {
+        table: PURCHASES_TABLE,
+        columns: PHOTO_KEY_COLUMNS,
+        values: vec![optional_text(photo_key), Value::Text(updated_at.to_owned())],
+        id,
+        user_id,
+    })
 }
 
 /// 抽出と、購入、商品、店を結合した一覧を組み立てる。並び順は抽出日時の降順と ID の昇順 (FR-11)。

@@ -12,3 +12,7 @@ p256 = { version = "0.14.0", default-features = false, features = ["ecdsa"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11.0"
+# ADR-0003 が定める署名付き PUT URL の生成の依存。Sans I/O の S3 クライアントで、
+# HTTP 通信は持たない。版はプレリリースのため固定する (ADR-0003)。
+# 既定の feature の `rust-crypto` を使い、`aws_lc_rs` は有効にしない。
+shiguredo_s3 = "=2026.1.0-canary.7"

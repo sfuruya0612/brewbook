@@ -1,4 +1,4 @@
-//! 店と商品と Flavor Notes のタグと、購入と抽出の API (FR-6 から FR-12) と、
+//! 店と商品と Flavor Notes のタグと、購入と抽出と写真の API (FR-6 から FR-12) と、
 //! 過去の入力値のサジェストの API (FR-13)。
 //!
 //! 入力の検証は `coffee_log_core::records`、SQL の組み立ては `coffee_log_core::query` が持つ。
@@ -6,6 +6,7 @@
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 
 pub mod brews;
+pub mod photos;
 pub mod products;
 pub mod purchases;
 pub mod shops;

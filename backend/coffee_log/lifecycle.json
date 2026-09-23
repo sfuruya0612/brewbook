@@ -1,0 +1,12 @@
+{
+  "rules": [
+    {
+      "id": "expire-pending-photos",
+      "conditions": { "prefix": "pending/" },
+      "enabled": true,
+      "deleteObjectsTransition": {
+        "condition": { "type": "Age", "maxAge": 86400 }
+      }
+    }
+  ]
+}

@@ -14,3 +14,17 @@ migrations_dir = "migrations"
 # 本番の database_id は `wrangler d1 create coffee-log` が返す値に差し替える。
 # ローカルの wrangler dev と `--local` のマイグレーションはこの値を参照しない。
 database_id = "00000000-0000-0000-0000-000000000000"
+
+# 写真の R2 バケットのバインディング (ADR-0003)。Worker はこのバインディングで
+# `pending/` の確認と移動と削除を行い、署名付き URL の生成だけ shiguredo_s3 を使う。
+# CORS とライフサイクルは `cors.json` と `lifecycle.json` を `mise run r2-setup` で適用する。
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "coffee-log-photos"
+
+[vars]
+# 写真のバケット名 (ADR-0003)。バインディングの `bucket_name` と同じ値にする。
+R2_BUCKET = "coffee-log-photos"
+# S3 互換エンドポイント (R2_ENDPOINT) と API トークン (R2_ACCESS_KEY_ID、
+# R2_SECRET_ACCESS_KEY) は環境ごとに違うため、開発では `.dev.vars` (git 管理外)、
+# 本番ではデプロイ時に設定し、リポジトリに実値を含めない (PRD のセキュリティ)。

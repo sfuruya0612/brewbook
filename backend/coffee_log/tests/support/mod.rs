@@ -29,6 +29,9 @@ const OUTPUT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// 起動ごとの連番。同じテストバイナリ内で複数のサーバーを起動しても状態ディレクトリが衝突しないようにする。
 static START_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// R2 の操作の一時ファイルの連番。同じテストバイナリ内の並行するテストで衝突しないようにする。
+static R2_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
 /// 正常系のテストの種別。
 pub const KIND_OK: &str = "ok";
 /// 未認証 401 のテストの種別。
@@ -45,7 +48,7 @@ pub struct SuiteEntry {
 }
 
 /// このスイートが持つテストの種別。0005 が認証の 10 経路、0006 が店と商品とタグの 13 経路、
-/// 0007 が購入と抽出の 12 経路、0008 がサジェストの 1 経路を追加する。
+/// 0007 が購入と抽出の 12 経路、0008 がサジェストの 1 経路、0009 が購入の写真の 4 経路を追加する。
 pub const SUITE: &[SuiteEntry] = &[
     SuiteEntry {
         route: "auth_register_begin",
@@ -161,6 +164,22 @@ pub const SUITE: &[SuiteEntry] = &[
     },
     SuiteEntry {
         route: "purchases_unarchive",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "purchases_photo_upload_url",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "purchases_photo_complete",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "purchases_photo_get",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "purchases_photo_delete",
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
     },
     SuiteEntry {
@@ -392,6 +411,86 @@ impl DevServer {
             .and_then(|row| row.values().next())
             .and_then(|value| value.as_i64());
         value.ok_or_else(|| format!("the d1 output has no integer: {output}"))
+    }
+
+    /// `wrangler r2 object put` でローカルの R2 にオブジェクトを置く (0009 の写真の下ごしらえ)。
+    /// アップロードの完了通知は、クライアントが置いた `pending/` のオブジェクトを確認するため、
+    /// テストは署名付き URL に PUT せず、この操作でその状態を作る。
+    pub fn put_r2_object(
+        &self,
+        bucket: &str,
+        key: &str,
+        bytes: &[u8],
+        content_type: &str,
+    ) -> Result<(), String> {
+        let path = self.r2_temp_path();
+        std::fs::write(&path, bytes)
+            .map_err(|error| format!("failed to write {}: {error}", path.display()))?;
+        let mut command = r2_object_command(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+            &self.persist_dir,
+            "put",
+            &format!("{bucket}/{key}"),
+        );
+        command
+            .arg("--file")
+            .arg(&path)
+            .arg("--content-type")
+            .arg(content_type)
+            // データカタログの確認のプロンプトを出さない。
+            .arg("--force");
+        let output = command
+            .output()
+            .map_err(|error| format!("failed to run wrangler r2 object put: {error}"))?;
+        let _ = std::fs::remove_file(&path);
+        if !output.status.success() {
+            return Err(format!(
+                "wrangler r2 object put failed with {}\nstdout:\n{}\nstderr:\n{}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+        Ok(())
+    }
+
+    /// `wrangler r2 object get` でローカルの R2 からオブジェクトを読む。無いときは None。
+    pub fn get_r2_object(&self, bucket: &str, key: &str) -> Result<Option<Vec<u8>>, String> {
+        let path = self.r2_temp_path();
+        let mut command = r2_object_command(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+            &self.persist_dir,
+            "get",
+            &format!("{bucket}/{key}"),
+        );
+        command.arg("--file").arg(&path);
+        let output = command
+            .output()
+            .map_err(|error| format!("failed to run wrangler r2 object get: {error}"))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let _ = std::fs::remove_file(&path);
+            // 無いオブジェクトの取得は失敗の終了状態になる。他の失敗と区別する。
+            if stderr.contains("The specified key does not exist.") {
+                return Ok(None);
+            }
+            return Err(format!(
+                "wrangler r2 object get failed with {}\nstdout:\n{}\nstderr:\n{stderr}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout)
+            ));
+        }
+        let bytes = std::fs::read(&path)
+            .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+        let _ = std::fs::remove_file(&path);
+        Ok(Some(bytes))
+    }
+
+    /// R2 の操作に使う一時ファイルのパス。並行に走るテストで衝突しないよう連番を付ける。
+    fn r2_temp_path(&self) -> PathBuf {
+        let sequence = R2_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        self.persist_dir
+            .join(format!("r2-object-{}-{sequence}.bin", std::process::id()))
     }
 
     /// `--json` を付けて SQL を実行する。
@@ -640,6 +739,31 @@ fn d1_execute_command(manifest_dir: &Path, persist_dir: &Path) -> Command {
     let mut command = Command::new("wrangler");
     command
         .args(["d1", "execute", "DB", "--local", "--persist-to"])
+        .arg(persist_dir)
+        .current_dir(manifest_dir)
+        .env("WRANGLER_SEND_METRICS", "false")
+        .env_remove("OPENCODE")
+        .env_remove("AGENT")
+        .env_remove("AI_AGENT")
+        .env_remove("CLAUDECODE");
+    command
+}
+
+/// `wrangler r2 object` の共通の引数を組み立てる。
+///
+/// `--local` を明示するのは、アカウントのログインの状態に依存させないためである
+/// (省くと対話の確認になる)。`--persist-to` は `wrangler dev` と同じ置き場を指す。
+fn r2_object_command(
+    manifest_dir: &Path,
+    persist_dir: &Path,
+    subcommand: &str,
+    object_path: &str,
+) -> Command {
+    let mut command = Command::new("wrangler");
+    command
+        .args(["r2", "object", subcommand, object_path])
+        .arg("--local")
+        .arg("--persist-to")
         .arg(persist_dir)
         .current_dir(manifest_dir)
         .env("WRANGLER_SEND_METRICS", "false")

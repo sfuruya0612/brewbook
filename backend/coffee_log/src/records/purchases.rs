@@ -452,7 +452,11 @@ pub async fn archive(
 }
 
 /// 購入を 1 件引く。商品と店を結合し、アーカイブ済みも返す (FR-9、FR-12)。
-async fn find(d1: &D1Database, user_id: &str, id: &str) -> Result<Option<PurchaseResponse>> {
+pub(super) async fn find(
+    d1: &D1Database,
+    user_id: &str,
+    id: &str,
+) -> Result<Option<PurchaseResponse>> {
     let statement = query::purchase_find(user_id, id, Archived::Include);
     let row: Option<PurchaseJoinRow> = db::prepared(d1, &statement)?.first(None).await?;
     match row {
@@ -466,7 +470,7 @@ async fn find(d1: &D1Database, user_id: &str, id: &str) -> Result<Option<Purchas
 }
 
 /// 登録または更新の後に、現在の内容を引いて返す。
-async fn respond_fetched(d1: &D1Database, user_id: &str, id: &str) -> Result<Response> {
+pub(super) async fn respond_fetched(d1: &D1Database, user_id: &str, id: &str) -> Result<Response> {
     match find(d1, user_id, id).await? {
         Some(purchase) => respond::json(&purchase),
         None => Ok(super::internal_error()),

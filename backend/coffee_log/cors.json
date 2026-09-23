@@ -1,0 +1,11 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": ["https://coffee-log.example.workers.dev"],
+        "methods": ["PUT"],
+        "headers": ["Content-Type"]
+      }
+    }
+  ]
+}
