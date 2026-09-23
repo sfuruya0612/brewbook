@@ -8,8 +8,10 @@ use worker::{
 
 pub mod auth;
 pub mod d1_check;
+pub mod db;
 pub mod logging;
 pub mod random;
+pub mod records;
 pub mod respond;
 pub mod test_page;
 
@@ -161,6 +163,19 @@ async fn authenticated_route(
         "passkeys_complete" => auth::passkeys::complete(req, env, session).await,
         "passkeys_rename" => auth::passkeys::rename(req, env, session, id).await,
         "passkeys_delete" => auth::passkeys::delete(env, session, id).await,
+        "shops_list" => records::shops::list(req, env, session).await,
+        "shops_create" => records::shops::create(req, env, session).await,
+        "shops_get" => records::shops::get(env, session, id).await,
+        "shops_update" => records::shops::update(req, env, session, id).await,
+        "shops_archive" => records::shops::archive(env, session, id, true).await,
+        "shops_unarchive" => records::shops::archive(env, session, id, false).await,
+        "products_list" => records::products::list(req, env, session).await,
+        "products_create" => records::products::create(req, env, session).await,
+        "products_get" => records::products::get(env, session, id).await,
+        "products_update" => records::products::update(req, env, session, id).await,
+        "products_archive" => records::products::archive(env, session, id, true).await,
+        "products_unarchive" => records::products::archive(env, session, id, false).await,
+        "flavor_tags_list" => records::tags::list(env, session).await,
         _ => Ok(not_implemented()),
     }
 }

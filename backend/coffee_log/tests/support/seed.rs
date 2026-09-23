@@ -10,10 +10,16 @@
 use coffee_log_core::auth::hash_secret;
 
 /// テスト用の利用者 ID。同じ数字を並べた UUID v4 にする。
-pub fn user_id(index: u8) -> String {
-    let digit = char::from_digit(u32::from(index), 10).expect("the index must be one digit");
-    let hex = digit.to_string();
-    let group = |length: usize| hex.repeat(length);
+/// 10 以上の添字は 0 で埋めて一意にする (数字の繰り返しでは 1 と 11 が衝突するため)。
+pub fn user_id(index: u32) -> String {
+    let group = |length: usize| {
+        if index < 10 {
+            let digit = char::from_digit(index, 10).expect("the index must be a digit");
+            digit.to_string().repeat(length)
+        } else {
+            format!("{index:0>length$}")
+        }
+    };
     format!(
         "{}-{}-4{}-8{}-{}",
         group(8),
@@ -22,6 +28,24 @@ pub fn user_id(index: u8) -> String {
         group(3),
         group(12)
     )
+}
+
+/// 下ごしらえした店。
+#[derive(Debug, Clone)]
+pub struct SeededShop {
+    /// `shops.id`。API のパスで指定する ID。
+    pub id: String,
+    /// 店名。
+    pub name: String,
+}
+
+/// 下ごしらえした商品。
+#[derive(Debug, Clone)]
+pub struct SeededProduct {
+    /// `products.id`。API のパスで指定する ID。
+    pub id: String,
+    /// 商品名。
+    pub name: String,
 }
 
 /// 下ごしらえしたパスキー。
@@ -166,6 +190,82 @@ impl Seed {
         );
         self.push(statement);
         self
+    }
+
+    /// 店の行を入れる。住所と `archived_at` は任意。
+    pub fn shop(
+        &mut self,
+        user_id: &str,
+        name: &str,
+        address: Option<&str>,
+        created_at: &str,
+        updated_at: &str,
+        archived_at: Option<&str>,
+    ) -> SeededShop {
+        let id = self.next_id();
+        self.push(format!(
+            "INSERT INTO shops (id, user_id, name, address, created_at, updated_at, archived_at) \
+             VALUES ({}, {}, {}, {}, {}, {}, {})",
+            literal(&id),
+            literal(user_id),
+            literal(name),
+            address.map_or_else(|| "NULL".to_owned(), literal),
+            literal(created_at),
+            literal(updated_at),
+            archived_at.map_or_else(|| "NULL".to_owned(), literal)
+        ));
+        SeededShop {
+            id,
+            name: name.to_owned(),
+        }
+    }
+
+    /// 商品の行を入れる。商品名以外の項目は NULL にする。
+    pub fn product(
+        &mut self,
+        user_id: &str,
+        name: &str,
+        created_at: &str,
+        updated_at: &str,
+        archived_at: Option<&str>,
+    ) -> SeededProduct {
+        let id = self.next_id();
+        self.push(format!(
+            "INSERT INTO products (id, user_id, name, created_at, updated_at, archived_at) \
+             VALUES ({}, {}, {}, {}, {}, {})",
+            literal(&id),
+            literal(user_id),
+            literal(name),
+            literal(created_at),
+            literal(updated_at),
+            archived_at.map_or_else(|| "NULL".to_owned(), literal)
+        ));
+        SeededProduct {
+            id,
+            name: name.to_owned(),
+        }
+    }
+
+    /// Flavor Notes のタグの行を入れる。タグの ID を返す。
+    pub fn flavor_tag(&mut self, user_id: &str, name: &str) -> String {
+        let id = self.next_id();
+        self.push(format!(
+            "INSERT INTO flavor_tags (id, user_id, name) VALUES ({}, {}, {})",
+            literal(&id),
+            literal(user_id),
+            literal(name)
+        ));
+        id
+    }
+
+    /// 商品とタグの対応の行を入れる。
+    pub fn product_flavor_tag(&mut self, user_id: &str, product_id: &str, tag_id: &str) {
+        self.push(format!(
+            "INSERT INTO product_flavor_tags (user_id, product_id, tag_id) VALUES ({}, {}, {})",
+            literal(user_id),
+            literal(product_id),
+            literal(tag_id)
+        ));
     }
 
     /// 下ごしらえの SQL。

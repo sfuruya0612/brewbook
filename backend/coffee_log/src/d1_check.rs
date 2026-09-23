@@ -10,11 +10,12 @@
 use coffee_log_core::datetime::format_epoch_millis;
 use coffee_log_core::error::{envelope, ErrorCode};
 use coffee_log_core::ids::uuid_v4_from_bytes;
-use coffee_log_core::query::{self, Archived, ListQuery, OrderKind, Value};
+use coffee_log_core::query::{self, Archived, ShopValues};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Type;
 use worker::{Date, Env, Error, Method, Request, Response, Result};
 
+use crate::db;
 use crate::random;
 
 /// この経路の経路名。ログの `route` に使う。
@@ -29,9 +30,6 @@ const VAR_ENABLED: &str = "true";
 const DISPLAY_NAME: &str = "d1 check";
 
 const INSERT_USER: &str = "INSERT INTO users (id, display_name, created_at) VALUES (?, ?, ?)";
-const INSERT_SHOP: &str = "INSERT INTO shops (id, user_id, name, address, created_at, updated_at, \
-                            archived_at) VALUES (?, ?, ?, ?, ?, ?, NULL)";
-const SHOP_COLUMNS: &str = "id, user_id, name, address, created_at, updated_at, archived_at";
 
 /// 有効なら D1 の往復を実行する。無効な経路は None を返し、呼び出し側が 404 にする。
 ///
@@ -72,46 +70,29 @@ async fn handle(req: &mut Request, env: &Env) -> Result<Response> {
         .await?;
 
     let address = input.address.as_deref();
-    let shop_values = [
-        D1Type::Text(&shop_id),
-        D1Type::Text(&user_id),
-        D1Type::Text(&input.name),
-        address.map_or(D1Type::Null, D1Type::Text),
-        D1Type::Text(&created_at),
-        D1Type::Text(&created_at),
-    ];
-    d1.prepare(INSERT_SHOP)
-        .bind_refs(shop_values.iter())?
-        .run()
-        .await?;
+    let insert = query::shop_insert(
+        &shop_id,
+        &user_id,
+        &ShopValues {
+            name: &input.name,
+            address,
+        },
+        &created_at,
+        &created_at,
+    )
+    .map_err(|error| {
+        Error::RustError(format!("failed to build the insert: {}", error.message()))
+    })?;
+    db::prepared(&d1, &insert)?.run().await?;
 
     // 一覧の SQL は共通部分を通して組み立て、値はプレースホルダで渡す。
-    let statement = query::list(&ListQuery {
-        table: "shops",
-        columns: SHOP_COLUMNS,
-        user_id: &user_id,
-        order_column: "created_at",
-        order_kind: OrderKind::DateTime,
-        archived: Archived::Exclude,
-        cursor: None,
-        limit: 50,
-    })
-    .map_err(|error| {
+    let statement = query::shops_list(&user_id, Archived::Exclude, None, 50).map_err(|error| {
         Error::RustError(format!(
             "failed to build the list query: {}",
             error.message()
         ))
     })?;
-    let params = statement
-        .params
-        .iter()
-        .map(d1_value)
-        .collect::<Result<Vec<D1Type>>>()?;
-    let result = d1
-        .prepare(statement.sql)
-        .bind_refs(params.iter())?
-        .all()
-        .await?;
+    let result = db::prepared(&d1, &statement)?.all().await?;
 
     let mut shops: Vec<ShopRow> = result.results()?;
     let shop = shops
@@ -119,19 +100,6 @@ async fn handle(req: &mut Request, env: &Env) -> Result<Response> {
         .next()
         .ok_or_else(|| Error::RustError("the inserted shop was not found".to_owned()))?;
     Response::from_json(&CheckOutput { user_id, shop })
-}
-
-/// 組み立てた値 (コアの型) を D1 に渡す値にする。整数は D1 の範囲に収まることを確認する。
-fn d1_value(value: &Value) -> Result<D1Type<'_>> {
-    Ok(match value {
-        Value::Text(text) => D1Type::Text(text),
-        Value::Integer(number) => {
-            let number = i32::try_from(*number).map_err(|_| {
-                Error::RustError(format!("the integer {number} does not fit in D1"))
-            })?;
-            D1Type::Integer(number)
-        }
-    })
 }
 
 fn now_millis() -> i64 {

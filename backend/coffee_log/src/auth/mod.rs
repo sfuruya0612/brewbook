@@ -15,15 +15,16 @@ pub mod register;
 pub mod session;
 
 use coffee_log_core::auth;
-use coffee_log_core::datetime::format_epoch_millis;
 use coffee_log_core::error::ErrorCode;
-use coffee_log_core::ids::uuid_v4_from_bytes;
 use serde::Serialize;
 use worker::d1::{D1Database, D1PreparedStatement, D1Type};
-use worker::{console_error, Date, Env, Error, Result};
+use worker::{Date, Env, Error, Result};
 
 use crate::random;
 use crate::respond;
+
+/// D1 の実行と現在時刻と UUID の補助は、記録の API (0006) と共有する (`crate::db`)。
+pub use crate::db::{database, execute_batch, execute_changes, new_id, now_text, statement};
 
 /// チャレンジの有効期限の vars の名前。テストが `--var` で短縮する (PRD の「制約と前提」)。
 pub const CHALLENGE_TTL_VAR: &str = "CHALLENGE_TTL_SECONDS";
@@ -172,17 +173,6 @@ fn ttl_var_or(env: &Env, name: &str, default: i64) -> Result<i64> {
     })
 }
 
-/// `DB` のバインディングを取る。
-pub fn database(env: &Env) -> Result<D1Database> {
-    env.d1("DB")
-}
-
-/// 現在時刻の ISO 8601 UTC の固定長文字列 (ADR-0002)。
-pub fn now_text() -> Result<String> {
-    format_epoch_millis(Date::now().as_millis() as i64)
-        .map_err(|error| Error::RustError(format!("failed to format the current time: {error:?}")))
-}
-
 /// 現在時刻と有効期限の秒数から、有効期限の時刻の文字列を作る。
 pub fn expiry_text(ttl_seconds: i64) -> Result<String> {
     let now = Date::now().as_millis() as i64;
@@ -190,44 +180,9 @@ pub fn expiry_text(ttl_seconds: i64) -> Result<String> {
         .map_err(|error| Error::RustError(format!("failed to format the expiry: {error:?}")))
 }
 
-/// 1 件の文を組み立て、値を束縛する。
-pub fn statement(d1: &D1Database, sql: &str, values: &[D1Type<'_>]) -> Result<D1PreparedStatement> {
-    d1.prepare(sql).bind_refs(values.iter())
-}
-
-/// 文の列を 1 つのまとまりとして実行する (D1 の batch は 1 つのトランザクションで実行する)。
-/// どれかが失敗したら内部エラーにする。
-pub async fn execute_batch(d1: &D1Database, statements: Vec<D1PreparedStatement>) -> Result<()> {
-    let results = d1.batch(statements).await?;
-    for result in &results {
-        if !result.success() {
-            let error = result.error().unwrap_or_default();
-            console_error!("a batched statement failed: {error}");
-            return Err(Error::RustError("a batched statement failed".to_owned()));
-        }
-    }
-    Ok(())
-}
-
-/// 1 件の文を実行し、変更した行数を返す。
-pub async fn execute_changes(d1: &D1Database, sql: &str, values: &[D1Type<'_>]) -> Result<usize> {
-    let result = statement(d1, sql, values)?.run().await?;
-    Ok(result.meta()?.and_then(|meta| meta.changes).unwrap_or(0))
-}
-
 /// 乱数の失敗を Worker のエラーにする。
 pub fn random_bytes_32() -> Result<[u8; 32]> {
     random::bytes_32().map_err(Error::RustError)
-}
-
-/// 乱数の失敗を Worker のエラーにする。
-pub fn random_bytes_16() -> Result<[u8; 16]> {
-    random::bytes_16().map_err(Error::RustError)
-}
-
-/// UUID v4 の文字列を作る。
-pub fn new_id() -> Result<String> {
-    Ok(uuid_v4_from_bytes(random_bytes_16()?))
 }
 
 /// 利用者 ID の 16 バイトを base64url にした文字列。WebAuthn の `user.id` に入れる (ADR-0004)。

@@ -44,7 +44,7 @@ pub struct SuiteEntry {
     pub kinds: &'static [&'static str],
 }
 
-/// このスイートが持つテストの種別。0005 が認証の 10 経路を追加する。
+/// このスイートが持つテストの種別。0005 が認証の 10 経路、0006 が店と商品とタグの 13 経路を追加する。
 pub const SUITE: &[SuiteEntry] = &[
     SuiteEntry {
         route: "auth_register_begin",
@@ -84,6 +84,58 @@ pub const SUITE: &[SuiteEntry] = &[
     },
     SuiteEntry {
         route: "passkeys_delete",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "shops_list",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "shops_create",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "shops_get",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "shops_update",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "shops_archive",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "shops_unarchive",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "products_list",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "products_create",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "products_get",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "products_update",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "products_archive",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "products_unarchive",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "flavor_tags_list",
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
     },
 ];

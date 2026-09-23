@@ -11,5 +11,6 @@ pub mod datetime;
 pub mod error;
 pub mod ids;
 pub mod query;
+pub mod records;
 pub mod routes;
 pub mod webauthn;
