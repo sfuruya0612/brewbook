@@ -12,6 +12,8 @@
   - @sfuruya0612
 - [ADD] 店と商品と Flavor Notes のタグの API を追加する
   - @sfuruya0612
+- [ADD] 購入と抽出の API を追加する
+  - @sfuruya0612
 
 ### misc
 

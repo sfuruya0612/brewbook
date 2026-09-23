@@ -44,7 +44,8 @@ pub struct SuiteEntry {
     pub kinds: &'static [&'static str],
 }
 
-/// このスイートが持つテストの種別。0005 が認証の 10 経路、0006 が店と商品とタグの 13 経路を追加する。
+/// このスイートが持つテストの種別。0005 が認証の 10 経路、0006 が店と商品とタグの 13 経路、
+/// 0007 が購入と抽出の 12 経路を追加する。
 pub const SUITE: &[SuiteEntry] = &[
     SuiteEntry {
         route: "auth_register_begin",
@@ -136,6 +137,54 @@ pub const SUITE: &[SuiteEntry] = &[
     },
     SuiteEntry {
         route: "flavor_tags_list",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "purchases_list",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "purchases_create",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "purchases_get",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "purchases_update",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "purchases_archive",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "purchases_unarchive",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "brews_list",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "brews_create",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "brews_get",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "brews_update",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "brews_archive",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "brews_unarchive",
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
     },
 ];
@@ -309,6 +358,19 @@ impl DevServer {
             &PathBuf::from(env!("CARGO_MANIFEST_DIR")),
             &self.persist_dir,
             sql,
+        )
+    }
+
+    /// 複数の文をまとめて実行する。`wrangler d1 execute --file` に一時ファイルを渡す。
+    /// 文ごとに `wrangler` を起動しないため、想定規模のデータの投入に使う。
+    pub fn execute_sql_file(&self, statements: &[String]) -> Result<(), String> {
+        let path = self.persist_dir.join("bulk.sql");
+        std::fs::write(&path, statements.join(";\n"))
+            .map_err(|error| format!("failed to write {}: {error}", path.display()))?;
+        execute_sql_file_at(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+            &self.persist_dir,
+            &path,
         )
     }
 
@@ -516,6 +578,24 @@ fn execute_sql_at(manifest_dir: &Path, persist_dir: &Path, sql: &str) -> Result<
     run_d1_execute(manifest_dir, persist_dir, sql, false)
 }
 
+/// `wrangler d1 execute --file` でファイルの SQL を実行する。
+fn execute_sql_file_at(manifest_dir: &Path, persist_dir: &Path, path: &Path) -> Result<(), String> {
+    let mut command = d1_execute_command(manifest_dir, persist_dir);
+    command.arg("--file").arg(path);
+    let output = command
+        .output()
+        .map_err(|error| format!("failed to run wrangler d1 execute: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "wrangler d1 execute --file failed with {}\nstdout:\n{}\nstderr:\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
 /// `wrangler d1 execute --json` で SQL を実行し、標準出力を返す。
 fn execute_sql_json_at(
     manifest_dir: &Path,
@@ -532,18 +612,8 @@ fn run_d1_execute(
     sql: &str,
     json: bool,
 ) -> Result<String, String> {
-    let mut command = Command::new("wrangler");
-    command
-        .args(["d1", "execute", "DB", "--local", "--persist-to"])
-        .arg(persist_dir)
-        .arg("--command")
-        .arg(sql)
-        .current_dir(manifest_dir)
-        .env("WRANGLER_SEND_METRICS", "false")
-        .env_remove("OPENCODE")
-        .env_remove("AGENT")
-        .env_remove("AI_AGENT")
-        .env_remove("CLAUDECODE");
+    let mut command = d1_execute_command(manifest_dir, persist_dir);
+    command.arg("--command").arg(sql);
     if json {
         command.arg("--json");
     }
@@ -559,6 +629,21 @@ fn run_d1_execute(
         ));
     }
     Ok(stdout)
+}
+
+/// `wrangler d1 execute` の共通の引数を組み立てる。
+fn d1_execute_command(manifest_dir: &Path, persist_dir: &Path) -> Command {
+    let mut command = Command::new("wrangler");
+    command
+        .args(["d1", "execute", "DB", "--local", "--persist-to"])
+        .arg(persist_dir)
+        .current_dir(manifest_dir)
+        .env("WRANGLER_SEND_METRICS", "false")
+        .env_remove("OPENCODE")
+        .env_remove("AGENT")
+        .env_remove("AI_AGENT")
+        .env_remove("CLAUDECODE");
+    command
 }
 
 /// `wrangler.toml` が D1 のバインディングを定義しているかを判定する。

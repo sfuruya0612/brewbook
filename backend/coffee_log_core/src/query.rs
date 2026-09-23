@@ -12,7 +12,9 @@ use crate::cursor::CursorKey;
 use crate::error::ErrorCode;
 
 /// SQL に束縛する値。
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// 小数を持つため `Eq` は実装しない (値の比較は `PartialEq` で行う)。
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     /// NULL。
     Null,
@@ -20,6 +22,8 @@ pub enum Value {
     Text(String),
     /// 整数。
     Integer(i64),
+    /// 小数 (豆の量、湯量、湯の温度に使う)。
+    Real(f64),
 }
 
 /// アーカイブ済みの行の扱い。
@@ -108,7 +112,7 @@ pub struct FindQuery<'a> {
 ///
 /// 主キーの `id` と `user_id` はこの関数が必ず先頭の列として置くため、`columns` と `values` に
 /// 含めない。値は列と同じ数だけ渡す。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InsertQuery<'a> {
     /// 対象のテーブル名。コード内の定数だけを渡す。
     pub table: &'static str,
@@ -125,7 +129,7 @@ pub struct InsertQuery<'a> {
 /// 行の更新のクエリの入力。
 ///
 /// 更新する行は `id` と `user_id` の両方で絞る。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct UpdateQuery<'a> {
     /// 対象のテーブル名。コード内の定数だけを渡す。
     pub table: &'static str,
@@ -140,7 +144,7 @@ pub struct UpdateQuery<'a> {
 }
 
 /// 組み立てた SQL と、プレースホルダに束縛する値 (SQL に現れる順)。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Statement {
     pub sql: String,
     pub params: Vec<Value>,
@@ -179,64 +183,147 @@ impl QueryError {
 /// [AND (<order_column> < ? OR (<order_column> = ? AND id > ?))]
 /// ORDER BY <order_column> DESC, id ASC LIMIT ?`
 pub fn list(query: &ListQuery<'_>) -> Result<Statement, QueryError> {
-    let mut sql = String::new();
-    let mut params = Vec::new();
-
-    sql.push_str("SELECT ");
-    sql.push_str(query.columns);
-    sql.push_str(" FROM ");
-    sql.push_str(query.table);
-    sql.push_str(" WHERE user_id = ?");
-    params.push(Value::Text(query.user_id.to_owned()));
-
-    if query.archived == Archived::Exclude {
-        sql.push_str(" AND archived_at IS NULL");
-    }
-
-    if let Some(cursor) = &query.cursor {
-        let key = match (cursor, query.order_kind) {
-            (CursorKey::DateTime { at, .. }, OrderKind::DateTime) => at,
-            (CursorKey::Date { on, .. }, OrderKind::Date) => on,
-            _ => return Err(QueryError::CursorKindMismatch),
-        };
-        // 並び順のキーの降順と ID の昇順の続きを引く。
-        sql.push_str(" AND (");
-        sql.push_str(query.order_column);
-        sql.push_str(" < ? OR (");
-        sql.push_str(query.order_column);
-        sql.push_str(" = ? AND id > ?))");
-        params.push(Value::Text(key.clone()));
-        params.push(Value::Text(key.clone()));
-        params.push(Value::Text(cursor.id().to_owned()));
-    }
-
-    sql.push_str(" ORDER BY ");
-    sql.push_str(query.order_column);
-    sql.push_str(" DESC, id ASC LIMIT ?");
-    params.push(Value::Integer(i64::from(query.limit)));
-
-    Ok(Statement { sql, params })
+    list_qualified(
+        &QualifiedList {
+            from: query.table,
+            columns: query.columns,
+            alias: "",
+            order_column: query.order_column,
+            order_kind: query.order_kind,
+            user_id: query.user_id,
+            archived: query.archived,
+        },
+        query.cursor.clone(),
+        query.limit,
+    )
 }
 
 /// 1 件の取得の SQL を組み立てる。
 ///
 /// `SELECT <columns> FROM <table> WHERE id = ? AND user_id = ? [AND archived_at IS NULL]`
 pub fn find_one(query: &FindQuery<'_>) -> Statement {
+    find_qualified(
+        query.table,
+        query.columns,
+        "",
+        query.user_id,
+        query.id,
+        query.archived,
+    )
+}
+
+/// 別名を付けた一覧の入力。`from` にはテーブルと結合の並びを渡せる。
+struct QualifiedList<'a> {
+    /// `FROM` に置くテーブルと結合の並び。
+    from: &'a str,
+    /// 選択する列の並び。
+    columns: &'a str,
+    /// 列名を修飾する別名。空のときは修飾しない。
+    alias: &'a str,
+    /// 並び順のキーの列 (修飾前)。
+    order_column: &'a str,
+    /// 並び順のキーの種類。
+    order_kind: OrderKind,
+    /// 絞り込む利用者の ID。
+    user_id: &'a str,
+    /// アーカイブ済みの行の扱い。
+    archived: Archived,
+}
+
+/// 別名を付けた一覧の SQL を組み立てる。
+///
+/// 列名は別名があるときだけ `<別名>.<列>` にする (`from` に複数のテーブルがあると `id` や
+/// `user_id` が曖昧になるため)。
+fn list_qualified(
+    query: &QualifiedList<'_>,
+    cursor: Option<CursorKey>,
+    limit: u32,
+) -> Result<Statement, QueryError> {
     let mut sql = String::new();
+    let mut params = Vec::new();
+
     sql.push_str("SELECT ");
     sql.push_str(query.columns);
     sql.push_str(" FROM ");
-    sql.push_str(query.table);
-    sql.push_str(" WHERE id = ? AND user_id = ?");
+    sql.push_str(query.from);
+    sql.push_str(" WHERE ");
+    sql.push_str(&qualified(query.alias, "user_id"));
+    sql.push_str(" = ?");
+    params.push(Value::Text(query.user_id.to_owned()));
+
     if query.archived == Archived::Exclude {
-        sql.push_str(" AND archived_at IS NULL");
+        sql.push_str(" AND ");
+        sql.push_str(&qualified(query.alias, "archived_at"));
+        sql.push_str(" IS NULL");
+    }
+
+    if let Some(cursor) = &cursor {
+        let key = match (cursor, query.order_kind) {
+            (CursorKey::DateTime { at, .. }, OrderKind::DateTime) => at,
+            (CursorKey::Date { on, .. }, OrderKind::Date) => on,
+            _ => return Err(QueryError::CursorKindMismatch),
+        };
+        // 並び順のキーの降順と ID の昇順の続きを引く。
+        let order = qualified(query.alias, query.order_column);
+        let id = qualified(query.alias, "id");
+        sql.push_str(" AND (");
+        sql.push_str(&order);
+        sql.push_str(" < ? OR (");
+        sql.push_str(&order);
+        sql.push_str(" = ? AND ");
+        sql.push_str(&id);
+        sql.push_str(" > ?))");
+        params.push(Value::Text(key.clone()));
+        params.push(Value::Text(key.clone()));
+        params.push(Value::Text(cursor.id().to_owned()));
+    }
+
+    sql.push_str(" ORDER BY ");
+    sql.push_str(&qualified(query.alias, query.order_column));
+    sql.push_str(" DESC, ");
+    sql.push_str(&qualified(query.alias, "id"));
+    sql.push_str(" ASC LIMIT ?");
+    params.push(Value::Integer(i64::from(limit)));
+
+    Ok(Statement { sql, params })
+}
+
+/// 別名を付けた 1 件の取得の SQL を組み立てる。`from` にはテーブルと結合の並びを渡せる。
+fn find_qualified(
+    from: &str,
+    columns: &str,
+    alias: &str,
+    user_id: &str,
+    id: &str,
+    archived: Archived,
+) -> Statement {
+    let mut sql = String::new();
+    sql.push_str("SELECT ");
+    sql.push_str(columns);
+    sql.push_str(" FROM ");
+    sql.push_str(from);
+    sql.push_str(" WHERE ");
+    sql.push_str(&qualified(alias, "id"));
+    sql.push_str(" = ? AND ");
+    sql.push_str(&qualified(alias, "user_id"));
+    sql.push_str(" = ?");
+    if archived == Archived::Exclude {
+        sql.push_str(" AND ");
+        sql.push_str(&qualified(alias, "archived_at"));
+        sql.push_str(" IS NULL");
     }
     Statement {
         sql,
-        params: vec![
-            Value::Text(query.id.to_owned()),
-            Value::Text(query.user_id.to_owned()),
-        ],
+        params: vec![Value::Text(id.to_owned()), Value::Text(user_id.to_owned())],
+    }
+}
+
+/// 列名を別名で修飾する。別名が空のときはそのままの列名にする。
+fn qualified(alias: &str, column: &str) -> String {
+    if alias.is_empty() {
+        column.to_owned()
+    } else {
+        format!("{alias}.{column}")
     }
 }
 
@@ -304,6 +391,18 @@ pub const PRODUCTS_TABLE: &str = "products";
 /// 商品の列の並び。応答の JSON の項目と同じ。
 pub const PRODUCT_COLUMNS: &str = "id, user_id, name, producer, origin, region, process, variety, \
                                    created_at, updated_at, archived_at";
+/// 購入のテーブル名。
+pub const PURCHASES_TABLE: &str = "purchases";
+/// 購入の列の並び。応答の JSON の項目と同じ。
+pub const PURCHASE_COLUMNS: &str = "id, user_id, product_id, shop_id, purchased_on, roast, \
+                                    roast_date, price_amount, price_currency, weight_grams, \
+                                    photo_key, created_at, updated_at, archived_at";
+/// 抽出のテーブル名。
+pub const BREWS_TABLE: &str = "brews";
+/// 抽出の列の並び。応答の JSON の項目と同じ。
+pub const BREW_COLUMNS: &str = "id, user_id, purchase_id, brewed_at, dose_grams, water_grams, \
+                                water_temp_c, brew_time_seconds, method, grind_setting, rating, \
+                                notes, created_at, updated_at, archived_at";
 /// Flavor Notes のタグのテーブル名。
 pub const FLAVOR_TAGS_TABLE: &str = "flavor_tags";
 /// Flavor Notes のタグの列の並び。応答の JSON の項目と同じ。
@@ -315,6 +414,26 @@ pub const PRODUCT_FLAVOR_TAGS_TABLE: &str = "product_flavor_tags";
 pub const MAX_BOUND_VALUES: usize = 100;
 /// タグ名を引くクエリは利用者 ID を 2 つ束縛するため、商品 ID は 98 件ずつにする。
 const PRODUCT_IDS_PER_STATEMENT: usize = MAX_BOUND_VALUES - 2;
+
+/// 結合の SQL で使う購入の別名。
+const PURCHASE_ALIAS: &str = "p";
+/// 結合の SQL で使う抽出の別名。
+const BREW_ALIAS: &str = "b";
+/// 結合の SQL で使う商品の別名。
+const PRODUCT_ALIAS: &str = "pr";
+/// 結合の SQL で使う店の別名。
+const SHOP_ALIAS: &str = "sh";
+
+/// 購入と商品と店の結合。商品は INNER JOIN、店は LEFT JOIN で結合し、店が無い購入でも行が返る
+/// (ADR-0006)。結合の条件にも利用者 ID を含める。
+const PURCHASES_FROM: &str = "purchases AS p \
+     INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
+     LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id";
+/// 抽出と、購入、商品、店の結合。抽出は購入だけを参照し、商品と店は購入からたどる (ADR-0006)。
+const BREWS_FROM: &str = "brews AS b \
+     INNER JOIN purchases AS p ON p.id = b.purchase_id AND p.user_id = b.user_id \
+     INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
+     LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id";
 
 /// 店の `INSERT` の列 (`id` と `user_id` を除く)。
 const SHOP_INSERT_COLUMNS: &[&str] = &["name", "address", "created_at", "updated_at"];
@@ -339,6 +458,60 @@ const PRODUCT_UPDATE_COLUMNS: &[&str] = &[
     "region",
     "process",
     "variety",
+    "updated_at",
+];
+/// 購入の `INSERT` の列 (`id` と `user_id` を除く)。`photo_key` は 0009 が扱う。
+const PURCHASE_INSERT_COLUMNS: &[&str] = &[
+    "product_id",
+    "shop_id",
+    "purchased_on",
+    "roast",
+    "roast_date",
+    "price_amount",
+    "price_currency",
+    "weight_grams",
+    "created_at",
+    "updated_at",
+];
+/// 購入の `UPDATE` の列。
+const PURCHASE_UPDATE_COLUMNS: &[&str] = &[
+    "product_id",
+    "shop_id",
+    "purchased_on",
+    "roast",
+    "roast_date",
+    "price_amount",
+    "price_currency",
+    "weight_grams",
+    "updated_at",
+];
+/// 抽出の `INSERT` の列 (`id` と `user_id` を除く)。
+const BREW_INSERT_COLUMNS: &[&str] = &[
+    "purchase_id",
+    "brewed_at",
+    "dose_grams",
+    "water_grams",
+    "water_temp_c",
+    "brew_time_seconds",
+    "method",
+    "grind_setting",
+    "rating",
+    "notes",
+    "created_at",
+    "updated_at",
+];
+/// 抽出の `UPDATE` の列。
+const BREW_UPDATE_COLUMNS: &[&str] = &[
+    "purchase_id",
+    "brewed_at",
+    "dose_grams",
+    "water_grams",
+    "water_temp_c",
+    "brew_time_seconds",
+    "method",
+    "grind_setting",
+    "rating",
+    "notes",
     "updated_at",
 ];
 /// アーカイブとアーカイブ解除の `UPDATE` の列 (ADR-0006)。
@@ -368,6 +541,52 @@ pub struct ProductValues<'a> {
     pub process: Option<&'a str>,
     /// 品種。任意。
     pub variety: Option<&'a str>,
+}
+
+/// 購入の入力の値。NULL は None で表す。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PurchaseValues<'a> {
+    /// 商品の ID。必須 (FR-9)。
+    pub product_id: &'a str,
+    /// 店の ID。任意 (店が無い購入がある。ADR-0006)。
+    pub shop_id: Option<&'a str>,
+    /// 購入日 (`YYYY-MM-DD`、タイムゾーンを持たない。ADR-0002)。
+    pub purchased_on: &'a str,
+    /// Roast。任意。
+    pub roast: Option<&'a str>,
+    /// Roast Date (`YYYY-MM-DD`)。任意。
+    pub roast_date: Option<&'a str>,
+    /// 価格 (通貨の最小単位)。任意。
+    pub price_amount: Option<i64>,
+    /// ISO 4217 の通貨コード。価格が無いときは NULL にする (0007 の設計判断)。
+    pub price_currency: Option<&'a str>,
+    /// 重量 (グラム)。任意。
+    pub weight_grams: Option<i64>,
+}
+
+/// 抽出の入力の値。NULL は None で表す。購入と抽出日時以外は任意 (FR-11)。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BrewValues<'a> {
+    /// 購入の ID。必須 (FR-11)。
+    pub purchase_id: &'a str,
+    /// 抽出日時 (ISO 8601 の UTC。ADR-0002)。
+    pub brewed_at: &'a str,
+    /// 豆の量 (グラム)。任意。
+    pub dose_grams: Option<f64>,
+    /// 湯量 (グラム)。任意。
+    pub water_grams: Option<f64>,
+    /// 湯の温度 (摂氏)。任意。
+    pub water_temp_c: Option<f64>,
+    /// 時間 (秒)。任意。
+    pub brew_time_seconds: Option<i64>,
+    /// 抽出方法。任意。
+    pub method: Option<&'a str>,
+    /// 挽き目 (グラインダーの設定値)。任意。
+    pub grind_setting: Option<&'a str>,
+    /// 評価 (1 から 5)。任意。
+    pub rating: Option<i64>,
+    /// 感想。任意。
+    pub notes: Option<&'a str>,
 }
 
 /// 店の一覧を組み立てる。並び順は作成日時の降順と ID の昇順。
@@ -531,6 +750,170 @@ pub fn product_set_archived(
     set_archived(PRODUCTS_TABLE, id, user_id, archived_at, updated_at)
 }
 
+/// 購入と商品と店を結合した一覧を組み立てる。並び順は購入日の降順と ID の昇順 (FR-9)。
+pub fn purchases_list(
+    user_id: &str,
+    archived: Archived,
+    cursor: Option<CursorKey>,
+    limit: u32,
+) -> Result<Statement, QueryError> {
+    list_qualified(
+        &QualifiedList {
+            from: PURCHASES_FROM,
+            columns: &purchases_columns(),
+            alias: PURCHASE_ALIAS,
+            order_column: "purchased_on",
+            order_kind: OrderKind::Date,
+            user_id,
+            archived,
+        },
+        cursor,
+        limit,
+    )
+}
+
+/// 購入と商品と店を結合した 1 件の取得の SQL を組み立てる。
+pub fn purchase_find(user_id: &str, id: &str, archived: Archived) -> Statement {
+    find_qualified(
+        PURCHASES_FROM,
+        &purchases_columns(),
+        PURCHASE_ALIAS,
+        user_id,
+        id,
+        archived,
+    )
+}
+
+/// 購入を挿入する SQL を組み立てる。`photo_key` は 0009 が扱うため NULL のままにする。
+pub fn purchase_insert(
+    id: &str,
+    user_id: &str,
+    values: &PurchaseValues<'_>,
+    created_at: &str,
+    updated_at: &str,
+) -> Result<Statement, QueryError> {
+    let mut purchase_values = purchase_value_list(values);
+    purchase_values.push(Value::Text(created_at.to_owned()));
+    purchase_values.push(Value::Text(updated_at.to_owned()));
+    insert(&InsertQuery {
+        table: PURCHASES_TABLE,
+        columns: PURCHASE_INSERT_COLUMNS,
+        values: purchase_values,
+        id,
+        user_id,
+    })
+}
+
+/// 購入を更新する SQL を組み立てる。
+pub fn purchase_update(
+    id: &str,
+    user_id: &str,
+    values: &PurchaseValues<'_>,
+    updated_at: &str,
+) -> Result<Statement, QueryError> {
+    let mut purchase_values = purchase_value_list(values);
+    purchase_values.push(Value::Text(updated_at.to_owned()));
+    update(&UpdateQuery {
+        table: PURCHASES_TABLE,
+        columns: PURCHASE_UPDATE_COLUMNS,
+        values: purchase_values,
+        id,
+        user_id,
+    })
+}
+
+/// 購入のアーカイブとアーカイブ解除の SQL を組み立てる。
+pub fn purchase_set_archived(
+    id: &str,
+    user_id: &str,
+    archived_at: Option<&str>,
+    updated_at: &str,
+) -> Result<Statement, QueryError> {
+    set_archived(PURCHASES_TABLE, id, user_id, archived_at, updated_at)
+}
+
+/// 抽出と、購入、商品、店を結合した一覧を組み立てる。並び順は抽出日時の降順と ID の昇順 (FR-11)。
+pub fn brews_list(
+    user_id: &str,
+    archived: Archived,
+    cursor: Option<CursorKey>,
+    limit: u32,
+) -> Result<Statement, QueryError> {
+    list_qualified(
+        &QualifiedList {
+            from: BREWS_FROM,
+            columns: &brews_columns(),
+            alias: BREW_ALIAS,
+            order_column: "brewed_at",
+            order_kind: OrderKind::DateTime,
+            user_id,
+            archived,
+        },
+        cursor,
+        limit,
+    )
+}
+
+/// 抽出と、購入、商品、店を結合した 1 件の取得の SQL を組み立てる。
+pub fn brew_find(user_id: &str, id: &str, archived: Archived) -> Statement {
+    find_qualified(
+        BREWS_FROM,
+        &brews_columns(),
+        BREW_ALIAS,
+        user_id,
+        id,
+        archived,
+    )
+}
+
+/// 抽出を挿入する SQL を組み立てる。
+pub fn brew_insert(
+    id: &str,
+    user_id: &str,
+    values: &BrewValues<'_>,
+    created_at: &str,
+    updated_at: &str,
+) -> Result<Statement, QueryError> {
+    let mut brew_values = brew_value_list(values);
+    brew_values.push(Value::Text(created_at.to_owned()));
+    brew_values.push(Value::Text(updated_at.to_owned()));
+    insert(&InsertQuery {
+        table: BREWS_TABLE,
+        columns: BREW_INSERT_COLUMNS,
+        values: brew_values,
+        id,
+        user_id,
+    })
+}
+
+/// 抽出を更新する SQL を組み立てる。
+pub fn brew_update(
+    id: &str,
+    user_id: &str,
+    values: &BrewValues<'_>,
+    updated_at: &str,
+) -> Result<Statement, QueryError> {
+    let mut brew_values = brew_value_list(values);
+    brew_values.push(Value::Text(updated_at.to_owned()));
+    update(&UpdateQuery {
+        table: BREWS_TABLE,
+        columns: BREW_UPDATE_COLUMNS,
+        values: brew_values,
+        id,
+        user_id,
+    })
+}
+
+/// 抽出のアーカイブとアーカイブ解除の SQL を組み立てる。
+pub fn brew_set_archived(
+    id: &str,
+    user_id: &str,
+    archived_at: Option<&str>,
+    updated_at: &str,
+) -> Result<Statement, QueryError> {
+    set_archived(BREWS_TABLE, id, user_id, archived_at, updated_at)
+}
+
 /// 利用者の Flavor Notes のタグの一覧を組み立てる。並び順は名前の昇順。
 pub fn flavor_tags_list(user_id: &str) -> Statement {
     let mut sql = String::new();
@@ -642,6 +1025,87 @@ fn product_value_list(values: &ProductValues<'_>) -> Vec<Value> {
         optional_text(values.process),
         optional_text(values.variety),
     ]
+}
+
+/// 購入の入力の値の並び (商品、店、購入日、Roast、Roast Date、価格、通貨コード、重量)。
+fn purchase_value_list(values: &PurchaseValues<'_>) -> Vec<Value> {
+    vec![
+        Value::Text(values.product_id.to_owned()),
+        optional_text(values.shop_id),
+        Value::Text(values.purchased_on.to_owned()),
+        optional_text(values.roast),
+        optional_text(values.roast_date),
+        optional_integer(values.price_amount),
+        optional_text(values.price_currency),
+        optional_integer(values.weight_grams),
+    ]
+}
+
+/// 抽出の入力の値の並び (購入、抽出日時、豆の量、湯量、湯の温度、時間、抽出方法、挽き目、評価、感想)。
+fn brew_value_list(values: &BrewValues<'_>) -> Vec<Value> {
+    vec![
+        Value::Text(values.purchase_id.to_owned()),
+        Value::Text(values.brewed_at.to_owned()),
+        optional_real(values.dose_grams),
+        optional_real(values.water_grams),
+        optional_real(values.water_temp_c),
+        optional_integer(values.brew_time_seconds),
+        optional_text(values.method),
+        optional_text(values.grind_setting),
+        optional_integer(values.rating),
+        optional_text(values.notes),
+    ]
+}
+
+/// 購入と商品と店の結合で選択する列の並び。別名は Worker が結果を読むときの項目名になる。
+fn purchases_columns() -> String {
+    join_columns(&[
+        (PURCHASE_ALIAS, PURCHASE_COLUMNS),
+        (PRODUCT_ALIAS, PRODUCT_COLUMNS),
+        (SHOP_ALIAS, SHOP_COLUMNS),
+    ])
+}
+
+/// 抽出と、購入、商品、店の結合で選択する列の並び。
+fn brews_columns() -> String {
+    join_columns(&[
+        (BREW_ALIAS, BREW_COLUMNS),
+        (PURCHASE_ALIAS, PURCHASE_COLUMNS),
+        (PRODUCT_ALIAS, PRODUCT_COLUMNS),
+        (SHOP_ALIAS, SHOP_COLUMNS),
+    ])
+}
+
+/// 複数のテーブルの列を、接頭辞を付けた選択の並びにする。
+fn join_columns(tables: &[(&str, &str)]) -> String {
+    tables
+        .iter()
+        .map(|(alias, columns)| prefixed_columns(alias, columns))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// 列の並びを `<別名>.<列> AS <別名>_<列>` の並びにする。
+///
+/// 結合の結果は 1 つの平坦な行になるため、列ごとに一意の別名を付ける。
+fn prefixed_columns(alias: &str, columns: &str) -> String {
+    columns
+        .split(',')
+        .map(str::trim)
+        .filter(|column| !column.is_empty())
+        .map(|column| format!("{alias}.{column} AS {alias}_{column}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// 任意の整数を値にする。None は NULL にする。
+fn optional_integer(value: Option<i64>) -> Value {
+    value.map_or(Value::Null, Value::Integer)
+}
+
+/// 任意の小数を値にする。None は NULL にする。
+fn optional_real(value: Option<f64>) -> Value {
+    value.map_or(Value::Null, Value::Real)
 }
 
 /// 任意の文字列を値にする。None は NULL にする。

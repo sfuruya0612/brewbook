@@ -1,7 +1,9 @@
-//! `records` の PBT。前後の空白の扱いと、Flavor Notes の正規化の性質を検査する。
+//! `records` の PBT。前後の空白の扱いと、Flavor Notes の正規化、日付と日時と小数の検証の
+//! 性質を検査する。
 
 use coffee_log_core::records::{
-    trim_optional, trim_text, validate_flavor_notes, validate_name, NameError, TagNameError,
+    trim_optional, trim_text, validate_day, validate_decimal, validate_flavor_notes, validate_name,
+    validate_timestamp, DayError, DecimalError, NameError, TagNameError, TimestampError,
 };
 use proptest::prelude::*;
 
@@ -108,5 +110,50 @@ proptest! {
             prop_assert!(validated.iter().all(|name| name.as_str() == name.trim()));
             prop_assert!(validated.windows(2).all(|pair| pair[0] < pair[1]));
         }
+    }
+
+    /// 小数第 1 位までの 0 以上の値は、その値のまま受け付ける (FR-11)。
+    #[test]
+    fn a_decimal_with_one_decimal_place_is_accepted(
+        integer in 0_u32..1_000_000,
+        fraction in 0_u32..10,
+    ) {
+        let text = format!("{integer}.{fraction}");
+        let expected = f64::from(integer) + f64::from(fraction) / 10.0;
+        prop_assert_eq!(validate_decimal(&text), Ok(expected));
+    }
+
+    /// 小数第 2 位以下を持つ値は拒否する (FR-11)。
+    #[test]
+    fn a_decimal_with_two_decimal_places_is_rejected(
+        integer in 0_u32..1_000_000,
+        first in 0_u32..10,
+        second in 1_u32..10,
+    ) {
+        let text = format!("{integer}.{first}{second}");
+        prop_assert_eq!(validate_decimal(&text), Err(DecimalError::NotOneDecimalPlace));
+    }
+
+    /// 負の値は必ず拒否する (FR-11)。
+    #[test]
+    fn a_negative_decimal_is_rejected(magnitude in 1_u32..1_000_000) {
+        prop_assert_eq!(
+            validate_decimal(&format!("-{magnitude}.5")),
+            Err(DecimalError::Negative)
+        );
+    }
+
+    /// 固定長でない値は日付として拒否する (ADR-0002)。
+    #[test]
+    fn a_value_of_another_length_is_not_a_day(text in ".{0,40}") {
+        prop_assume!(text.chars().count() != 10);
+        prop_assert_eq!(validate_day(&text), Err(DayError::Invalid));
+    }
+
+    /// 固定長でない値と末尾が `Z` でない値は抽出日時として拒否する (ADR-0002)。
+    #[test]
+    fn a_value_of_another_length_or_suffix_is_not_a_timestamp(text in ".{0,40}") {
+        prop_assume!(text.chars().count() != 24 || !text.ends_with('Z'));
+        prop_assert_eq!(validate_timestamp(&text), Err(TimestampError::Invalid));
     }
 }

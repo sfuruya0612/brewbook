@@ -48,6 +48,28 @@ pub struct SeededProduct {
     pub name: String,
 }
 
+/// 下ごしらえした購入。
+#[derive(Debug, Clone)]
+pub struct SeededPurchase {
+    /// `purchases.id`。API のパスで指定する ID。
+    pub id: String,
+    /// 参照する商品の ID。
+    pub product_id: String,
+    /// 購入日。
+    pub purchased_on: String,
+}
+
+/// 下ごしらえした抽出。
+#[derive(Debug, Clone)]
+pub struct SeededBrew {
+    /// `brews.id`。API のパスで指定する ID。
+    pub id: String,
+    /// 参照する購入の ID。
+    pub purchase_id: String,
+    /// 抽出日時。
+    pub brewed_at: String,
+}
+
 /// 下ごしらえしたパスキー。
 pub struct SeededPasskey {
     /// `passkey_credentials.id`。API のパスで指定する ID。
@@ -266,6 +288,69 @@ impl Seed {
             literal(product_id),
             literal(tag_id)
         ));
+    }
+
+    /// 購入の行を入れる。店、価格、通貨コード、重量、写真は任意。
+    // 下ごしらえの引数はテーブルの列をそのまま受ける (テストが列を選んで投入できるようにする)。
+    #[allow(clippy::too_many_arguments)]
+    pub fn purchase(
+        &mut self,
+        user_id: &str,
+        product_id: &str,
+        shop_id: Option<&str>,
+        purchased_on: &str,
+        created_at: &str,
+        updated_at: &str,
+        archived_at: Option<&str>,
+    ) -> SeededPurchase {
+        let id = self.next_id();
+        let shop = shop_id.map_or_else(|| "NULL".to_owned(), literal);
+        self.push(format!(
+            "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, created_at, \
+             updated_at, archived_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {})",
+            literal(&id),
+            literal(user_id),
+            literal(product_id),
+            shop,
+            literal(purchased_on),
+            literal(created_at),
+            literal(updated_at),
+            archived_at.map_or_else(|| "NULL".to_owned(), literal)
+        ));
+        SeededPurchase {
+            id,
+            product_id: product_id.to_owned(),
+            purchased_on: purchased_on.to_owned(),
+        }
+    }
+
+    /// 抽出の行を入れる。数値の項目は入れず、NULL のままにする。
+    pub fn brew(
+        &mut self,
+        user_id: &str,
+        purchase_id: &str,
+        brewed_at: &str,
+        created_at: &str,
+        updated_at: &str,
+        archived_at: Option<&str>,
+    ) -> SeededBrew {
+        let id = self.next_id();
+        self.push(format!(
+            "INSERT INTO brews (id, user_id, purchase_id, brewed_at, created_at, updated_at, \
+             archived_at) VALUES ({}, {}, {}, {}, {}, {}, {})",
+            literal(&id),
+            literal(user_id),
+            literal(purchase_id),
+            literal(brewed_at),
+            literal(created_at),
+            literal(updated_at),
+            archived_at.map_or_else(|| "NULL".to_owned(), literal)
+        ));
+        SeededBrew {
+            id,
+            purchase_id: purchase_id.to_owned(),
+            brewed_at: brewed_at.to_owned(),
+        }
     }
 
     /// 下ごしらえの SQL。

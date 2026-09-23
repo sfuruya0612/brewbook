@@ -77,5 +77,6 @@ fn d1_value(value: &Value) -> Result<D1Type<'_>> {
             i32::try_from(*number)
                 .map_err(|_| Error::RustError(format!("the value {number} does not fit in D1")))?,
         ),
+        Value::Real(number) => D1Type::Real(*number),
     })
 }

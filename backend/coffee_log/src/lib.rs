@@ -176,6 +176,18 @@ async fn authenticated_route(
         "products_archive" => records::products::archive(env, session, id, true).await,
         "products_unarchive" => records::products::archive(env, session, id, false).await,
         "flavor_tags_list" => records::tags::list(env, session).await,
+        "purchases_list" => records::purchases::list(req, env, session).await,
+        "purchases_create" => records::purchases::create(req, env, session).await,
+        "purchases_get" => records::purchases::get(env, session, id).await,
+        "purchases_update" => records::purchases::update(req, env, session, id).await,
+        "purchases_archive" => records::purchases::archive(env, session, id, true).await,
+        "purchases_unarchive" => records::purchases::archive(env, session, id, false).await,
+        "brews_list" => records::brews::list(req, env, session).await,
+        "brews_create" => records::brews::create(req, env, session).await,
+        "brews_get" => records::brews::get(env, session, id).await,
+        "brews_update" => records::brews::update(req, env, session, id).await,
+        "brews_archive" => records::brews::archive(env, session, id, true).await,
+        "brews_unarchive" => records::brews::archive(env, session, id, false).await,
         _ => Ok(not_implemented()),
     }
 }

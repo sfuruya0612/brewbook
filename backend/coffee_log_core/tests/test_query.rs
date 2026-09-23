@@ -457,6 +457,335 @@ mod record_queries {
     }
 }
 
+mod purchase_and_brew_queries {
+    use super::*;
+    use coffee_log_core::query::{self, BrewValues, PurchaseValues};
+
+    /// 購入の列の別名 (結合の SQL の期待値に使う)。
+    const PURCHASE_COLUMNS: &str = "p.id AS p_id, p.user_id AS p_user_id, \
+        p.product_id AS p_product_id, p.shop_id AS p_shop_id, p.purchased_on AS p_purchased_on, \
+        p.roast AS p_roast, p.roast_date AS p_roast_date, p.price_amount AS p_price_amount, \
+        p.price_currency AS p_price_currency, p.weight_grams AS p_weight_grams, \
+        p.photo_key AS p_photo_key, p.created_at AS p_created_at, p.updated_at AS p_updated_at, \
+        p.archived_at AS p_archived_at";
+    /// 商品の列の別名。
+    const PRODUCT_COLUMNS: &str = "pr.id AS pr_id, pr.user_id AS pr_user_id, pr.name AS pr_name, \
+        pr.producer AS pr_producer, pr.origin AS pr_origin, pr.region AS pr_region, \
+        pr.process AS pr_process, pr.variety AS pr_variety, pr.created_at AS pr_created_at, \
+        pr.updated_at AS pr_updated_at, pr.archived_at AS pr_archived_at";
+    /// 店の列の別名。
+    const SHOP_COLUMNS: &str = "sh.id AS sh_id, sh.user_id AS sh_user_id, sh.name AS sh_name, \
+        sh.address AS sh_address, sh.created_at AS sh_created_at, sh.updated_at AS sh_updated_at, \
+        sh.archived_at AS sh_archived_at";
+
+    fn purchase_values<'a>(product_id: &'a str, shop_id: Option<&'a str>) -> PurchaseValues<'a> {
+        PurchaseValues {
+            product_id,
+            shop_id,
+            purchased_on: "2026-09-21",
+            roast: None,
+            roast_date: None,
+            price_amount: None,
+            price_currency: None,
+            weight_grams: None,
+        }
+    }
+
+    fn brew_values<'a>(purchase_id: &'a str) -> BrewValues<'a> {
+        BrewValues {
+            purchase_id,
+            brewed_at: AT,
+            dose_grams: None,
+            water_grams: None,
+            water_temp_c: None,
+            brew_time_seconds: None,
+            method: None,
+            grind_setting: None,
+            rating: None,
+            notes: None,
+        }
+    }
+
+    #[test]
+    fn a_purchases_list_query_joins_the_product_and_the_shop() {
+        let statement = query::purchases_list(USER_ID, Archived::Exclude, None, 50).unwrap();
+        assert_eq!(
+            statement.sql,
+            format!(
+                "SELECT {PURCHASE_COLUMNS}, {PRODUCT_COLUMNS}, {SHOP_COLUMNS} \
+                 FROM purchases AS p \
+                 INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
+                 LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id \
+                 WHERE p.user_id = ? AND p.archived_at IS NULL \
+                 ORDER BY p.purchased_on DESC, p.id ASC LIMIT ?"
+            )
+        );
+        assert_eq!(
+            statement.params,
+            vec![Value::Text(USER_ID.to_owned()), Value::Integer(50)]
+        );
+    }
+
+    #[test]
+    fn a_purchases_list_query_with_a_cursor_uses_the_purchase_date() {
+        let cursor = CursorKey::Date {
+            on: "2026-09-21".to_owned(),
+            id: SHOP_ID.to_owned(),
+        };
+        let statement =
+            query::purchases_list(USER_ID, Archived::Exclude, Some(cursor), 10).unwrap();
+        assert!(
+            statement
+                .sql
+                .contains("AND (p.purchased_on < ? OR (p.purchased_on = ? AND p.id > ?))"),
+            "{}",
+            statement.sql
+        );
+        assert_eq!(statement.params.len(), 5);
+        assert_eq!(statement.params[1], Value::Text("2026-09-21".to_owned()));
+        assert_eq!(statement.params[3], Value::Text(SHOP_ID.to_owned()));
+    }
+
+    #[test]
+    fn a_purchases_list_query_with_include_archived_has_no_archived_filter() {
+        let statement = query::purchases_list(USER_ID, Archived::Include, None, 50).unwrap();
+        assert!(
+            !statement.sql.contains("archived_at IS NULL"),
+            "include_archived must not add the archived filter: {}",
+            statement.sql
+        );
+        assert!(statement.sql.contains("WHERE p.user_id = ?"));
+    }
+
+    #[test]
+    fn a_purchases_cursor_of_another_kind_is_rejected() {
+        let cursor = CursorKey::DateTime {
+            at: AT.to_owned(),
+            id: SHOP_ID.to_owned(),
+        };
+        assert_eq!(
+            query::purchases_list(USER_ID, Archived::Exclude, Some(cursor), 50),
+            Err(QueryError::CursorKindMismatch)
+        );
+    }
+
+    #[test]
+    fn a_brews_list_query_joins_the_purchase_the_product_and_the_shop() {
+        let statement = query::brews_list(USER_ID, Archived::Exclude, None, 200).unwrap();
+        assert_eq!(
+            statement.sql,
+            format!(
+                "SELECT b.id AS b_id, b.user_id AS b_user_id, b.purchase_id AS b_purchase_id, \
+                 b.brewed_at AS b_brewed_at, b.dose_grams AS b_dose_grams, \
+                 b.water_grams AS b_water_grams, b.water_temp_c AS b_water_temp_c, \
+                 b.brew_time_seconds AS b_brew_time_seconds, b.method AS b_method, \
+                 b.grind_setting AS b_grind_setting, b.rating AS b_rating, b.notes AS b_notes, \
+                 b.created_at AS b_created_at, b.updated_at AS b_updated_at, \
+                 b.archived_at AS b_archived_at, {PURCHASE_COLUMNS}, {PRODUCT_COLUMNS}, \
+                 {SHOP_COLUMNS} \
+                 FROM brews AS b \
+                 INNER JOIN purchases AS p ON p.id = b.purchase_id AND p.user_id = b.user_id \
+                 INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
+                 LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id \
+                 WHERE b.user_id = ? AND b.archived_at IS NULL \
+                 ORDER BY b.brewed_at DESC, b.id ASC LIMIT ?"
+            )
+        );
+        assert_eq!(
+            statement.params,
+            vec![Value::Text(USER_ID.to_owned()), Value::Integer(200)]
+        );
+    }
+
+    #[test]
+    fn a_brew_find_query_filters_by_the_id_and_the_user() {
+        let statement = query::brew_find(USER_ID, SHOP_ID, Archived::Include);
+        assert_eq!(
+            statement.sql,
+            format!(
+                "SELECT b.id AS b_id, b.user_id AS b_user_id, b.purchase_id AS b_purchase_id, \
+                 b.brewed_at AS b_brewed_at, b.dose_grams AS b_dose_grams, \
+                 b.water_grams AS b_water_grams, b.water_temp_c AS b_water_temp_c, \
+                 b.brew_time_seconds AS b_brew_time_seconds, b.method AS b_method, \
+                 b.grind_setting AS b_grind_setting, b.rating AS b_rating, b.notes AS b_notes, \
+                 b.created_at AS b_created_at, b.updated_at AS b_updated_at, \
+                 b.archived_at AS b_archived_at, {PURCHASE_COLUMNS}, {PRODUCT_COLUMNS}, \
+                 {SHOP_COLUMNS} \
+                 FROM brews AS b \
+                 INNER JOIN purchases AS p ON p.id = b.purchase_id AND p.user_id = b.user_id \
+                 INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
+                 LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id \
+                 WHERE b.id = ? AND b.user_id = ?"
+            )
+        );
+        assert_eq!(
+            statement.params,
+            vec![
+                Value::Text(SHOP_ID.to_owned()),
+                Value::Text(USER_ID.to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_purchase_find_query_joins_the_product_and_the_shop() {
+        let statement = query::purchase_find(USER_ID, SHOP_ID, Archived::Include);
+        assert!(
+            statement
+                .sql
+                .contains("FROM purchases AS p INNER JOIN products AS pr ON pr.id = p.product_id"),
+            "{}",
+            statement.sql
+        );
+        assert!(
+            statement
+                .sql
+                .contains("LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id"),
+            "{}",
+            statement.sql
+        );
+        assert!(
+            statement.sql.ends_with("WHERE p.id = ? AND p.user_id = ?"),
+            "{}",
+            statement.sql
+        );
+    }
+
+    #[test]
+    fn a_purchase_insert_and_update_carry_every_field() {
+        let insert = query::purchase_insert(
+            SHOP_ID,
+            USER_ID,
+            &purchase_values("product-1", Some("shop-1")),
+            AT,
+            AT,
+        )
+        .unwrap();
+        assert_eq!(
+            insert.sql,
+            "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, \
+             roast_date, price_amount, price_currency, weight_grams, created_at, updated_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        );
+        assert_eq!(
+            insert.params,
+            vec![
+                Value::Text(SHOP_ID.to_owned()),
+                Value::Text(USER_ID.to_owned()),
+                Value::Text("product-1".to_owned()),
+                Value::Text("shop-1".to_owned()),
+                Value::Text("2026-09-21".to_owned()),
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::Text(AT.to_owned()),
+                Value::Text(AT.to_owned()),
+            ]
+        );
+        let update =
+            query::purchase_update(SHOP_ID, USER_ID, &purchase_values("product-1", None), AT)
+                .unwrap();
+        assert_eq!(
+            update.sql,
+            "UPDATE purchases SET product_id = ?, shop_id = ?, purchased_on = ?, roast = ?, \
+             roast_date = ?, price_amount = ?, price_currency = ?, weight_grams = ?, updated_at = ? \
+             WHERE id = ? AND user_id = ?"
+        );
+        assert_eq!(update.params.len(), 11);
+        assert_eq!(update.params[1], Value::Null);
+    }
+
+    #[test]
+    fn a_purchase_insert_carries_the_price_and_the_currency() {
+        let values = PurchaseValues {
+            product_id: "product-1",
+            shop_id: None,
+            purchased_on: "2026-09-21",
+            roast: Some("中煎り"),
+            roast_date: Some("2026-09-19"),
+            price_amount: Some(1200),
+            price_currency: Some("JPY"),
+            weight_grams: Some(200),
+        };
+        let statement = query::purchase_insert(SHOP_ID, USER_ID, &values, AT, AT).unwrap();
+        assert_eq!(statement.params[7], Value::Integer(1200));
+        assert_eq!(statement.params[8], Value::Text("JPY".to_owned()));
+        assert_eq!(statement.params[9], Value::Integer(200));
+        // 価格が無いときは通貨コードも NULL にする (0007 の設計判断)。
+        let statement = query::purchase_insert(
+            SHOP_ID,
+            USER_ID,
+            &purchase_values("product-1", None),
+            AT,
+            AT,
+        )
+        .unwrap();
+        assert_eq!(statement.params[7], Value::Null);
+        assert_eq!(statement.params[8], Value::Null);
+    }
+
+    #[test]
+    fn a_brew_insert_carries_the_decimal_values() {
+        let values = BrewValues {
+            purchase_id: "purchase-1",
+            brewed_at: AT,
+            dose_grams: Some(15.5),
+            water_grams: Some(250.0),
+            water_temp_c: Some(92.5),
+            brew_time_seconds: Some(150),
+            method: Some("ペーパードリップ"),
+            grind_setting: Some("中細"),
+            rating: Some(4),
+            notes: Some("良い出来"),
+        };
+        let insert = query::brew_insert(SHOP_ID, USER_ID, &values, AT, AT).unwrap();
+        assert_eq!(
+            insert.sql,
+            "INSERT INTO brews (id, user_id, purchase_id, brewed_at, dose_grams, water_grams, \
+             water_temp_c, brew_time_seconds, method, grind_setting, rating, notes, created_at, \
+             updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        );
+        assert_eq!(insert.params[2], Value::Text("purchase-1".to_owned()));
+        assert_eq!(insert.params[3], Value::Text(AT.to_owned()));
+        assert_eq!(insert.params[4], Value::Real(15.5));
+        assert_eq!(insert.params[5], Value::Real(250.0));
+        assert_eq!(insert.params[6], Value::Real(92.5));
+        assert_eq!(insert.params[7], Value::Integer(150));
+        assert_eq!(insert.params[8], Value::Text("ペーパードリップ".to_owned()));
+        assert_eq!(insert.params[9], Value::Text("中細".to_owned()));
+        assert_eq!(insert.params[10], Value::Integer(4));
+        assert_eq!(insert.params[11], Value::Text("良い出来".to_owned()));
+        assert_eq!(insert.params.len(), 14);
+        let update = query::brew_update(SHOP_ID, USER_ID, &brew_values("purchase-1"), AT).unwrap();
+        assert_eq!(
+            update.sql,
+            "UPDATE brews SET purchase_id = ?, brewed_at = ?, dose_grams = ?, water_grams = ?, \
+             water_temp_c = ?, brew_time_seconds = ?, method = ?, grind_setting = ?, rating = ?, \
+             notes = ?, updated_at = ? WHERE id = ? AND user_id = ?"
+        );
+        assert_eq!(update.params[2], Value::Null);
+        assert_eq!(update.params.len(), 13);
+    }
+
+    #[test]
+    fn the_archive_statements_of_the_purchases_and_the_brews_keep_the_user() {
+        let archive = query::purchase_set_archived(SHOP_ID, USER_ID, Some(AT), AT).unwrap();
+        assert_eq!(
+            archive.sql,
+            "UPDATE purchases SET archived_at = ?, updated_at = ? WHERE id = ? AND user_id = ?"
+        );
+        assert_eq!(archive.params[0], Value::Text(AT.to_owned()));
+        let unarchive = query::brew_set_archived(SHOP_ID, USER_ID, None, AT).unwrap();
+        assert_eq!(
+            unarchive.sql,
+            "UPDATE brews SET archived_at = ?, updated_at = ? WHERE id = ? AND user_id = ?"
+        );
+        assert_eq!(unarchive.params[0], Value::Null);
+    }
+}
+
 mod include_archived_parameter {
     use super::*;
 
@@ -487,7 +816,7 @@ mod include_archived_parameter {
 
 mod conditions {
     use super::*;
-    use coffee_log_core::query::{self, ProductValues, ShopValues};
+    use coffee_log_core::query::{self, BrewValues, ProductValues, PurchaseValues, ShopValues};
 
     /// 検査の対象にする文の種類。
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -549,6 +878,159 @@ mod conditions {
             at: AT.to_owned(),
             id: SHOP_ID.to_owned(),
         };
+        for (name, archived, default_archived) in [
+            ("purchases list", Archived::Exclude, true),
+            ("purchases list with archived", Archived::Include, false),
+            ("brews list", Archived::Exclude, true),
+            ("brews list with archived", Archived::Include, false),
+        ] {
+            checked.push(Checked {
+                name,
+                statement: if name.starts_with("purchases") {
+                    query::purchases_list(USER_ID, archived, None, 50).unwrap()
+                } else {
+                    query::brews_list(USER_ID, archived, None, 50).unwrap()
+                },
+                kind: Kind::List,
+                default_archived,
+            });
+        }
+        checked.push(Checked {
+            name: "purchases list with a date cursor",
+            statement: query::purchases_list(
+                USER_ID,
+                Archived::Exclude,
+                Some(CursorKey::Date {
+                    on: "2026-09-21".to_owned(),
+                    id: SHOP_ID.to_owned(),
+                }),
+                50,
+            )
+            .unwrap(),
+            kind: Kind::List,
+            default_archived: true,
+        });
+        checked.push(Checked {
+            name: "brews list with a cursor",
+            statement: query::brews_list(USER_ID, Archived::Exclude, Some(cursor.clone()), 50)
+                .unwrap(),
+            kind: Kind::List,
+            default_archived: true,
+        });
+        checked.push(Checked {
+            name: "purchase find",
+            statement: query::purchase_find(USER_ID, SHOP_ID, Archived::Include),
+            kind: Kind::Row,
+            default_archived: false,
+        });
+        checked.push(Checked {
+            name: "brew find of the active rows",
+            statement: query::brew_find(USER_ID, SHOP_ID, Archived::Exclude),
+            kind: Kind::Row,
+            default_archived: true,
+        });
+        checked.push(Checked {
+            name: "purchase insert",
+            statement: query::purchase_insert(
+                SHOP_ID,
+                USER_ID,
+                &PurchaseValues {
+                    product_id: "product-1",
+                    shop_id: None,
+                    purchased_on: "2026-09-21",
+                    roast: None,
+                    roast_date: None,
+                    price_amount: None,
+                    price_currency: None,
+                    weight_grams: None,
+                },
+                AT,
+                AT,
+            )
+            .unwrap(),
+            kind: Kind::Insert,
+            default_archived: false,
+        });
+        checked.push(Checked {
+            name: "purchase update",
+            statement: query::purchase_update(
+                SHOP_ID,
+                USER_ID,
+                &PurchaseValues {
+                    product_id: "product-1",
+                    shop_id: None,
+                    purchased_on: "2026-09-21",
+                    roast: None,
+                    roast_date: None,
+                    price_amount: None,
+                    price_currency: None,
+                    weight_grams: None,
+                },
+                AT,
+            )
+            .unwrap(),
+            kind: Kind::Row,
+            default_archived: false,
+        });
+        checked.push(Checked {
+            name: "purchase archive",
+            statement: query::purchase_set_archived(SHOP_ID, USER_ID, Some(AT), AT).unwrap(),
+            kind: Kind::Row,
+            default_archived: false,
+        });
+        checked.push(Checked {
+            name: "brew insert",
+            statement: query::brew_insert(
+                SHOP_ID,
+                USER_ID,
+                &BrewValues {
+                    purchase_id: "purchase-1",
+                    brewed_at: AT,
+                    dose_grams: Some(15.5),
+                    water_grams: None,
+                    water_temp_c: None,
+                    brew_time_seconds: None,
+                    method: None,
+                    grind_setting: None,
+                    rating: None,
+                    notes: None,
+                },
+                AT,
+                AT,
+            )
+            .unwrap(),
+            kind: Kind::Insert,
+            default_archived: false,
+        });
+        checked.push(Checked {
+            name: "brew update",
+            statement: query::brew_update(
+                SHOP_ID,
+                USER_ID,
+                &BrewValues {
+                    purchase_id: "purchase-1",
+                    brewed_at: AT,
+                    dose_grams: None,
+                    water_grams: None,
+                    water_temp_c: None,
+                    brew_time_seconds: None,
+                    method: None,
+                    grind_setting: None,
+                    rating: None,
+                    notes: None,
+                },
+                AT,
+            )
+            .unwrap(),
+            kind: Kind::Row,
+            default_archived: false,
+        });
+        checked.push(Checked {
+            name: "brew unarchive",
+            statement: query::brew_set_archived(SHOP_ID, USER_ID, None, AT).unwrap(),
+            kind: Kind::Row,
+            default_archived: false,
+        });
         checked.push(Checked {
             name: "shops list with a cursor",
             statement: query::shops_list(USER_ID, Archived::Exclude, Some(cursor.clone()), 50)

@@ -1,10 +1,12 @@
-//! 店と商品と Flavor Notes のタグの API (FR-6、FR-7、FR-8、FR-12)。
+//! 店と商品と Flavor Notes のタグと、購入と抽出の API (FR-6 から FR-12)。
 //!
 //! 入力の検証は `coffee_log_core::records`、SQL の組み立ては `coffee_log_core::query` が持つ。
 //! ここは経路の処理 (入力の読み取り、D1 の実行、応答の組み立て) だけを行う。
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 
+pub mod brews;
 pub mod products;
+pub mod purchases;
 pub mod shops;
 pub mod tags;
 
@@ -19,6 +21,9 @@ use worker::{console_error, Request, Response, Result};
 
 use crate::db;
 use crate::respond;
+
+use self::products::ProductResponse;
+use self::shops::ShopResponse;
 
 /// 一覧のクエリパラメータ (limit、cursor、include_archived)。
 pub struct ListParams {
@@ -104,6 +109,102 @@ pub fn invalid_input(message: &str) -> Response {
 /// 404 の応答を組み立てる。存在しない ID と他の利用者の ID は区別しない (ADR-0006)。
 pub fn not_found(message: &str) -> Response {
     respond::error(ErrorCode::NotFound, message)
+}
+
+/// 409 の応答を組み立てる。アーカイブ済みの親を参照先に指定したときなどに使う (FR-9、FR-11)。
+pub fn conflict(message: &str) -> Response {
+    respond::error(ErrorCode::Conflict, message)
+}
+
+/// 参照先の検証の結果 (FR-9、FR-11)。拒否したときはそのまま返す応答を持つ。
+pub enum Reference<T> {
+    /// 参照できる。
+    Found(T),
+    /// 存在しないか他の利用者のもの (404)、またはアーカイブ済み (409)。
+    Rejected(Response),
+}
+
+impl<T> Reference<T> {
+    /// 拒否されたときは応答を返し、参照できるときは値を返す。
+    pub fn or_return(self) -> std::result::Result<T, Response> {
+        match self {
+            Reference::Found(value) => Ok(value),
+            Reference::Rejected(response) => Err(response),
+        }
+    }
+}
+
+/// 参照先の商品を検証する。存在しないか他の利用者のものは 404、アーカイブ済みは 409 (FR-9)。
+pub async fn require_product(
+    d1: &D1Database,
+    user_id: &str,
+    id: &str,
+) -> Result<Reference<ProductResponse>> {
+    let statement = query::product_find(user_id, id, Archived::Include);
+    match db::prepared(d1, &statement)?
+        .first::<ProductResponse>(None)
+        .await?
+    {
+        None => Ok(Reference::Rejected(not_found("the product does not exist"))),
+        Some(product) if product.archived_at.is_some() => {
+            Ok(Reference::Rejected(conflict("the product is archived")))
+        }
+        Some(product) => Ok(Reference::Found(product)),
+    }
+}
+
+/// 参照先の店を検証する。存在しないか他の利用者のものは 404、アーカイブ済みは 409 (FR-9)。
+pub async fn require_shop(
+    d1: &D1Database,
+    user_id: &str,
+    id: &str,
+) -> Result<Reference<ShopResponse>> {
+    let statement = query::shop_find(user_id, id, Archived::Include);
+    match db::prepared(d1, &statement)?
+        .first::<ShopResponse>(None)
+        .await?
+    {
+        None => Ok(Reference::Rejected(not_found("the shop does not exist"))),
+        Some(shop) if shop.archived_at.is_some() => {
+            Ok(Reference::Rejected(conflict("the shop is archived")))
+        }
+        Some(shop) => Ok(Reference::Found(shop)),
+    }
+}
+
+/// 参照先の購入を検証する。存在しないか他の利用者のものは 404、アーカイブ済みは 409 (FR-11)。
+pub async fn require_purchase(d1: &D1Database, user_id: &str, id: &str) -> Result<Reference<()>> {
+    let statement = query::purchase_find(user_id, id, Archived::Include);
+    let row: Option<PurchaseReferenceRow> = db::prepared(d1, &statement)?.first(None).await?;
+    match row {
+        None => Ok(Reference::Rejected(not_found(
+            "the purchase does not exist",
+        ))),
+        Some(row) if row.p_archived_at.is_some() => {
+            Ok(Reference::Rejected(conflict("the purchase is archived")))
+        }
+        Some(_) => Ok(Reference::Found(())),
+    }
+}
+
+/// 参照先の購入の検証に使う、結合した行のうち購入の状態だけの列。
+#[derive(Debug, serde::Deserialize)]
+struct PurchaseReferenceRow {
+    p_archived_at: Option<String>,
+}
+
+/// 応答の商品に Flavor Notes を付ける (FR-8)。商品のタグは 1 つのクエリでまとめて引く。
+pub async fn attach_flavor_notes(
+    d1: &D1Database,
+    user_id: &str,
+    products: &mut [&mut ProductResponse],
+) -> Result<()> {
+    let ids: Vec<&str> = products.iter().map(|product| product.id.as_str()).collect();
+    let notes = flavor_notes_for(d1, user_id, &ids).await?;
+    for product in products {
+        product.flavor_notes = notes.get(&product.id).cloned().unwrap_or_default();
+    }
+    Ok(())
 }
 
 /// クエリの組み立ての誤りを応答にする。
