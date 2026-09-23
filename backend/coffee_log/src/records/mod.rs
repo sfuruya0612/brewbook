@@ -10,6 +10,7 @@ pub mod photos;
 pub mod products;
 pub mod purchases;
 pub mod shops;
+pub mod stats;
 pub mod suggestions;
 pub mod tags;
 
@@ -188,6 +189,16 @@ pub async fn require_purchase(d1: &D1Database, user_id: &str, id: &str) -> Resul
         }
         Some(_) => Ok(Reference::Found(())),
     }
+}
+
+/// 参照先の購入が存在するかを確かめる。存在しないか他の利用者のものは false にする。
+///
+/// アーカイブ済みでも存在として扱う (評価の推移は単件取得と同じくアーカイブ済みの購入を
+/// 指定できる。FR-12)。
+pub async fn purchase_exists(d1: &D1Database, user_id: &str, id: &str) -> Result<bool> {
+    let statement = query::purchase_find(user_id, id, Archived::Include);
+    let row: Option<PurchaseReferenceRow> = db::prepared(d1, &statement)?.first(None).await?;
+    Ok(row.is_some())
 }
 
 /// 参照先の購入の検証に使う、結合した行のうち購入の状態だけの列。

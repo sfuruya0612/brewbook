@@ -14,4 +14,5 @@ pub mod photo;
 pub mod query;
 pub mod records;
 pub mod routes;
+pub mod stats;
 pub mod webauthn;

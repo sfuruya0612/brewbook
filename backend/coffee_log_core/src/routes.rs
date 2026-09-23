@@ -328,6 +328,34 @@ pub const ROUTES: &[Route] = &[
         // 入力中の文字列 (`q`) を読む (項目名は経路のパラメータであり、入力には数えない)。
         has_input: true,
     },
+    Route {
+        name: "stats_brews",
+        method: Method::Get,
+        pattern: "/api/stats/brews",
+        auth_required: true,
+        has_input: true,
+    },
+    Route {
+        name: "stats_purchases",
+        method: Method::Get,
+        pattern: "/api/stats/purchases",
+        auth_required: true,
+        has_input: true,
+    },
+    Route {
+        name: "stats_brew_ratings",
+        method: Method::Get,
+        pattern: "/api/stats/brew-ratings",
+        auth_required: true,
+        has_input: true,
+    },
+    Route {
+        name: "purchases_rating_history",
+        method: Method::Get,
+        pattern: "/api/purchases/:id/rating-history",
+        auth_required: true,
+        has_input: false,
+    },
 ];
 
 /// 経路が一致しなかったリクエストのログに使う経路名。

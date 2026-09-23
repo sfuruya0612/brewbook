@@ -457,6 +457,88 @@ impl Seed {
         }
     }
 
+    /// 豆の量、湯量、湯の温度、時間、評価を持つ抽出の行を入れる (統計の検査用)。
+    // 下ごしらえの引数はテーブルの列をそのまま受ける (テストが列を選んで投入できるようにする)。
+    #[allow(clippy::too_many_arguments)]
+    pub fn brew_with_numbers(
+        &mut self,
+        user_id: &str,
+        purchase_id: &str,
+        brewed_at: &str,
+        dose_grams: Option<f64>,
+        water_grams: Option<f64>,
+        water_temp_c: Option<f64>,
+        brew_time_seconds: Option<i64>,
+        rating: Option<i64>,
+        created_at: &str,
+        updated_at: &str,
+        archived_at: Option<&str>,
+    ) -> SeededBrew {
+        let id = self.next_id();
+        self.push(format!(
+            "INSERT INTO brews (id, user_id, purchase_id, brewed_at, dose_grams, water_grams, \
+             water_temp_c, brew_time_seconds, rating, created_at, updated_at, archived_at) \
+             VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+            literal(&id),
+            literal(user_id),
+            literal(purchase_id),
+            literal(brewed_at),
+            real(dose_grams),
+            real(water_grams),
+            real(water_temp_c),
+            count(brew_time_seconds),
+            count(rating),
+            literal(created_at),
+            literal(updated_at),
+            archived_at.map_or_else(|| "NULL".to_owned(), literal)
+        ));
+        SeededBrew {
+            id,
+            purchase_id: purchase_id.to_owned(),
+            brewed_at: brewed_at.to_owned(),
+        }
+    }
+
+    /// 価格、通貨コード、重量を持つ購入の行を入れる (統計の検査用)。
+    // 下ごしらえの引数はテーブルの列をそのまま受ける (テストが列を選んで投入できるようにする)。
+    #[allow(clippy::too_many_arguments)]
+    pub fn purchase_with_numbers(
+        &mut self,
+        user_id: &str,
+        product_id: &str,
+        shop_id: Option<&str>,
+        purchased_on: &str,
+        price_amount: Option<i64>,
+        price_currency: Option<&str>,
+        weight_grams: Option<i64>,
+        created_at: &str,
+        updated_at: &str,
+        archived_at: Option<&str>,
+    ) -> SeededPurchase {
+        let id = self.next_id();
+        self.push(format!(
+            "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, \
+             price_amount, price_currency, weight_grams, created_at, updated_at, archived_at) \
+             VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+            literal(&id),
+            literal(user_id),
+            literal(product_id),
+            shop_id.map_or_else(|| "NULL".to_owned(), literal),
+            literal(purchased_on),
+            count(price_amount),
+            price_currency.map_or_else(|| "NULL".to_owned(), literal),
+            count(weight_grams),
+            literal(created_at),
+            literal(updated_at),
+            archived_at.map_or_else(|| "NULL".to_owned(), literal)
+        ));
+        SeededPurchase {
+            id,
+            product_id: product_id.to_owned(),
+            purchased_on: purchased_on.to_owned(),
+        }
+    }
+
     /// 下ごしらえの SQL。
     pub fn sql(&self) -> String {
         self.statements.join(";\n")
@@ -491,4 +573,14 @@ fn literal(value: &str) -> String {
         "the test value must not contain a single quote: {value}"
     );
     format!("'{value}'")
+}
+
+/// 小数を SQL のリテラルにする。無い値は NULL にする。
+fn real(value: Option<f64>) -> String {
+    value.map_or_else(|| "NULL".to_owned(), |value| format!("{value}"))
+}
+
+/// 整数を SQL のリテラルにする。無い値は NULL にする。
+fn count(value: Option<i64>) -> String {
+    value.map_or_else(|| "NULL".to_owned(), |value| value.to_string())
 }

@@ -203,6 +203,10 @@ async fn authenticated_route(
         "brews_archive" => records::brews::archive(env, session, id, true).await,
         "brews_unarchive" => records::brews::archive(env, session, id, false).await,
         "suggestions_list" => records::suggestions::list(req, env, session, field).await,
+        "stats_brews" => records::stats::brews(req, env, session).await,
+        "stats_purchases" => records::stats::purchases(req, env, session).await,
+        "stats_brew_ratings" => records::stats::brew_ratings(req, env, session).await,
+        "purchases_rating_history" => records::stats::rating_history(env, session, id).await,
         _ => Ok(not_implemented()),
     }
 }
