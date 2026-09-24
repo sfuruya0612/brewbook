@@ -9,11 +9,11 @@ Model: deepseek-v4p1-flash
 
 ```
 [custom build] Running: worker-build --release
-[custom build] [INFO]: 🎯  Checking for the Wasm target...
-[custom build] [INFO]: 🌀  Compiling to Wasm...
+[custom build] [INFO]: Checking for the Wasm target...
+[custom build] [INFO]: Compiling to Wasm...
 [custom build] Error: Failed to read /Users/user/apps/coffee/backend/coffee_log/build/.tmp/package.json
 [custom build]     No such file or directory (os error 2)
-✘ [ERROR] Process exited with non-zero status (1)
+[ERROR] Process exited with non-zero status (1)
 ```
 
 テストは `wrangler dev must start: "wrangler dev exited before ready with exit status: 1"` で失敗する (2026-09-23 の `mise run check` の `d1_binding` の `wrangler_d1_binding_inserts_and_selects_with_placeholders` で発生。リポジトリの 0019 とは別の事象)。
