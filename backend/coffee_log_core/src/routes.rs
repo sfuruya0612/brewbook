@@ -363,6 +363,13 @@ pub const ROUTES: &[Route] = &[
         auth_required: true,
         has_input: false,
     },
+    Route {
+        name: "account_delete",
+        method: Method::Delete,
+        pattern: "/api/account",
+        auth_required: true,
+        has_input: false,
+    },
 ];
 
 /// 経路が一致しなかったリクエストのログに使う経路名。

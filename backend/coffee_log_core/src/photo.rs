@@ -71,6 +71,16 @@ pub fn photo_key(user_id: &str, purchase_id: &str, uuid: &str) -> String {
     format!("{USERS_PREFIX}{user_id}/purchases/{purchase_id}/{uuid}{SUFFIX}")
 }
 
+/// 利用者に属する紐づけ前のオブジェクトキーのプレフィックス。アカウント削除の一覧に使う (FR-15)。
+pub fn pending_prefix(user_id: &str) -> String {
+    format!("{PENDING_PREFIX}{user_id}/")
+}
+
+/// 利用者に属する紐づけ済みのオブジェクトキーのプレフィックス。アカウント削除の一覧に使う (FR-15)。
+pub fn user_prefix(user_id: &str) -> String {
+    format!("{USERS_PREFIX}{user_id}/")
+}
+
 /// `pending/<利用者 ID>/<UUID>.jpg` のキーから UUID を取り出す。形式が違えば None を返す。
 ///
 /// キーはクライアントから戻される信頼できない入力である。利用者 ID の一致と、UUID の部分が

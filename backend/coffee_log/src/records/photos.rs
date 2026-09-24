@@ -1,6 +1,7 @@
 //! 購入の写真 (FR-10、ADR-0003)。
 //!
 //! アップロード用 URL の発行、アップロード完了の通知、取得、削除の 4 つの経路を処理する。
+//! アカウント削除 (FR-15) が使う、利用者の全オブジェクトの削除もここに置く。
 //! 署名付き URL の生成は `coffee_log_core::photo`、R2 のオブジェクトの操作はバインディング
 //! (`PHOTOS`) が行う。存在しない購入と他の利用者の購入は区別せず 404 を返す (FR-5)。
 //!
@@ -33,6 +34,8 @@ pub const ACCESS_KEY_ID_SECRET: &str = "R2_ACCESS_KEY_ID";
 pub const SECRET_ACCESS_KEY_SECRET: &str = "R2_SECRET_ACCESS_KEY";
 /// 署名付き URL の有効期限の秒数の vars の名前。テストが `--var` で短い値を注入する (FR-10)。
 pub const URL_EXPIRES_SECONDS_VAR: &str = "PHOTO_URL_EXPIRES_SECONDS";
+/// R2 の一覧を 1 回で引く件数の上限。カーソルを繰り返す削除 (FR-15) が使う。
+const LIST_PAGE_LIMIT: u32 = 1_000;
 
 /// 購入が無いときの応答のメッセージ。存在しない購入と他の利用者の購入で共通にする (FR-5)。
 const PURCHASE_NOT_FOUND: &str = "the purchase does not exist";
@@ -290,6 +293,38 @@ pub async fn delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Re
     let bucket = env.bucket(PHOTOS_BINDING)?;
     bucket.delete(&key).await?;
     purchases::respond_fetched(&d1, &session.user_id, id).await
+}
+
+/// 利用者の全オブジェクトを R2 から削除する。アカウント削除だけが使う (FR-15、ADR-0003)。
+///
+/// 紐づけ済み (`users/<利用者 ID>/`) と紐づけ前 (`pending/<利用者 ID>/`) の両方を対象にする。
+/// 一覧は 1 回で返る件数に上限があるため、カーソルを繰り返して全件を削除する
+/// (想定規模では 1 利用者あたり 3,000 件まであり得る)。同じキーの削除は繰り返しても成功するため、
+/// 途中で失敗しても、セッションが有効なうちに利用者が再試行できる (設計判断)。
+pub async fn delete_user_objects(env: &Env, user_id: &str) -> Result<()> {
+    let bucket = env.bucket(PHOTOS_BINDING)?;
+    for prefix in [photo::user_prefix(user_id), photo::pending_prefix(user_id)] {
+        let mut cursor: Option<String> = None;
+        loop {
+            let mut list = bucket.list().prefix(&prefix).limit(LIST_PAGE_LIMIT);
+            if let Some(value) = &cursor {
+                list = list.cursor(value);
+            }
+            let page = list.execute().await?;
+            for object in page.objects() {
+                bucket.delete(&object.key()).await?;
+            }
+            if !page.truncated() {
+                break;
+            }
+            // 打ち切られた一覧には次のカーソルが付く。付かない場合は同じページを繰り返すため、
+            // 無限ループにせず内部エラーにする。
+            cursor = Some(page.cursor().ok_or_else(|| {
+                worker::Error::RustError("the object list is truncated without a cursor".to_owned())
+            })?);
+        }
+    }
+    Ok(())
 }
 
 /// 必須の vars または Secret を読む。無い場合と空の場合は内部エラーにする。

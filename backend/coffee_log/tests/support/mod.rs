@@ -49,7 +49,8 @@ pub struct SuiteEntry {
 
 /// このスイートが持つテストの種別。0005 が認証の 10 経路、0006 が店と商品とタグの 13 経路、
 /// 0007 が購入と抽出の 12 経路、0008 がサジェストの 1 経路、0009 が購入の写真の 4 経路、
-/// 0010 が統計と評価の推移の 4 経路、0011 がエクスポートの 1 経路を追加する。
+/// 0010 が統計と評価の推移の 4 経路、0011 がエクスポートの 1 経路、
+/// 0012 がアカウント削除の 1 経路を追加する。
 pub const SUITE: &[SuiteEntry] = &[
     SuiteEntry {
         route: "auth_register_begin",
@@ -229,6 +230,10 @@ pub const SUITE: &[SuiteEntry] = &[
     },
     SuiteEntry {
         route: "export_get",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "account_delete",
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
     },
 ];

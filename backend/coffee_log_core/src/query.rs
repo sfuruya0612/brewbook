@@ -499,6 +499,34 @@ pub const FLAVOR_TAG_COLUMNS: &str = "id, user_id, name";
 pub const PRODUCT_FLAVOR_TAGS_TABLE: &str = "product_flavor_tags";
 /// 商品と Flavor Notes のタグの対応の列の並び。応答の JSON の項目と同じ。
 pub const PRODUCT_FLAVOR_TAG_COLUMNS: &str = "user_id, product_id, tag_id";
+/// 利用者のテーブル名。
+pub const USERS_TABLE: &str = "users";
+/// 登録用トークンのテーブル名。
+pub const REGISTRATION_TOKENS_TABLE: &str = "registration_tokens";
+/// パスキーのテーブル名。
+pub const PASSKEY_CREDENTIALS_TABLE: &str = "passkey_credentials";
+/// WebAuthn のチャレンジのテーブル名。
+pub const WEBAUTHN_CHALLENGES_TABLE: &str = "webauthn_challenges";
+/// セッションのテーブル名。
+pub const SESSIONS_TABLE: &str = "sessions";
+/// 利用者を指す列の名前。`users` だけは主キーの `id` を使う。
+const USER_ID_COLUMN: &str = "user_id";
+/// アカウント削除 (FR-15) で行を消すテーブルと、利用者を指す列の名前。
+///
+/// 外部キーの参照元から先に消す順にする (ADR-0006)。カスケード削除は使わない。
+const ACCOUNT_DELETE_TABLES: &[(&str, &str)] = &[
+    (PRODUCT_FLAVOR_TAGS_TABLE, USER_ID_COLUMN),
+    (BREWS_TABLE, USER_ID_COLUMN),
+    (PURCHASES_TABLE, USER_ID_COLUMN),
+    (FLAVOR_TAGS_TABLE, USER_ID_COLUMN),
+    (PRODUCTS_TABLE, USER_ID_COLUMN),
+    (SHOPS_TABLE, USER_ID_COLUMN),
+    (SESSIONS_TABLE, USER_ID_COLUMN),
+    (PASSKEY_CREDENTIALS_TABLE, USER_ID_COLUMN),
+    (WEBAUTHN_CHALLENGES_TABLE, USER_ID_COLUMN),
+    (REGISTRATION_TOKENS_TABLE, USER_ID_COLUMN),
+    (USERS_TABLE, "id"),
+];
 /// 1 つのクエリに束縛できる値の数。D1 は 100 個までとする
 /// (202 個を束縛したクエリを D1 が拒否することをローカルで確認した)。
 pub const MAX_BOUND_VALUES: usize = 100;
@@ -1106,6 +1134,22 @@ pub fn export_rows(
         sql,
         params: vec![Value::Text(user_id.to_owned())],
     }
+}
+
+/// アカウント削除 (FR-15) で利用者に属する全行を消す SQL を組み立てる。
+///
+/// 外部キーの参照元から先に消す順に並べ、どの文も利用者 ID を 1 つだけ束縛する (ADR-0006)。
+/// `webauthn_challenges` は利用者を持つ行 (登録のチャレンジ) だけを消し、ログイン用の行
+/// (`user_id` が NULL) は対象外にする (ADR-0006)。
+/// 呼び出し側は返した文を 1 つの batch で実行し、1 トランザクションにする (ADR-0002)。
+pub fn account_delete(user_id: &str) -> Vec<Statement> {
+    ACCOUNT_DELETE_TABLES
+        .iter()
+        .map(|(table, column)| Statement {
+            sql: format!("DELETE FROM {table} WHERE {column} = ?"),
+            params: vec![Value::Text(user_id.to_owned())],
+        })
+        .collect()
 }
 
 /// 商品の Flavor Notes のタグ名を引く SQL を、束縛する値の上限に収まるよう分けて組み立てる。

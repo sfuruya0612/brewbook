@@ -21,10 +21,15 @@ pub struct ApiClient {
 impl ApiClient {
     /// API の基底 URL とセッションのトークンから作る。`None` ならセッションを持たない。
     pub fn new(base_url: &str, token: Option<&str>) -> Self {
+        Self::with_timeout(base_url, token, Duration::from_secs(30))
+    }
+
+    /// 応答に時間のかかる呼び出し (想定規模の R2 の削除) のために、待ち時間を指定して作る。
+    pub fn with_timeout(base_url: &str, token: Option<&str>, timeout: Duration) -> Self {
         Self {
             base_url: base_url.to_owned(),
             client: Client::builder()
-                .timeout(Duration::from_secs(30))
+                .timeout(timeout)
                 .build()
                 .expect("the HTTP client must build"),
             cookie: token.map(|token| format!("session={token}")),

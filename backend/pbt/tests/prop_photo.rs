@@ -4,7 +4,9 @@
 //! 単体テスト (`test_photo.rs`) が担う。
 
 use coffee_log_core::ids::{uuid_bytes, uuid_v4_from_bytes};
-use coffee_log_core::photo::{parse_pending_key, pending_key, photo_key};
+use coffee_log_core::photo::{
+    parse_pending_key, pending_key, pending_prefix, photo_key, user_prefix,
+};
 use proptest::prelude::*;
 
 /// 利用者 ID と購入 ID に使う値。実際の ID (UUID) と同じ文字だけにする。
@@ -54,5 +56,33 @@ proptest! {
     ) {
         let key = photo_key(&user_id, &purchase_id, &uuid_v4_from_bytes(bytes));
         prop_assert_eq!(parse_pending_key(&user_id, &key), None);
+    }
+
+    /// アカウント削除 (FR-15) が使うプレフィックスは、その利用者の写真のキー (紐づけ済みと
+    /// 紐づけ前の両方) の先頭に一致する。
+    #[test]
+    fn the_prefixes_cover_the_keys_of_the_user(
+        user_id in identifier(),
+        purchase_id in identifier(),
+        bytes in any::<[u8; 16]>(),
+    ) {
+        let uuid = uuid_v4_from_bytes(bytes);
+        prop_assert!(photo_key(&user_id, &purchase_id, &uuid).starts_with(&user_prefix(&user_id)));
+        prop_assert!(pending_key(&user_id, &uuid).starts_with(&pending_prefix(&user_id)));
+    }
+
+    /// アカウント削除が使うプレフィックスは、他の利用者のキーの先頭に一致しない
+    /// (他の利用者のオブジェクトを消さない)。
+    #[test]
+    fn the_prefixes_do_not_cover_the_keys_of_another_user(
+        user_id in identifier(),
+        other in identifier(),
+        purchase_id in identifier(),
+        bytes in any::<[u8; 16]>(),
+    ) {
+        prop_assume!(user_id != other);
+        let uuid = uuid_v4_from_bytes(bytes);
+        prop_assert!(!photo_key(&other, &purchase_id, &uuid).starts_with(&user_prefix(&user_id)));
+        prop_assert!(!pending_key(&other, &uuid).starts_with(&pending_prefix(&user_id)));
     }
 }

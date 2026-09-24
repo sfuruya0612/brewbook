@@ -6,11 +6,13 @@ use worker::{
     console_error, event, Context, Date, Env, Request, Response, Result, RouteContext, Router,
 };
 
+pub mod account;
 pub mod auth;
 pub mod d1_check;
 pub mod db;
 pub mod export;
 pub mod logging;
+pub mod r2_check;
 pub mod random;
 pub mod records;
 pub mod respond;
@@ -62,6 +64,9 @@ async fn unmatched_route(req: &mut Request, env: &Env) -> (&'static str, u16, Re
     }
     if let Some(result) = d1_check::run(req, env).await {
         return test_route_result(d1_check::ROUTE_NAME, result);
+    }
+    if let Some(result) = r2_check::run(req, env).await {
+        return test_route_result(r2_check::ROUTE_NAME, result);
     }
     (
         NOT_FOUND_ROUTE,
@@ -209,6 +214,7 @@ async fn authenticated_route(
         "stats_brew_ratings" => records::stats::brew_ratings(req, env, session).await,
         "purchases_rating_history" => records::stats::rating_history(env, session, id).await,
         "export_get" => export::get(env, session).await,
+        "account_delete" => account::delete(env, session).await,
         _ => Ok(not_implemented()),
     }
 }
