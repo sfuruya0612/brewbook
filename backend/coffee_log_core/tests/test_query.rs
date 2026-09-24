@@ -901,6 +901,92 @@ mod suggestions {
     }
 }
 
+mod export_queries {
+    use super::*;
+    use coffee_log_core::query;
+
+    #[test]
+    fn an_export_query_carries_every_column_of_the_table_without_the_archived_filter_and_a_limit() {
+        let statement =
+            query::export_rows(query::SHOPS_TABLE, query::SHOP_COLUMNS, "id ASC", USER_ID);
+        assert_eq!(
+            statement.sql,
+            "SELECT id, user_id, name, address, created_at, updated_at, archived_at FROM shops \
+             WHERE user_id = ? ORDER BY id ASC"
+        );
+        assert_eq!(statement.params, vec![Value::Text(USER_ID.to_owned())]);
+        assert!(
+            !statement.sql.contains("archived_at IS NULL"),
+            "the export must include the archived rows: {}",
+            statement.sql
+        );
+        assert!(
+            !statement.sql.contains("LIMIT"),
+            "the export must carry every row: {}",
+            statement.sql
+        );
+        assert!(
+            !statement.sql.contains(USER_ID),
+            "the user id must not appear in the SQL: {}",
+            statement.sql
+        );
+    }
+
+    #[test]
+    fn an_export_query_of_the_product_flavor_tags_orders_by_the_primary_key() {
+        let statement = query::export_rows(
+            query::PRODUCT_FLAVOR_TAGS_TABLE,
+            query::PRODUCT_FLAVOR_TAG_COLUMNS,
+            "product_id ASC, tag_id ASC",
+            USER_ID,
+        );
+        assert_eq!(
+            statement.sql,
+            "SELECT user_id, product_id, tag_id FROM product_flavor_tags \
+             WHERE user_id = ? ORDER BY product_id ASC, tag_id ASC"
+        );
+        assert_eq!(statement.params, vec![Value::Text(USER_ID.to_owned())]);
+    }
+
+    #[test]
+    fn every_export_query_of_the_six_tables_keeps_the_user_condition() {
+        for (table, columns, order_by) in [
+            (query::SHOPS_TABLE, query::SHOP_COLUMNS, "id ASC"),
+            (query::PRODUCTS_TABLE, query::PRODUCT_COLUMNS, "id ASC"),
+            (
+                query::FLAVOR_TAGS_TABLE,
+                query::FLAVOR_TAG_COLUMNS,
+                "id ASC",
+            ),
+            (
+                query::PRODUCT_FLAVOR_TAGS_TABLE,
+                query::PRODUCT_FLAVOR_TAG_COLUMNS,
+                "product_id ASC, tag_id ASC",
+            ),
+            (query::PURCHASES_TABLE, query::PURCHASE_COLUMNS, "id ASC"),
+            (query::BREWS_TABLE, query::BREW_COLUMNS, "id ASC"),
+        ] {
+            let statement = query::export_rows(table, columns, order_by, USER_ID);
+            assert!(
+                statement.sql.contains("WHERE user_id = ?"),
+                "the user filter is missing in {table}: {}",
+                statement.sql
+            );
+            assert_eq!(
+                statement.params,
+                vec![Value::Text(USER_ID.to_owned())],
+                "the export of {table} must bind only the user"
+            );
+            let placeholders = statement.sql.matches('?').count();
+            assert_eq!(
+                placeholders,
+                statement.params.len(),
+                "every placeholder must have a value in {table}: {}",
+                statement.sql
+            );
+        }
+    }
+}
 mod include_archived_parameter {
     use super::*;
 
@@ -940,6 +1026,9 @@ mod conditions {
         List,
         /// 1 件の取得と更新、削除。`id` と `user_id` の両方で絞る。
         Row,
+        /// エクスポート (FR-14)。利用者の全行を引くため、`user_id` だけで絞り、
+        /// アーカイブ済みの条件を付けない。
+        Export,
         /// 挿入。`id` と `user_id` の列と値を必ず持つ。
         Insert,
     }
@@ -1292,6 +1381,52 @@ mod conditions {
             kind: Kind::List,
             default_archived: false,
         });
+        // エクスポート (FR-14)。6 テーブルの全行を引くため、`archived_at` の条件は付かない。
+        for (name, table, columns, order_by) in [
+            (
+                "export the shops",
+                query::SHOPS_TABLE,
+                query::SHOP_COLUMNS,
+                "id ASC",
+            ),
+            (
+                "export the products",
+                query::PRODUCTS_TABLE,
+                query::PRODUCT_COLUMNS,
+                "id ASC",
+            ),
+            (
+                "export the flavor tags",
+                query::FLAVOR_TAGS_TABLE,
+                query::FLAVOR_TAG_COLUMNS,
+                "id ASC",
+            ),
+            (
+                "export the product flavor tags",
+                query::PRODUCT_FLAVOR_TAGS_TABLE,
+                query::PRODUCT_FLAVOR_TAG_COLUMNS,
+                "product_id ASC, tag_id ASC",
+            ),
+            (
+                "export the purchases",
+                query::PURCHASES_TABLE,
+                query::PURCHASE_COLUMNS,
+                "id ASC",
+            ),
+            (
+                "export the brews",
+                query::BREWS_TABLE,
+                query::BREW_COLUMNS,
+                "id ASC",
+            ),
+        ] {
+            checked.push(Checked {
+                name,
+                statement: query::export_rows(table, columns, order_by, USER_ID),
+                kind: Kind::Export,
+                default_archived: false,
+            });
+        }
         checked
     }
 
@@ -1299,7 +1434,7 @@ mod conditions {
     fn every_record_query_keeps_the_user_and_archived_conditions() {
         for checked in every_statement() {
             match checked.kind {
-                Kind::List | Kind::Row => assert!(
+                Kind::List | Kind::Row | Kind::Export => assert!(
                     has_user_condition(&checked.statement),
                     "the user filter is missing in {}: {}",
                     checked.name,

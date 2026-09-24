@@ -1,9 +1,11 @@
 //! 想定規模 (1 利用者あたり店 100 件、商品 1,000 件、購入 3,000 件、抽出 30,000 件) のデータでの
-//! 一覧と単件の取得の処理時間を測る。
+//! 一覧と単件の取得と、全記録のエクスポートの処理時間を測る。
 //!
 //! 応答時間の目標 (p95 200 ms) の合否は、リリース後に本番の Workers Logs の `duration_ms` の
 //! 集計で確認する (PRD の成功指標)。このテストは処理時間を測って標準出力に出し、応答の
 //! 正しさ (件数と並び順) だけを検査する。時間の上限は判定しない (機械の負荷で揺れるため)。
+//! エクスポートは全行を Worker のメモリに載せるため、想定規模でも成功すること (FR-14) と、
+//! 応答の JSON の大きさを併せて確認する。
 //!
 //! テスト名の `wrangler_` は、`wrangler dev` を起動するテストを `backend:test` が名前で除外するための規約。
 
@@ -27,6 +29,8 @@ const BREW_COUNT: usize = 30_000;
 const ROWS_PER_STATEMENT: usize = 400;
 /// 1 つの測定の繰り返し回数。
 const MEASUREMENTS: usize = 10;
+/// エクスポートの測定の繰り返し回数。応答が大きいため回数を抑える。
+const EXPORT_MEASUREMENTS: usize = 3;
 /// ページの上限 (PRD の性能)。
 const MAX_PAGE_SIZE: usize = 200;
 /// 想定規模の計測の基準の時刻 (2027-01-15T08:00:00.000Z 相当)。
@@ -35,7 +39,7 @@ const BASE_MILLIS: i64 = 1_800_000_000_000;
 const MILLIS_PER_DAY: i64 = 86_400_000;
 
 #[test]
-fn wrangler_records_scale_of_the_list_and_the_single_fetch() {
+fn wrangler_records_scale_of_the_list_the_single_fetch_and_the_export() {
     let scale = ScaleData::new();
     let lease = support::shared_server("scale", || {
         support::DevServer::start_with(|_| Vec::new(), &scale.seed_sql)
@@ -155,6 +159,40 @@ fn wrangler_records_scale_of_the_list_and_the_single_fetch() {
         (body["id"].is_string(), 1)
     });
 
+    // 全記録のエクスポート (FR-14)。想定規模の全行を 1 つの JSON に組み立てられること
+    // (Worker のメモリに収まること) を確認する。
+    let export = measure(EXPORT_MEASUREMENTS, || {
+        let body = get_json(&client, "/api/export");
+        assert_eq!(
+            body["shops"].as_array().map(Vec::len),
+            Some(SHOP_COUNT),
+            "the export must carry every shop"
+        );
+        assert_eq!(
+            body["products"].as_array().map(Vec::len),
+            Some(PRODUCT_COUNT),
+            "the export must carry every product"
+        );
+        assert_eq!(
+            body["purchases"].as_array().map(Vec::len),
+            Some(PURCHASE_COUNT),
+            "the export must carry every purchase"
+        );
+        assert_eq!(
+            body["brews"].as_array().map(Vec::len),
+            Some(BREW_COUNT),
+            "the export must carry every brew"
+        );
+        (
+            true,
+            SHOP_COUNT + PRODUCT_COUNT + PURCHASE_COUNT + BREW_COUNT,
+        )
+    });
+    // 応答の JSON の大きさ。Worker が載せるメモリの見積もりの根拠にする。
+    let export_bytes = serde_json::to_string(&get_json(&client, "/api/export"))
+        .expect("the export must serialize")
+        .len();
+
     println!(
         "the measurements of the assumed scale ({} shops, {} products, {} purchases, {} brews):",
         SHOP_COUNT, PRODUCT_COUNT, PURCHASE_COUNT, BREW_COUNT
@@ -173,6 +211,11 @@ fn wrangler_records_scale_of_the_list_and_the_single_fetch() {
     report("brews list (limit 200)", &brews_list_200);
     report("brews single (the oldest)", &brew_oldest);
     report("brews single (the newest)", &brew_newest);
+    report("export (all records)", &export);
+    println!(
+        "the export of the assumed scale is {} bytes of JSON ({} rows)",
+        export_bytes, export.rows
+    );
 }
 
 /// 想定規模の下ごしらえ。

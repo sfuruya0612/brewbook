@@ -9,6 +9,7 @@ use worker::{
 pub mod auth;
 pub mod d1_check;
 pub mod db;
+pub mod export;
 pub mod logging;
 pub mod random;
 pub mod records;
@@ -207,6 +208,7 @@ async fn authenticated_route(
         "stats_purchases" => records::stats::purchases(req, env, session).await,
         "stats_brew_ratings" => records::stats::brew_ratings(req, env, session).await,
         "purchases_rating_history" => records::stats::rating_history(env, session, id).await,
+        "export_get" => export::get(env, session).await,
         _ => Ok(not_implemented()),
     }
 }

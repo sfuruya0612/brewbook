@@ -356,6 +356,13 @@ pub const ROUTES: &[Route] = &[
         auth_required: true,
         has_input: false,
     },
+    Route {
+        name: "export_get",
+        method: Method::Get,
+        pattern: "/api/export",
+        auth_required: true,
+        has_input: false,
+    },
 ];
 
 /// 経路が一致しなかったリクエストのログに使う経路名。

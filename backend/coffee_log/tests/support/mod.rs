@@ -49,7 +49,7 @@ pub struct SuiteEntry {
 
 /// このスイートが持つテストの種別。0005 が認証の 10 経路、0006 が店と商品とタグの 13 経路、
 /// 0007 が購入と抽出の 12 経路、0008 がサジェストの 1 経路、0009 が購入の写真の 4 経路、
-/// 0010 が統計と評価の推移の 4 経路を追加する。
+/// 0010 が統計と評価の推移の 4 経路、0011 がエクスポートの 1 経路を追加する。
 pub const SUITE: &[SuiteEntry] = &[
     SuiteEntry {
         route: "auth_register_begin",
@@ -225,6 +225,10 @@ pub const SUITE: &[SuiteEntry] = &[
     },
     SuiteEntry {
         route: "purchases_rating_history",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "export_get",
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
     },
 ];
@@ -508,6 +512,19 @@ impl DevServer {
         let sequence = R2_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
         self.persist_dir
             .join(format!("r2-object-{}-{sequence}.bin", std::process::id()))
+    }
+
+    /// D1 から行を引く。列名をキーにした行の並びを返す (エクスポートの比較に使う)。
+    pub fn query_rows(&self, sql: &str) -> Result<Vec<serde_json::Value>, String> {
+        let output = self.execute_sql_json(sql)?;
+        let parsed: serde_json::Value = serde_json::from_str(&output)
+            .map_err(|error| format!("the d1 output must be JSON but was {output}: {error}"))?;
+        let rows = parsed
+            .get(0)
+            .and_then(|result| result.get("results"))
+            .and_then(|results| results.as_array())
+            .cloned();
+        rows.ok_or_else(|| format!("the d1 output has no rows: {output}"))
     }
 
     /// `--json` を付けて SQL を実行する。

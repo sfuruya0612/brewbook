@@ -497,6 +497,8 @@ pub const FLAVOR_TAGS_TABLE: &str = "flavor_tags";
 pub const FLAVOR_TAG_COLUMNS: &str = "id, user_id, name";
 /// 商品と Flavor Notes のタグの対応のテーブル名。
 pub const PRODUCT_FLAVOR_TAGS_TABLE: &str = "product_flavor_tags";
+/// 商品と Flavor Notes のタグの対応の列の並び。応答の JSON の項目と同じ。
+pub const PRODUCT_FLAVOR_TAG_COLUMNS: &str = "user_id, product_id, tag_id";
 /// 1 つのクエリに束縛できる値の数。D1 は 100 個までとする
 /// (202 個を束縛したクエリを D1 が拒否することをローカルで確認した)。
 pub const MAX_BOUND_VALUES: usize = 100;
@@ -1081,6 +1083,30 @@ fn escape_like(text: &str) -> String {
     escaped
 }
 
+/// エクスポート (FR-14) で、利用者の 1 つのテーブルの全行を引く SQL を組み立てる。
+///
+/// `SELECT <columns> FROM <table> WHERE user_id = ? ORDER BY <order_by>`
+///
+/// アーカイブ済みの行も含める (FR-14。既定の一覧の `archived_at IS NULL` を付けない)。
+/// 件数の上限も付けず、並び順は `order_by` の昇順にする。
+pub fn export_rows(
+    table: &'static str,
+    columns: &'static str,
+    order_by: &'static str,
+    user_id: &str,
+) -> Statement {
+    let mut sql = String::new();
+    sql.push_str("SELECT ");
+    sql.push_str(columns);
+    sql.push_str(" FROM ");
+    sql.push_str(table);
+    sql.push_str(" WHERE user_id = ? ORDER BY ");
+    sql.push_str(order_by);
+    Statement {
+        sql,
+        params: vec![Value::Text(user_id.to_owned())],
+    }
+}
 /// 商品の Flavor Notes のタグ名を引く SQL を、束縛する値の上限に収まるよう分けて組み立てる。
 ///
 /// 返す文の並びは、商品 ID を [`PRODUCT_IDS_PER_STATEMENT`] 件ずつに分けたもの。

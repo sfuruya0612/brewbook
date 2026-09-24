@@ -539,6 +539,11 @@ impl Seed {
         }
     }
 
+    /// 生の SQL の文を加える。テーブルの列をそのまま埋める行 (エクスポートのテストの記録) に使う。
+    pub fn raw(&mut self, statement: &str) -> &mut Self {
+        self.push(statement.to_owned());
+        self
+    }
     /// 下ごしらえの SQL。
     pub fn sql(&self) -> String {
         self.statements.join(";\n")

@@ -27,6 +27,16 @@ pub fn json<T: Serialize>(value: &T) -> Result<Response> {
     Response::from_json(value)
 }
 
+/// ダウンロード用の JSON の応答を組み立てる。`Content-Disposition: attachment` を付ける (FR-14)。
+pub fn json_attachment<T: Serialize>(value: &T, file_name: &str) -> Result<Response> {
+    let mut response = Response::from_json(value)?;
+    response.headers_mut().set(
+        "Content-Disposition",
+        &format!("attachment; filename=\"{file_name}\""),
+    )?;
+    Ok(response)
+}
+
 /// `Set-Cookie` を 1 つ付けた JSON の応答を組み立てる。
 pub fn json_with_cookie<T: Serialize>(value: &T, cookie: &str) -> Result<Response> {
     set_cookie(Response::from_json(value)?, cookie)
