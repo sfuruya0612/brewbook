@@ -49,6 +49,9 @@ struct Table {
     columns: &'static [&'static str],
 }
 
+/// 写真のバケット名 (wrangler.toml の R2 バインディングと同じ)。
+const PHOTO_BUCKET: &str = "coffee-log-photos";
+
 /// エクスポートの対象の 6 テーブル (ADR-0006)。親から子の順に並べる (復元の挿入の順)。
 const TABLES: &[Table] = &[
     Table {
@@ -258,7 +261,7 @@ fn records(seed: &mut Seed, user: &str, prefix: &str) {
     // 店。添字 0 は住所あり、添字 1 は住所なしでアーカイブ済み。
     seed.raw(&format!(
         "INSERT INTO shops (id, user_id, name, address, created_at, updated_at, archived_at) \
-         VALUES ('{}', '{user}', '{prefix} の店 0', '{prefix} の住所 0', '{T21}', '{T21}', NULL)",
+         VALUES ('{}', '{user}', '{prefix} の店 0 O''Brien', '{prefix} の住所 0', '{T21}', '{T21}', NULL)",
         row_id(prefix, "shop", 0)
     ));
     seed.raw(&format!(
@@ -464,17 +467,20 @@ fn table_columns(table: &Table, row: &Value) -> Value {
     Value::Object(columns)
 }
 
+/// 行の主キーを比較用の文字列にする。
+fn key_string(table: &Table, row: &Value) -> String {
+    table
+        .key
+        .iter()
+        .map(|column| row.get(*column).map(Value::to_string).unwrap_or_default())
+        .collect::<Vec<String>>()
+        .join("\u{1f}")
+}
+
 /// テーブルの行を主キーで並べる (比較の順を安定させる)。
 fn sorted(table: &Table, rows: &[Value]) -> Vec<Value> {
     let mut rows = rows.to_vec();
-    rows.sort_by_key(|row| {
-        table
-            .key
-            .iter()
-            .map(|column| row.get(*column).map(Value::to_string).unwrap_or_default())
-            .collect::<Vec<String>>()
-            .join("\u{1f}")
-    });
+    rows.sort_by_key(|row| key_string(table, row));
     rows
 }
 
@@ -608,6 +614,15 @@ fn wrangler_export_ok() {
     let base_url = lease.use_server(|server| server.base_url());
     let client = ApiClient::new(&base_url, Some(&data.export_session));
 
+    // 写真の実体が応答に含まれないことを確かめるため、写真の位置に印を付けたオブジェクトを置く。
+    let photo_marker = "EXPORT-PHOTO-BODY-9a2c";
+    let key = photo_key(&data.export_user, &data.export_prefix, 0);
+    lease.use_server(|server| {
+        server
+            .put_r2_object(PHOTO_BUCKET, &key, photo_marker.as_bytes(), "image/jpeg")
+            .expect("the photo object must be placed");
+    });
+
     let response = client.get("/api/export");
     // 応答は JSON のダウンロードにする (設計判断)。
     assert_eq!(
@@ -643,6 +658,16 @@ fn wrangler_export_ok() {
             .map(|(_, count)| *count)
             .expect("every table must have an expected count");
         assert_eq!(rows.len(), count, "the {} rows: {body}", table.name);
+        // 応答は主キーの昇順で並ぶ (再現性のある出力)。隣接する行のキーを比べる。
+        for pair in rows.windows(2) {
+            let left = key_string(table, &pair[0]);
+            let right = key_string(table, &pair[1]);
+            assert!(
+                left < right,
+                "the {} rows must be ordered by the key: {left} >= {right}",
+                table.name
+            );
+        }
         for row in rows {
             let extra: &[&str] = if table.name == "purchases" {
                 &["photo_path"]
@@ -694,8 +719,16 @@ fn wrangler_export_ok() {
     );
 
     // 写真の実体と署名付き GET URL は含めない (ADR-0003)。
+    // 実体の除外は、photo_key の位置に印を付けたオブジェクトを R2 に置いて確かめる。
     let text = body.to_string();
-    for marker in ["X-Amz", "Signature", "photo_url", "photo_data", "base64"] {
+    for marker in [
+        "X-Amz",
+        "Signature",
+        "photo_url",
+        "photo_data",
+        "base64",
+        photo_marker,
+    ] {
         assert!(
             !text.contains(marker),
             "the export must not carry the photo body or a signed URL: {marker}"
@@ -708,6 +741,33 @@ fn wrangler_export_ok() {
             .contains('?'),
         "the photo path must not carry a query string: {with_photo}"
     );
+}
+
+#[test]
+fn wrangler_export_covers_every_column_of_the_schema() {
+    // エクスポートの列の一覧が migration のスキーマと一致することを確かめる (列の追加漏れの検出)。
+    let lease = server();
+    lease.use_server(|server| {
+        for table in TABLES {
+            let rows = server
+                .query_rows(&format!(
+                    "SELECT name FROM pragma_table_info('{}') ORDER BY cid",
+                    table.name
+                ))
+                .expect("the schema must be readable");
+            let mut names: Vec<&str> = rows.iter().filter_map(|row| row["name"].as_str()).collect();
+            let mut expected = table.columns.to_vec();
+            // 列の並びは物理順と論理順で違いうる (migration 0002 は price_currency を末尾に移す) ため、
+            // 名前の集合で照合し、列の追加と削除を検出する。
+            names.sort_unstable();
+            expected.sort_unstable();
+            assert_eq!(
+                names, expected,
+                "the {} columns must match the schema",
+                table.name
+            );
+        }
+    });
 }
 
 #[test]

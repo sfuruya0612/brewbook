@@ -20,6 +20,8 @@
   - @sfuruya0612
 - [ADD] 統計と評価の推移の API を追加する
   - @sfuruya0612
+- [ADD] 全記録のエクスポートを追加する
+  - @sfuruya0612
 
 ### misc
 

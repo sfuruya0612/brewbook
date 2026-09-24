@@ -544,6 +544,7 @@ impl Seed {
         self.push(statement.to_owned());
         self
     }
+
     /// 下ごしらえの SQL。
     pub fn sql(&self) -> String {
         self.statements.join(";\n")

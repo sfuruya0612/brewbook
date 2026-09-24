@@ -9,10 +9,10 @@
 //! だけにするため)。
 //! 応答はダウンロード用の JSON とし、`Content-Disposition: attachment` を付ける。
 
-use coffee_log_core::query::{self, Statement};
+use coffee_log_core::query;
 use serde::{Deserialize, Serialize};
-use worker::d1::D1Database;
-use worker::{Env, Response, Result};
+use worker::d1::D1Result;
+use worker::{console_error, Env, Response, Result};
 
 use crate::auth::session::Session;
 use crate::db;
@@ -136,58 +136,64 @@ struct ExportResponse {
 pub async fn get(env: &Env, session: &Session) -> Result<Response> {
     let d1 = db::database(env)?;
     let user_id = &session.user_id;
+    // 6 つの SELECT を 1 つの batch (1 トランザクション) で実行し、単一の時点の記録を返す
+    // (別々に読むと、親の無い抽出を含む復元できない JSON になり得る)。
     // 全行を読むため、応答は利用者の記録の大きさだけメモリに載る。想定規模 (抽出 30,000 件) で
     // 収まることは結合テスト (wrangler_records_scale) が確認する。
-    let shops = rows::<ShopRow>(
-        &d1,
-        &query::export_rows(query::SHOPS_TABLE, query::SHOP_COLUMNS, "id ASC", user_id),
-    )
-    .await?;
-    let products = rows::<ProductRow>(
-        &d1,
-        &query::export_rows(
-            query::PRODUCTS_TABLE,
-            query::PRODUCT_COLUMNS,
-            "id ASC",
-            user_id,
-        ),
-    )
-    .await?;
-    let flavor_tags = rows::<FlavorTagRow>(
-        &d1,
-        &query::export_rows(
-            query::FLAVOR_TAGS_TABLE,
-            query::FLAVOR_TAG_COLUMNS,
-            "id ASC",
-            user_id,
-        ),
-    )
-    .await?;
-    let product_flavor_tags = rows::<ProductFlavorTagRow>(
-        &d1,
-        &query::export_rows(
-            query::PRODUCT_FLAVOR_TAGS_TABLE,
-            query::PRODUCT_FLAVOR_TAG_COLUMNS,
-            "product_id ASC, tag_id ASC",
-            user_id,
-        ),
-    )
-    .await?;
-    let purchases = rows::<PurchaseRow>(
-        &d1,
-        &query::export_rows(
-            query::PURCHASES_TABLE,
-            query::PURCHASE_COLUMNS,
-            "id ASC",
-            user_id,
-        ),
-    )
-    .await?;
-    let brews = rows::<BrewRow>(
-        &d1,
-        &query::export_rows(query::BREWS_TABLE, query::BREW_COLUMNS, "id ASC", user_id),
-    )
-    .await?;
+    let statements = vec![
+        db::prepared(
+            &d1,
+            &query::export_rows(query::SHOPS_TABLE, query::SHOP_COLUMNS, "id ASC", user_id),
+        )?,
+        db::prepared(
+            &d1,
+            &query::export_rows(
+                query::PRODUCTS_TABLE,
+                query::PRODUCT_COLUMNS,
+                "id ASC",
+                user_id,
+            ),
+        )?,
+        db::prepared(
+            &d1,
+            &query::export_rows(
+                query::FLAVOR_TAGS_TABLE,
+                query::FLAVOR_TAG_COLUMNS,
+                "id ASC",
+                user_id,
+            ),
+        )?,
+        db::prepared(
+            &d1,
+            &query::export_rows(
+                query::PRODUCT_FLAVOR_TAGS_TABLE,
+                query::PRODUCT_FLAVOR_TAG_COLUMNS,
+                "product_id ASC, tag_id ASC",
+                user_id,
+            ),
+        )?,
+        db::prepared(
+            &d1,
+            &query::export_rows(
+                query::PURCHASES_TABLE,
+                query::PURCHASE_COLUMNS,
+                "id ASC",
+                user_id,
+            ),
+        )?,
+        db::prepared(
+            &d1,
+            &query::export_rows(query::BREWS_TABLE, query::BREW_COLUMNS, "id ASC", user_id),
+        )?,
+    ];
+    let mut results = d1.batch(statements).await?.into_iter();
+    let shops: Vec<ShopRow> = take_rows(&mut results, query::SHOPS_TABLE)?;
+    let products: Vec<ProductRow> = take_rows(&mut results, query::PRODUCTS_TABLE)?;
+    let flavor_tags: Vec<FlavorTagRow> = take_rows(&mut results, query::FLAVOR_TAGS_TABLE)?;
+    let product_flavor_tags: Vec<ProductFlavorTagRow> =
+        take_rows(&mut results, query::PRODUCT_FLAVOR_TAGS_TABLE)?;
+    let purchases: Vec<PurchaseRow> = take_rows(&mut results, query::PURCHASES_TABLE)?;
+    let brews: Vec<BrewRow> = take_rows(&mut results, query::BREWS_TABLE)?;
     respond::json_attachment(
         &ExportResponse {
             shops,
@@ -201,12 +207,22 @@ pub async fn get(env: &Env, session: &Session) -> Result<Response> {
     )
 }
 
-/// エクスポートの 1 つのテーブルの全行を引く。
-async fn rows<T: serde::de::DeserializeOwned>(
-    d1: &D1Database,
-    statement: &Statement,
+/// batch の結果から 1 つのテーブルの行を取り出す。結果の並びは `statements` と同じである。
+fn take_rows<T: serde::de::DeserializeOwned>(
+    results: &mut std::vec::IntoIter<D1Result>,
+    table: &str,
 ) -> Result<Vec<T>> {
-    db::prepared(d1, statement)?.all().await?.results::<T>()
+    let result = results.next().ok_or_else(|| {
+        worker::Error::RustError(format!("the batch result for {table} is missing"))
+    })?;
+    if !result.success() {
+        let error = result.error().unwrap_or_default();
+        console_error!("the export query for {table} failed: {error}");
+        return Err(worker::Error::RustError(
+            "the export query failed".to_owned(),
+        ));
+    }
+    result.results()
 }
 
 /// 写真取得 API のパス (FR-10、ADR-0003)。

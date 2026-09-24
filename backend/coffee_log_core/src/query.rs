@@ -1107,6 +1107,7 @@ pub fn export_rows(
         params: vec![Value::Text(user_id.to_owned())],
     }
 }
+
 /// 商品の Flavor Notes のタグ名を引く SQL を、束縛する値の上限に収まるよう分けて組み立てる。
 ///
 /// 返す文の並びは、商品 ID を [`PRODUCT_IDS_PER_STATEMENT`] 件ずつに分けたもの。
