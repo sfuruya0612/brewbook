@@ -24,19 +24,42 @@ const Map<String, Object?> goneBody = <String, Object?>{
   'error': <String, Object?>{'code': 'gone', 'message': 'the value has expired'},
 };
 
+/// ログイン済みの状態で立ち上げるための API (起動時の `GET /api/passkeys` が 200)。
+FakeApi signedInApi() {
+  return FakeApi()
+    ..on('GET', '/api/passkeys', status: 200, body: <String, Object?>{'passkeys': <Object?>[]});
+}
+
 /// テスト用の API。経路ごとの応答を登録し、呼び出しを記録する。
 ///
 /// `ApiClient` は `package:http` のクライアントを差し替えられるため、本物の変換
 /// (エラーの共通の型への変換、401 の通知) を通したまま応答を決められる。
 class FakeApi {
   final Map<String, _FakeResponse> _responses = <String, _FakeResponse>{};
+  final Map<String, ({int status, Object? body}) Function(Map<String, String> query)>
+  _queryResponses =
+      <String, ({int status, Object? body}) Function(Map<String, String> query)>{};
 
-  /// 呼び出された経路 (例: `GET /api/passkeys`) の記録。
+  /// 呼び出された経路 (例: `GET /api/passkeys`) の記録。クエリパラメータは含めない。
   final List<String> calls = <String>[];
+
+  /// 受け取った要求 (本文の確認に使う)。
+  final List<http.Request> requests = <http.Request>[];
 
   /// `method` と `path` (例: `POST`、`/api/auth/login/begin`) の応答を登録する。
   void on(String method, String path, {required int status, Object? body}) {
     _responses['$method $path'] = _FakeResponse(status: status, body: body);
+  }
+
+  /// クエリパラメータに応じて応答を変える登録 (一覧の追加読み込みなど)。
+  ///
+  /// `respond` はクエリパラメータを受け取り、状態コードと本文の組を返す。
+  void onQuery(
+    String method,
+    String path,
+    ({int status, Object? body}) Function(Map<String, String> query) respond,
+  ) {
+    _queryResponses['$method $path'] = respond;
   }
 
   /// `method` と `path` の呼び出しを接続の失敗にする。
@@ -47,9 +70,26 @@ class FakeApi {
   /// 登録した応答を返す [ApiClient] を組み立てる。
   ApiClient client() => ApiClient(httpClient: MockClient(_handle));
 
+  /// `method` と `path` に一致する直近の要求の本文を JSON として返す。無ければ null。
+  Map<String, Object?>? lastBody(String method, String path) {
+    for (final request in requests.reversed) {
+      if ('${request.method} ${request.url.path}' == '$method $path') {
+        final decoded = jsonDecode(request.body);
+        return decoded is Map<String, Object?> ? decoded : null;
+      }
+    }
+    return null;
+  }
+
   Future<http.Response> _handle(http.Request request) async {
     final key = '${request.method} ${request.url.path}';
     calls.add(key);
+    requests.add(request);
+    final respond = _queryResponses[key];
+    if (respond != null) {
+      final result = respond(request.url.queryParameters);
+      return _json(result.status, result.body);
+    }
     final response = _responses[key];
     if (response == null) {
       // 登録していない経路はテストの前提の誤りなので、原因が分かる応答にする。

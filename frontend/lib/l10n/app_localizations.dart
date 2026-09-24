@@ -212,12 +212,6 @@ abstract class AppLocalizations {
   /// **'coffee-log'**
   String get homeTitle;
 
-  /// No description provided for @homeDescription.
-  ///
-  /// In ja, this message translates to:
-  /// **'ログインしています。'**
-  String get homeDescription;
-
   /// No description provided for @retryButton.
   ///
   /// In ja, this message translates to:
@@ -325,6 +319,492 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'フレーバーノート'**
   String get flavorNotes;
+
+  /// No description provided for @menuTooltip.
+  ///
+  /// In ja, this message translates to:
+  /// **'メニュー'**
+  String get menuTooltip;
+
+  /// No description provided for @newBrewButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'抽出を記録'**
+  String get newBrewButton;
+
+  /// No description provided for @brewNewTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'抽出を記録'**
+  String get brewNewTitle;
+
+  /// No description provided for @brewEditTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'抽出を編集'**
+  String get brewEditTitle;
+
+  /// No description provided for @brewDetailTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'抽出の詳細'**
+  String get brewDetailTitle;
+
+  /// No description provided for @purchasesTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'購入'**
+  String get purchasesTitle;
+
+  /// No description provided for @newPurchaseButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'購入を記録'**
+  String get newPurchaseButton;
+
+  /// No description provided for @purchaseNewTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'購入を記録'**
+  String get purchaseNewTitle;
+
+  /// No description provided for @purchaseEditTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'購入を編集'**
+  String get purchaseEditTitle;
+
+  /// No description provided for @purchaseDetailTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'購入の詳細'**
+  String get purchaseDetailTitle;
+
+  /// No description provided for @productsTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'商品'**
+  String get productsTitle;
+
+  /// No description provided for @newProductButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'商品を登録'**
+  String get newProductButton;
+
+  /// No description provided for @productNewTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'商品を登録'**
+  String get productNewTitle;
+
+  /// No description provided for @productEditTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'商品を編集'**
+  String get productEditTitle;
+
+  /// No description provided for @shopsTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'店'**
+  String get shopsTitle;
+
+  /// No description provided for @newShopButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'店を登録'**
+  String get newShopButton;
+
+  /// No description provided for @shopNewTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'店を登録'**
+  String get shopNewTitle;
+
+  /// No description provided for @shopEditTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'店を編集'**
+  String get shopEditTitle;
+
+  /// No description provided for @saveButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'保存'**
+  String get saveButton;
+
+  /// No description provided for @cancelButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'キャンセル'**
+  String get cancelButton;
+
+  /// No description provided for @editButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'編集'**
+  String get editButton;
+
+  /// No description provided for @deleteButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'削除'**
+  String get deleteButton;
+
+  /// No description provided for @archiveButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'アーカイブ'**
+  String get archiveButton;
+
+  /// No description provided for @unarchiveButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'アーカイブ解除'**
+  String get unarchiveButton;
+
+  /// No description provided for @selectButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'選択'**
+  String get selectButton;
+
+  /// No description provided for @addButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'追加'**
+  String get addButton;
+
+  /// No description provided for @includeArchivedLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'アーカイブ済みを含める'**
+  String get includeArchivedLabel;
+
+  /// No description provided for @noRecords.
+  ///
+  /// In ja, this message translates to:
+  /// **'記録がありません'**
+  String get noRecords;
+
+  /// No description provided for @unsetLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'未設定'**
+  String get unsetLabel;
+
+  /// No description provided for @savedMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'保存しました。'**
+  String get savedMessage;
+
+  /// No description provided for @archivedMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'アーカイブしました。'**
+  String get archivedMessage;
+
+  /// No description provided for @unarchivedMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'アーカイブ解除しました。'**
+  String get unarchivedMessage;
+
+  /// No description provided for @shopNameLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'店名'**
+  String get shopNameLabel;
+
+  /// No description provided for @productNameLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'商品名'**
+  String get productNameLabel;
+
+  /// No description provided for @addressLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'住所'**
+  String get addressLabel;
+
+  /// No description provided for @purchasedOnLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'購入日'**
+  String get purchasedOnLabel;
+
+  /// No description provided for @brewedAtLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'抽出日時'**
+  String get brewedAtLabel;
+
+  /// No description provided for @priceLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'価格'**
+  String get priceLabel;
+
+  /// No description provided for @currencyLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'通貨'**
+  String get currencyLabel;
+
+  /// No description provided for @weightLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'重量'**
+  String get weightLabel;
+
+  /// No description provided for @doseLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'豆の量'**
+  String get doseLabel;
+
+  /// No description provided for @waterLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'湯量'**
+  String get waterLabel;
+
+  /// No description provided for @waterTempLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'湯の温度'**
+  String get waterTempLabel;
+
+  /// No description provided for @brewTimeLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'時間'**
+  String get brewTimeLabel;
+
+  /// No description provided for @methodLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'抽出方法'**
+  String get methodLabel;
+
+  /// No description provided for @grindSettingLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'挽き目'**
+  String get grindSettingLabel;
+
+  /// No description provided for @ratingLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'評価'**
+  String get ratingLabel;
+
+  /// No description provided for @notesLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'感想'**
+  String get notesLabel;
+
+  /// No description provided for @productLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'商品'**
+  String get productLabel;
+
+  /// No description provided for @shopLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'店'**
+  String get shopLabel;
+
+  /// No description provided for @purchaseLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'購入'**
+  String get purchaseLabel;
+
+  /// No description provided for @tagInputHint.
+  ///
+  /// In ja, this message translates to:
+  /// **'タグを入力'**
+  String get tagInputHint;
+
+  /// No description provided for @tagInputLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'タグの名前'**
+  String get tagInputLabel;
+
+  /// No description provided for @dayFormatHint.
+  ///
+  /// In ja, this message translates to:
+  /// **'YYYY-MM-DD'**
+  String get dayFormatHint;
+
+  /// No description provided for @timeFormatHint.
+  ///
+  /// In ja, this message translates to:
+  /// **'HH:MM'**
+  String get timeFormatHint;
+
+  /// No description provided for @photoLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'写真'**
+  String get photoLabel;
+
+  /// No description provided for @photoSelectButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'写真を選ぶ'**
+  String get photoSelectButton;
+
+  /// No description provided for @photoReplaceButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'写真を差し替え'**
+  String get photoReplaceButton;
+
+  /// No description provided for @photoDeleteButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'写真を削除'**
+  String get photoDeleteButton;
+
+  /// No description provided for @photoNoneLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'写真はありません'**
+  String get photoNoneLabel;
+
+  /// No description provided for @ratingHistoryTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'評価の推移'**
+  String get ratingHistoryTitle;
+
+  /// No description provided for @selectPurchaseTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'購入を選ぶ'**
+  String get selectPurchaseTitle;
+
+  /// No description provided for @selectProductTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'商品を選ぶ'**
+  String get selectProductTitle;
+
+  /// No description provided for @selectShopTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'店を選ぶ'**
+  String get selectShopTitle;
+
+  /// No description provided for @shopNoneLabel.
+  ///
+  /// In ja, this message translates to:
+  /// **'店を指定しない'**
+  String get shopNoneLabel;
+
+  /// No description provided for @validationRequired.
+  ///
+  /// In ja, this message translates to:
+  /// **'必須の項目です。'**
+  String get validationRequired;
+
+  /// No description provided for @validationNumber.
+  ///
+  /// In ja, this message translates to:
+  /// **'0 以上の整数を入力してください。'**
+  String get validationNumber;
+
+  /// No description provided for @validationDecimal.
+  ///
+  /// In ja, this message translates to:
+  /// **'0 以上で小数第 1 位までの数を入力してください。'**
+  String get validationDecimal;
+
+  /// No description provided for @validationDay.
+  ///
+  /// In ja, this message translates to:
+  /// **'日付を YYYY-MM-DD で入力してください。'**
+  String get validationDay;
+
+  /// No description provided for @validationTime.
+  ///
+  /// In ja, this message translates to:
+  /// **'時刻を HH:MM で入力してください。'**
+  String get validationTime;
+
+  /// No description provided for @validationProduct.
+  ///
+  /// In ja, this message translates to:
+  /// **'商品を選んでください。'**
+  String get validationProduct;
+
+  /// No description provided for @validationPurchase.
+  ///
+  /// In ja, this message translates to:
+  /// **'購入を選んでください。'**
+  String get validationPurchase;
+
+  /// 抽出の一覧の行の補足 (店が無い場合は brewRowSubtitleNoShop)
+  ///
+  /// In ja, this message translates to:
+  /// **'{date} / {shop}'**
+  String brewRowSubtitle(String date, String shop);
+
+  /// 抽出の一覧の行の補足 (店が無い場合)
+  ///
+  /// In ja, this message translates to:
+  /// **'{date}'**
+  String brewRowSubtitleNoShop(String date);
+
+  /// 購入の一覧の行の補足
+  ///
+  /// In ja, this message translates to:
+  /// **'{date} / {product}'**
+  String purchaseRowSubtitle(String date, String product);
+
+  /// グラムの値の表示
+  ///
+  /// In ja, this message translates to:
+  /// **'{value} g'**
+  String gramsValue(String value);
+
+  /// 摂氏の値の表示
+  ///
+  /// In ja, this message translates to:
+  /// **'{value} ℃'**
+  String celsiusValue(String value);
+
+  /// 秒の値の表示
+  ///
+  /// In ja, this message translates to:
+  /// **'{value} 秒'**
+  String secondsValue(String value);
+
+  /// 評価の値の表示
+  ///
+  /// In ja, this message translates to:
+  /// **'{value} / 5'**
+  String ratingValue(String value);
+
+  /// 価格の表示
+  ///
+  /// In ja, this message translates to:
+  /// **'{amount} {currency}'**
+  String priceValue(String amount, String currency);
+
+  /// No description provided for @validationCurrency.
+  ///
+  /// In ja, this message translates to:
+  /// **'通貨コードを ISO 4217 の 3 文字の英大文字で入力してください。'**
+  String get validationCurrency;
 }
 
 class _AppLocalizationsDelegate

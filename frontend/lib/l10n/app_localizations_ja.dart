@@ -67,9 +67,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get homeTitle => 'coffee-log';
 
   @override
-  String get homeDescription => 'ログインしています。';
-
-  @override
   String get retryButton => '再試行';
 
   @override
@@ -122,4 +119,263 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get flavorNotes => 'フレーバーノート';
+
+  @override
+  String get menuTooltip => 'メニュー';
+
+  @override
+  String get newBrewButton => '抽出を記録';
+
+  @override
+  String get brewNewTitle => '抽出を記録';
+
+  @override
+  String get brewEditTitle => '抽出を編集';
+
+  @override
+  String get brewDetailTitle => '抽出の詳細';
+
+  @override
+  String get purchasesTitle => '購入';
+
+  @override
+  String get newPurchaseButton => '購入を記録';
+
+  @override
+  String get purchaseNewTitle => '購入を記録';
+
+  @override
+  String get purchaseEditTitle => '購入を編集';
+
+  @override
+  String get purchaseDetailTitle => '購入の詳細';
+
+  @override
+  String get productsTitle => '商品';
+
+  @override
+  String get newProductButton => '商品を登録';
+
+  @override
+  String get productNewTitle => '商品を登録';
+
+  @override
+  String get productEditTitle => '商品を編集';
+
+  @override
+  String get shopsTitle => '店';
+
+  @override
+  String get newShopButton => '店を登録';
+
+  @override
+  String get shopNewTitle => '店を登録';
+
+  @override
+  String get shopEditTitle => '店を編集';
+
+  @override
+  String get saveButton => '保存';
+
+  @override
+  String get cancelButton => 'キャンセル';
+
+  @override
+  String get editButton => '編集';
+
+  @override
+  String get deleteButton => '削除';
+
+  @override
+  String get archiveButton => 'アーカイブ';
+
+  @override
+  String get unarchiveButton => 'アーカイブ解除';
+
+  @override
+  String get selectButton => '選択';
+
+  @override
+  String get addButton => '追加';
+
+  @override
+  String get includeArchivedLabel => 'アーカイブ済みを含める';
+
+  @override
+  String get noRecords => '記録がありません';
+
+  @override
+  String get unsetLabel => '未設定';
+
+  @override
+  String get savedMessage => '保存しました。';
+
+  @override
+  String get archivedMessage => 'アーカイブしました。';
+
+  @override
+  String get unarchivedMessage => 'アーカイブ解除しました。';
+
+  @override
+  String get shopNameLabel => '店名';
+
+  @override
+  String get productNameLabel => '商品名';
+
+  @override
+  String get addressLabel => '住所';
+
+  @override
+  String get purchasedOnLabel => '購入日';
+
+  @override
+  String get brewedAtLabel => '抽出日時';
+
+  @override
+  String get priceLabel => '価格';
+
+  @override
+  String get currencyLabel => '通貨';
+
+  @override
+  String get weightLabel => '重量';
+
+  @override
+  String get doseLabel => '豆の量';
+
+  @override
+  String get waterLabel => '湯量';
+
+  @override
+  String get waterTempLabel => '湯の温度';
+
+  @override
+  String get brewTimeLabel => '時間';
+
+  @override
+  String get methodLabel => '抽出方法';
+
+  @override
+  String get grindSettingLabel => '挽き目';
+
+  @override
+  String get ratingLabel => '評価';
+
+  @override
+  String get notesLabel => '感想';
+
+  @override
+  String get productLabel => '商品';
+
+  @override
+  String get shopLabel => '店';
+
+  @override
+  String get purchaseLabel => '購入';
+
+  @override
+  String get tagInputHint => 'タグを入力';
+
+  @override
+  String get tagInputLabel => 'タグの名前';
+
+  @override
+  String get dayFormatHint => 'YYYY-MM-DD';
+
+  @override
+  String get timeFormatHint => 'HH:MM';
+
+  @override
+  String get photoLabel => '写真';
+
+  @override
+  String get photoSelectButton => '写真を選ぶ';
+
+  @override
+  String get photoReplaceButton => '写真を差し替え';
+
+  @override
+  String get photoDeleteButton => '写真を削除';
+
+  @override
+  String get photoNoneLabel => '写真はありません';
+
+  @override
+  String get ratingHistoryTitle => '評価の推移';
+
+  @override
+  String get selectPurchaseTitle => '購入を選ぶ';
+
+  @override
+  String get selectProductTitle => '商品を選ぶ';
+
+  @override
+  String get selectShopTitle => '店を選ぶ';
+
+  @override
+  String get shopNoneLabel => '店を指定しない';
+
+  @override
+  String get validationRequired => '必須の項目です。';
+
+  @override
+  String get validationNumber => '0 以上の整数を入力してください。';
+
+  @override
+  String get validationDecimal => '0 以上で小数第 1 位までの数を入力してください。';
+
+  @override
+  String get validationDay => '日付を YYYY-MM-DD で入力してください。';
+
+  @override
+  String get validationTime => '時刻を HH:MM で入力してください。';
+
+  @override
+  String get validationProduct => '商品を選んでください。';
+
+  @override
+  String get validationPurchase => '購入を選んでください。';
+
+  @override
+  String brewRowSubtitle(String date, String shop) {
+    return '$date / $shop';
+  }
+
+  @override
+  String brewRowSubtitleNoShop(String date) {
+    return '$date';
+  }
+
+  @override
+  String purchaseRowSubtitle(String date, String product) {
+    return '$date / $product';
+  }
+
+  @override
+  String gramsValue(String value) {
+    return '$value g';
+  }
+
+  @override
+  String celsiusValue(String value) {
+    return '$value ℃';
+  }
+
+  @override
+  String secondsValue(String value) {
+    return '$value 秒';
+  }
+
+  @override
+  String ratingValue(String value) {
+    return '$value / 5';
+  }
+
+  @override
+  String priceValue(String amount, String currency) {
+    return '$amount $currency';
+  }
+
+  @override
+  String get validationCurrency => '通貨コードを ISO 4217 の 3 文字の英大文字で入力してください。';
 }

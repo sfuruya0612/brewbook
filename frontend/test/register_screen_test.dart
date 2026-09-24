@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'support/fake_api.dart';
+import 'support/fake_records.dart';
 import 'support/fake_passkey_client.dart';
 import 'support/pump_app.dart';
 
@@ -93,6 +94,13 @@ void main() {
         '/api/auth/register/complete',
         status: 200,
         body: <String, Object?>{'user_id': 'test-user'},
+      )
+      // ホームは抽出の一覧を読む (FR-11)。
+      ..on(
+        'GET',
+        '/api/brews',
+        status: 200,
+        body: pageJson(key: 'brews', items: <Map<String, Object?>>[]),
       );
 
     await tester.enterText(find.byType(TextField), '自宅の PC');
@@ -104,6 +112,7 @@ void main() {
       'GET /api/passkeys',
       'POST /api/auth/register/begin',
       'POST /api/auth/register/complete',
+      'GET /api/brews',
     ]);
     expect(passkeys.createdOptions?['challenge'], 'test-challenge');
   });

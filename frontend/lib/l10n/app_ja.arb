@@ -19,7 +19,6 @@
   "registerTokenUsed": "この登録用のリンクは使用済みです。",
   "registerTokenExpired": "この登録用のリンクの有効期限が切れています。",
   "homeTitle": "coffee-log",
-  "homeDescription": "ログインしています。",
   "retryButton": "再試行",
   "errorValidation": "入力の内容を確認してください。",
   "errorUnauthorized": "セッションが無効になりました。もう一度ログインしてください。",
@@ -61,5 +60,159 @@
   "flavorNotes": "フレーバーノート",
   "@flavorNotes": {
     "description": "商品の項目名 (PRD の FR-16)"
-  }
+  },
+  "menuTooltip": "メニュー",
+  "newBrewButton": "抽出を記録",
+  "brewNewTitle": "抽出を記録",
+  "brewEditTitle": "抽出を編集",
+  "brewDetailTitle": "抽出の詳細",
+  "purchasesTitle": "購入",
+  "newPurchaseButton": "購入を記録",
+  "purchaseNewTitle": "購入を記録",
+  "purchaseEditTitle": "購入を編集",
+  "purchaseDetailTitle": "購入の詳細",
+  "productsTitle": "商品",
+  "newProductButton": "商品を登録",
+  "productNewTitle": "商品を登録",
+  "productEditTitle": "商品を編集",
+  "shopsTitle": "店",
+  "newShopButton": "店を登録",
+  "shopNewTitle": "店を登録",
+  "shopEditTitle": "店を編集",
+  "saveButton": "保存",
+  "cancelButton": "キャンセル",
+  "editButton": "編集",
+  "deleteButton": "削除",
+  "archiveButton": "アーカイブ",
+  "unarchiveButton": "アーカイブ解除",
+  "selectButton": "選択",
+  "addButton": "追加",
+  "includeArchivedLabel": "アーカイブ済みを含める",
+  "noRecords": "記録がありません",
+  "unsetLabel": "未設定",
+  "savedMessage": "保存しました。",
+  "archivedMessage": "アーカイブしました。",
+  "unarchivedMessage": "アーカイブ解除しました。",
+  "shopNameLabel": "店名",
+  "productNameLabel": "商品名",
+  "addressLabel": "住所",
+  "purchasedOnLabel": "購入日",
+  "brewedAtLabel": "抽出日時",
+  "priceLabel": "価格",
+  "currencyLabel": "通貨",
+  "weightLabel": "重量",
+  "doseLabel": "豆の量",
+  "waterLabel": "湯量",
+  "waterTempLabel": "湯の温度",
+  "brewTimeLabel": "時間",
+  "methodLabel": "抽出方法",
+  "grindSettingLabel": "挽き目",
+  "ratingLabel": "評価",
+  "notesLabel": "感想",
+  "productLabel": "商品",
+  "shopLabel": "店",
+  "purchaseLabel": "購入",
+  "tagInputHint": "タグを入力",
+  "tagInputLabel": "タグの名前",
+  "dayFormatHint": "YYYY-MM-DD",
+  "timeFormatHint": "HH:MM",
+  "photoLabel": "写真",
+  "photoSelectButton": "写真を選ぶ",
+  "photoReplaceButton": "写真を差し替え",
+  "photoDeleteButton": "写真を削除",
+  "photoNoneLabel": "写真はありません",
+  "ratingHistoryTitle": "評価の推移",
+  "selectPurchaseTitle": "購入を選ぶ",
+  "selectProductTitle": "商品を選ぶ",
+  "selectShopTitle": "店を選ぶ",
+  "shopNoneLabel": "店を指定しない",
+  "validationRequired": "必須の項目です。",
+  "validationNumber": "0 以上の整数を入力してください。",
+  "validationDecimal": "0 以上で小数第 1 位までの数を入力してください。",
+  "validationDay": "日付を YYYY-MM-DD で入力してください。",
+  "validationTime": "時刻を HH:MM で入力してください。",
+  "validationProduct": "商品を選んでください。",
+  "validationPurchase": "購入を選んでください。",
+  "brewRowSubtitle": "{date} / {shop}",
+  "@brewRowSubtitle": {
+    "description": "抽出の一覧の行の補足 (店が無い場合は brewRowSubtitleNoShop)",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "shop": {
+        "type": "String"
+      }
+    }
+  },
+  "brewRowSubtitleNoShop": "{date}",
+  "@brewRowSubtitleNoShop": {
+    "description": "抽出の一覧の行の補足 (店が無い場合)",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseRowSubtitle": "{date} / {product}",
+  "@purchaseRowSubtitle": {
+    "description": "購入の一覧の行の補足",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "product": {
+        "type": "String"
+      }
+    }
+  },
+  "gramsValue": "{value} g",
+  "@gramsValue": {
+    "description": "グラムの値の表示",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "celsiusValue": "{value} ℃",
+  "@celsiusValue": {
+    "description": "摂氏の値の表示",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "secondsValue": "{value} 秒",
+  "@secondsValue": {
+    "description": "秒の値の表示",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ratingValue": "{value} / 5",
+  "@ratingValue": {
+    "description": "評価の値の表示",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "priceValue": "{amount} {currency}",
+  "@priceValue": {
+    "description": "価格の表示",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "validationCurrency": "通貨コードを ISO 4217 の 3 文字の英大文字で入力してください。"
 }

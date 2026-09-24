@@ -26,6 +26,8 @@
   - @sfuruya0612
 - [ADD] Flutter の基盤と認証の画面を追加する
   - @sfuruya0612
+- [ADD] Flutter の記録の画面と写真のアップロードを追加する
+  - @sfuruya0612
 
 ### misc
 

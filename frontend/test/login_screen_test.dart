@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_api.dart';
+import 'support/fake_records.dart';
 import 'support/fake_passkey_client.dart';
 import 'support/pump_app.dart';
 
@@ -49,17 +50,25 @@ void main() {
         '/api/auth/login/complete',
         status: 200,
         body: <String, Object?>{'user_id': 'test-user'},
+      )
+      // ホームは抽出の一覧を読む (FR-11)。
+      ..on(
+        'GET',
+        '/api/brews',
+        status: 200,
+        body: pageJson(key: 'brews', items: <Map<String, Object?>>[]),
       );
 
     await tester.tap(find.widgetWithText(FilledButton, l10n.loginButton));
     await tester.pumpAndSettle();
 
     expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.text(l10n.homeDescription), findsOneWidget);
+    expect(find.text(l10n.noRecords), findsOneWidget);
     expect(api.calls, <String>[
       'GET /api/passkeys',
       'POST /api/auth/login/begin',
       'POST /api/auth/login/complete',
+      'GET /api/brews',
     ]);
     // サーバーのオプションはそのままパスキーのクライアントへ渡す。
     expect(passkeys.requestedOptions?['challenge'], 'test-challenge');
