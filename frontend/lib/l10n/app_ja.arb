@@ -1,0 +1,65 @@
+{
+  "@@locale": "ja",
+  "appTitle": "coffee-log",
+  "loading": "読み込み中",
+  "loginTitle": "ログイン",
+  "loginDescription": "パスキーでログインします。利用者名とパスワードの入力は要りません。",
+  "loginButton": "パスキーでログイン",
+  "loginFailed": "ログインできませんでした。もう一度お試しください。",
+  "logoutButton": "ログアウト",
+  "registerTitle": "パスキーの登録",
+  "registerDescription": "パスキーに付ける名前を入力して登録します。",
+  "passkeyNameLabel": "パスキーの名前",
+  "passkeyNameHint": "例: 自宅の PC",
+  "passkeyNameHelper": "1 文字以上 50 文字以下で入力してください。",
+  "passkeyNameError": "名前を 1 文字以上 50 文字以下で入力してください。",
+  "registerButton": "登録する",
+  "registerTokenMissing": "登録用のトークンが URL にありません。",
+  "registerTokenNotFound": "登録用のリンクが正しくありません。",
+  "registerTokenUsed": "この登録用のリンクは使用済みです。",
+  "registerTokenExpired": "この登録用のリンクの有効期限が切れています。",
+  "homeTitle": "coffee-log",
+  "homeDescription": "ログインしています。",
+  "retryButton": "再試行",
+  "errorValidation": "入力の内容を確認してください。",
+  "errorUnauthorized": "セッションが無効になりました。もう一度ログインしてください。",
+  "errorNotFound": "対象が見つかりません。",
+  "errorConflict": "処理できない状態です。画面を開き直してください。",
+  "errorGone": "有効期限が切れています。",
+  "errorNetwork": "通信に失敗しました。接続を確認してもう一度お試しください。",
+  "errorUnexpected": "予期しないエラーが発生しました。",
+  "passkeyCancelled": "パスキーの操作が取り消されました。",
+  "passkeyUnsupported": "この環境ではパスキーを使えません。",
+  "producer": "生産者",
+  "@producer": {
+    "description": "商品の項目名 (PRD の FR-16)"
+  },
+  "origin": "生産国",
+  "@origin": {
+    "description": "商品の項目名 (PRD の FR-16)"
+  },
+  "region": "地域",
+  "@region": {
+    "description": "商品の項目名 (PRD の FR-16)"
+  },
+  "process": "精製方法",
+  "@process": {
+    "description": "商品の項目名 (PRD の FR-16)"
+  },
+  "variety": "品種",
+  "@variety": {
+    "description": "商品の項目名 (PRD の FR-16)"
+  },
+  "roast": "焙煎度",
+  "@roast": {
+    "description": "購入の項目名 (PRD の FR-16)"
+  },
+  "roastDate": "焙煎日",
+  "@roastDate": {
+    "description": "購入の項目名 (PRD の FR-16)"
+  },
+  "flavorNotes": "フレーバーノート",
+  "@flavorNotes": {
+    "description": "商品の項目名 (PRD の FR-16)"
+  }
+}

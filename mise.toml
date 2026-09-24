@@ -4,6 +4,9 @@ rust = { version = "1.98.1", targets = ["wasm32-unknown-unknown"] }
 "cargo:worker-build" = "0.8.6"
 wrangler = { version = "4.135.0", allow_builds = ["esbuild", "sharp", "workerd"] }
 ripgrep = "15.2.0"
+# Flutter の統合テスト (flutter drive) が使う。版は手元の Chrome と CI の Chrome for Testing に
+# 揃える (ブラウザ本体はリポジトリのツールチェーンに含められないため、CI はワークフローで同じ版を入れる)。
+chromedriver = "154.0.8037.57"
 
 # ツールの版とコマンドラインは mise.toml に集約する (ADR-0009)。
 # タスクは標準のコマンドの組み合わせにし、ツールの版は [tools] だけが持つ。
@@ -36,11 +39,17 @@ run = [
 
 [tasks.test]
 description = "全ての自動テストを実行する"
-depends = ["backend:test", "backend:test-integration"]
+depends = [
+  "backend:test",
+  "backend:test-integration",
+  "frontend:test",
+  "frontend:test-web",
+  "frontend:test-integration",
+]
 
 [tasks.check]
 description = "静的検査と全ての自動テストを実行する (CI と手元の共通の入口)"
-depends = ["fmt", "lint", "test"]
+depends = ["fmt", "lint", "frontend:build", "frontend:analyze", "test"]
 
 [tasks."backend:build"]
 description = "利用者向けの Worker をビルドする"
@@ -58,6 +67,45 @@ run = "cargo test --workspace -- --skip wrangler_"
 description = "wrangler dev を起動する結合テストを実行する"
 dir = "backend"
 run = "cargo test -p coffee_log --test dev_server --test d1_binding --test wrangler_auth_api --test wrangler_passkey_flow --test wrangler_records_api --test wrangler_purchases_brews_api --test wrangler_suggestions_api --test wrangler_photos_api --test wrangler_stats_api --test wrangler_export_api --test wrangler_account_api --test wrangler_records_scale --test wrangler_stats_scale"
+
+[tasks."frontend:setup"]
+description = "Frontend の依存を取得する"
+dir = "frontend"
+run = "flutter pub get"
+
+[tasks."frontend:build"]
+description = "Frontend を Web 向けにビルドする (CanvasKit)"
+dir = "frontend"
+# Flutter 3.47.5 の CLI にレンダラの指定は無く、JavaScript のビルドは CanvasKit を使う
+# (skwasm は --wasm のときだけ使う)。よって指定は付けない (ADR-0007)。
+run = "flutter build web"
+
+[tasks."frontend:analyze"]
+description = "Frontend の静的検査を実行する"
+dir = "frontend"
+run = "flutter analyze"
+
+[tasks."frontend:test"]
+description = "Widget テストを実行する (VM)"
+dir = "frontend"
+run = "flutter test"
+
+[tasks."frontend:test-web"]
+description = "ブラウザで動かすテストを実行する (Canvas を使うテストを含む)"
+dir = "frontend"
+run = "flutter test --platform chrome"
+
+[tasks."frontend:test-integration"]
+description = "統合テストを chromedriver で実行する"
+dir = "frontend"
+# flutter drive は chromedriver を起動しないため、同じ版の chromedriver を先に起動する (issue 0013)。
+# 版は mise.toml の [tools] が持ち、統合テストの間だけ 4444 で待ち受ける。
+run = """
+chromedriver --port=4444 &
+chromedriver_pid=$!
+trap 'kill "$chromedriver_pid"' EXIT
+flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d web-server --browser-name=chrome --headless
+"""
 
 [tasks."r2-setup"]
 description = "R2 バケットの CORS とライフサイクルを適用する (本番環境に触るため check には含めない)"

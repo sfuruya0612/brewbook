@@ -1,0 +1,38 @@
+# coffee-log の Frontend のパッケージ定義 (ADR-0007)。
+# 依存を追加する理由は issue 0013 の「設計判断」に記す。
+name: coffee_log
+description: "coffee-log の Frontend (ADR-0007)"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Flutter の l10n (ARB) の delegate と、日本語の書式 (FR-16)。
+  flutter_localizations:
+    sdk: flutter
+  # ルーティング。経路は 1 か所の台帳に置く (ADR-0007)。
+  go_router: ^18.0.1
+  # `/api` の下の API 呼び出し (ADR-0007)。
+  http: ^1.6.0
+  # 生成される l10n のコードが使う (Flutter の l10n の一部)。
+  intl: any
+  # Web で `navigator.credentials` を呼ぶ JS 相互運用 (ADR-0007)。
+  web: ^1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  # Flutter の標準の lint 集約。
+  flutter_lints: ^6.0.0
+  # 統合テスト (`flutter drive` と chromedriver) のハーネス。
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  # ARB から AppLocalizations を生成する (FR-16)。
+  generate: true

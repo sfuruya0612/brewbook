@@ -24,6 +24,8 @@
   - @sfuruya0612
 - [ADD] アカウントと全データの削除を追加する
   - @sfuruya0612
+- [ADD] Flutter の基盤と認証の画面を追加する
+  - @sfuruya0612
 
 ### misc
 
