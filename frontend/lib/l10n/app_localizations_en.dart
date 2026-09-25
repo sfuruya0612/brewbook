@@ -452,4 +452,82 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get statsRatingTimeTitle => 'Time and rating';
+
+  @override
+  String get settingsTitle => 'Settings';
+
+  @override
+  String get passkeysTitle => 'Passkeys';
+
+  @override
+  String get passkeysDescription =>
+      'Add or remove the passkeys you use to log in.';
+
+  @override
+  String get addPasskeyTitle => 'Add a passkey';
+
+  @override
+  String get addPasskeyButton => 'Add a passkey';
+
+  @override
+  String get renamePasskeyTitle => 'Rename the passkey';
+
+  @override
+  String get renameButton => 'Rename';
+
+  @override
+  String passkeyCreatedAt(String timestamp) {
+    return 'Created: $timestamp';
+  }
+
+  @override
+  String passkeyLastUsedAt(String timestamp) {
+    return 'Last used: $timestamp';
+  }
+
+  @override
+  String get passkeyNotUsedYet => 'Not used yet';
+
+  @override
+  String get passkeyAddedMessage => 'Added the passkey.';
+
+  @override
+  String get passkeyRenamedMessage => 'Renamed the passkey.';
+
+  @override
+  String get passkeyDeletedMessage => 'Deleted the passkey.';
+
+  @override
+  String get passkeyLastDeleteError =>
+      'The last passkey cannot be deleted. Add another passkey first.';
+
+  @override
+  String get exportTitle => 'Export';
+
+  @override
+  String get exportDescription =>
+      'Download all of your records as a single JSON file.';
+
+  @override
+  String get exportButton => 'Download the export';
+
+  @override
+  String get exportDoneMessage => 'Downloaded the export.';
+
+  @override
+  String get deleteAccountTitle => 'Delete the account';
+
+  @override
+  String get deleteAccountDescription =>
+      'Deletes your account and all of your records. This cannot be undone.';
+
+  @override
+  String get deleteAccountButton => 'Delete the account';
+
+  @override
+  String get deleteAccountConfirmTitle => 'Delete the account?';
+
+  @override
+  String get deleteAccountConfirmMessage =>
+      'Your account and all of your records will be deleted. This cannot be undone.';
 }

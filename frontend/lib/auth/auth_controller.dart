@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../api/api_client.dart';
 import '../api/api_error.dart';
+import 'passkey.dart';
 import 'passkey_client.dart';
 
 /// ログインの状態 (FR-1、FR-2、FR-4)。
@@ -23,6 +24,7 @@ enum SessionStatus {
 ///
 /// セッションの確認は専用の API を設けず、起動時に `GET /api/passkeys` を呼んで 401 かどうかで
 /// 判定する。セッションはブラウザの Cookie が管理するため (ADR-0005)、このクラスは Cookie を扱わない。
+/// パスキーの管理 (FR-3) とアカウントの削除 (FR-15) もここに置き、セッションの状態を 1 か所で変える。
 class AuthController extends ChangeNotifier {
   AuthController({required ApiClient apiClient, required PasskeyClient passkeyClient})
     : _api = apiClient,
@@ -94,6 +96,42 @@ class AuthController extends ChangeNotifier {
   /// ログアウトする (FR-4)。ログアウト後はログイン画面へ遷移させる。
   Future<void> logout() async {
     await _api.postJson('/auth/logout');
+    _set(SessionStatus.signedOut);
+  }
+
+  /// 登録済みのパスキーの一覧を返す (FR-3)。
+  Future<List<Passkey>> passkeys() async {
+    return passkeysFromJson(await _api.getJson('/passkeys'));
+  }
+
+  /// パスキーを追加する (FR-3)。追加したパスキーを返す。
+  ///
+  /// 追加は登録 (FR-1) と同じ流れで行い、作成のオプションはセッションの利用者に対して発行される。
+  Future<Passkey> addPasskey({required String name}) async {
+    final options = await _api.postJson('/passkeys/begin');
+    final credential = await _passkeys.createCredential(options);
+    final json = await _api.postJson('/passkeys/complete', <String, Object?>{
+      'name': name,
+      'credential': credential,
+    });
+    return Passkey.fromJson(json);
+  }
+
+  /// パスキーの名前を変更する (FR-3)。変更したパスキーを返す。
+  Future<Passkey> renamePasskey({required String id, required String name}) async {
+    return Passkey.fromJson(
+      await _api.patchJson('/passkeys/$id', <String, Object?>{'name': name}),
+    );
+  }
+
+  /// パスキーを削除する (FR-3)。最後の 1 つはサーバーが 409 を返す。
+  Future<void> deletePasskey(String id) async {
+    await _api.deleteJson('/passkeys/$id');
+  }
+
+  /// アカウントと全データを削除する (FR-15)。削除後はログイン画面へ遷移させる。
+  Future<void> deleteAccount() async {
+    await _api.deleteJson('/account');
     _set(SessionStatus.signedOut);
   }
 

@@ -304,5 +304,44 @@
   "statsRatingTimeTitle": "時間と評価",
   "@statsRatingTimeTitle": {
     "description": "抽出条件と評価の関係の散布図 (FR-18)"
-  }
+  },
+  "settingsTitle": "設定",
+  "passkeysTitle": "パスキー",
+  "passkeysDescription": "ログインに使うパスキーを追加したり削除したりできます。",
+  "addPasskeyTitle": "パスキーを追加",
+  "addPasskeyButton": "パスキーを追加",
+  "renamePasskeyTitle": "パスキーの名前を変更",
+  "renameButton": "名前を変更",
+  "passkeyCreatedAt": "登録: {timestamp}",
+  "@passkeyCreatedAt": {
+    "description": "パスキーの登録日時の表示",
+    "placeholders": {
+      "timestamp": {
+        "type": "String"
+      }
+    }
+  },
+  "passkeyLastUsedAt": "最終使用: {timestamp}",
+  "@passkeyLastUsedAt": {
+    "description": "パスキーの最終使用日時の表示",
+    "placeholders": {
+      "timestamp": {
+        "type": "String"
+      }
+    }
+  },
+  "passkeyNotUsedYet": "まだ使われていません",
+  "passkeyAddedMessage": "パスキーを追加しました。",
+  "passkeyRenamedMessage": "パスキーの名前を変更しました。",
+  "passkeyDeletedMessage": "パスキーを削除しました。",
+  "passkeyLastDeleteError": "最後の 1 つのパスキーは削除できません。先に別のパスキーを追加してください。",
+  "exportTitle": "エクスポート",
+  "exportDescription": "全記録を 1 つの JSON ファイルとしてダウンロードできます。",
+  "exportButton": "エクスポートをダウンロード",
+  "exportDoneMessage": "エクスポートをダウンロードしました。",
+  "deleteAccountTitle": "アカウントの削除",
+  "deleteAccountDescription": "アカウントと全記録を削除します。元に戻せません。",
+  "deleteAccountButton": "アカウントを削除",
+  "deleteAccountConfirmTitle": "アカウントを削除しますか？",
+  "deleteAccountConfirmMessage": "アカウントと全記録を削除します。元に戻せません。"
 }

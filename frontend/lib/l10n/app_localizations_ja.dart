@@ -442,4 +442,78 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get statsRatingTimeTitle => '時間と評価';
+
+  @override
+  String get settingsTitle => '設定';
+
+  @override
+  String get passkeysTitle => 'パスキー';
+
+  @override
+  String get passkeysDescription => 'ログインに使うパスキーを追加したり削除したりできます。';
+
+  @override
+  String get addPasskeyTitle => 'パスキーを追加';
+
+  @override
+  String get addPasskeyButton => 'パスキーを追加';
+
+  @override
+  String get renamePasskeyTitle => 'パスキーの名前を変更';
+
+  @override
+  String get renameButton => '名前を変更';
+
+  @override
+  String passkeyCreatedAt(String timestamp) {
+    return '登録: $timestamp';
+  }
+
+  @override
+  String passkeyLastUsedAt(String timestamp) {
+    return '最終使用: $timestamp';
+  }
+
+  @override
+  String get passkeyNotUsedYet => 'まだ使われていません';
+
+  @override
+  String get passkeyAddedMessage => 'パスキーを追加しました。';
+
+  @override
+  String get passkeyRenamedMessage => 'パスキーの名前を変更しました。';
+
+  @override
+  String get passkeyDeletedMessage => 'パスキーを削除しました。';
+
+  @override
+  String get passkeyLastDeleteError =>
+      '最後の 1 つのパスキーは削除できません。先に別のパスキーを追加してください。';
+
+  @override
+  String get exportTitle => 'エクスポート';
+
+  @override
+  String get exportDescription => '全記録を 1 つの JSON ファイルとしてダウンロードできます。';
+
+  @override
+  String get exportButton => 'エクスポートをダウンロード';
+
+  @override
+  String get exportDoneMessage => 'エクスポートをダウンロードしました。';
+
+  @override
+  String get deleteAccountTitle => 'アカウントの削除';
+
+  @override
+  String get deleteAccountDescription => 'アカウントと全記録を削除します。元に戻せません。';
+
+  @override
+  String get deleteAccountButton => 'アカウントを削除';
+
+  @override
+  String get deleteAccountConfirmTitle => 'アカウントを削除しますか？';
+
+  @override
+  String get deleteAccountConfirmMessage => 'アカウントと全記録を削除します。元に戻せません。';
 }

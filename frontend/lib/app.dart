@@ -6,6 +6,7 @@ import 'api/api_client.dart';
 import 'auth/auth_controller.dart';
 import 'auth/auth_scope.dart';
 import 'auth/passkey_client.dart';
+import 'download/file_download.dart';
 import 'l10n/app_localizations.dart';
 import 'l10n/locale_resolution.dart';
 import 'photo/image_converter.dart';
@@ -13,6 +14,7 @@ import 'photo/photo_picker.dart';
 import 'records/clock.dart';
 import 'records/record_services.dart';
 import 'router/app_router.dart';
+import 'settings/settings_services.dart';
 
 /// アプリのルート。
 ///
@@ -28,6 +30,7 @@ class CoffeeLogApp extends StatefulWidget {
     this.imageConverter,
     this.photoUploadClient,
     this.clock,
+    this.fileDownload,
     this.navigatorObservers = const <NavigatorObserver>[],
   });
 
@@ -46,6 +49,9 @@ class CoffeeLogApp extends StatefulWidget {
   /// 端末の時計とタイムゾーン (FR-18)。無いときは実行環境の値を使う。
   final DeviceClock? clock;
 
+  /// エクスポートのファイルの保存 (FR-14)。無いときは実行環境に合う実装を使う。
+  final FileDownload? fileDownload;
+
   /// ルーターの監視 (画面数の成功指標を測るテストが渡す。PRD の成功指標)。
   final List<NavigatorObserver> navigatorObservers;
 
@@ -56,6 +62,7 @@ class CoffeeLogApp extends StatefulWidget {
 class _CoffeeLogAppState extends State<CoffeeLogApp> {
   late final AuthController _controller;
   late final RecordServices _services;
+  late final SettingsServices _settings;
   late final GoRouter _router;
 
   @override
@@ -72,11 +79,16 @@ class _CoffeeLogAppState extends State<CoffeeLogApp> {
       photoUploadClient: widget.photoUploadClient,
       clock: widget.clock,
     );
+    _settings = SettingsServices(
+      apiClient: widget.apiClient,
+      fileDownload: widget.fileDownload,
+    );
     // 401 の応答でセッションが失われたときは、ログイン画面へ遷移させる (ADR-0007)。
     widget.apiClient.onUnauthorized = _controller.markSignedOut;
     _router = createAppRouter(
       _controller,
       _services,
+      _settings,
       observers: widget.navigatorObservers,
     );
     // 起動時に `GET /api/passkeys` を呼び、ログイン状態を判定する。

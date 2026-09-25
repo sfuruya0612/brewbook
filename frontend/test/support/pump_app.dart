@@ -1,6 +1,7 @@
 import 'package:coffee_log/api/api_client.dart';
 import 'package:coffee_log/app.dart';
 import 'package:coffee_log/auth/passkey_client.dart';
+import 'package:coffee_log/download/file_download.dart';
 import 'package:coffee_log/l10n/app_localizations.dart';
 import 'package:coffee_log/photo/image_converter.dart';
 import 'package:coffee_log/photo/photo_picker.dart';
@@ -25,6 +26,7 @@ Future<void> pumpApp(
   ImageConverter? imageConverter,
   http.Client? photoUploadClient,
   DeviceClock? clock,
+  FileDownload? fileDownload,
   List<NavigatorObserver> navigatorObservers = const <NavigatorObserver>[],
 }) async {
   tester.platformDispatcher.localesTestValue = locales;
@@ -37,6 +39,7 @@ Future<void> pumpApp(
       imageConverter: imageConverter,
       photoUploadClient: photoUploadClient,
       clock: clock,
+      fileDownload: fileDownload,
       navigatorObservers: navigatorObservers,
     ),
   );

@@ -26,38 +26,51 @@ class ApiClient {
   void Function()? onUnauthorized;
 
   /// `GET` を呼び、JSON のオブジェクトを返す。
-  Future<Map<String, Object?>> getJson(String path) {
-    return _send(() => _http.get(_uri(path)));
+  Future<Map<String, Object?>> getJson(String path) async {
+    return _decodeJson(await _send(() => _http.get(_uri(path))));
+  }
+
+  /// `GET` を呼び、応答の本文をバイト列として返す (FR-14 のダウンロード)。
+  ///
+  /// 認証は同じオリジンの Cookie で行う (ADR-0005)。
+  Future<List<int>> getBytes(String path) async {
+    final response = await _send(() => _http.get(_uri(path)));
+    return response.bodyBytes;
   }
 
   /// `POST` を呼び、JSON のオブジェクトを返す。本文が無いときは空のオブジェクトを送る。
-  Future<Map<String, Object?>> postJson(String path, [Map<String, Object?>? body]) {
-    return _send(
-      () => _http.post(
-        _uri(path),
-        headers: _jsonHeaders,
-        body: jsonEncode(body ?? const <String, Object?>{}),
+  Future<Map<String, Object?>> postJson(String path, [Map<String, Object?>? body]) async {
+    return _decodeJson(
+      await _send(
+        () => _http.post(
+          _uri(path),
+          headers: _jsonHeaders,
+          body: jsonEncode(body ?? const <String, Object?>{}),
+        ),
       ),
     );
   }
 
   /// `PATCH` を呼び、JSON のオブジェクトを返す。
-  Future<Map<String, Object?>> patchJson(String path, Map<String, Object?> body) {
-    return _send(
-      () => _http.patch(_uri(path), headers: _jsonHeaders, body: jsonEncode(body)),
+  Future<Map<String, Object?>> patchJson(String path, Map<String, Object?> body) async {
+    return _decodeJson(
+      await _send(
+        () => _http.patch(_uri(path), headers: _jsonHeaders, body: jsonEncode(body)),
+      ),
     );
   }
 
   /// `DELETE` を呼び、JSON のオブジェクトを返す。
-  Future<Map<String, Object?>> deleteJson(String path) {
-    return _send(() => _http.delete(_uri(path)));
+  Future<Map<String, Object?>> deleteJson(String path) async {
+    return _decodeJson(await _send(() => _http.delete(_uri(path))));
   }
 
   /// ページのオリジンを基準にした絶対 URL にする。Web では同一オリジン、それ以外では
   /// `Uri.base` を基準にした URL になる。
   Uri _uri(String path) => Uri.base.resolve('$basePath$path');
 
-  Future<Map<String, Object?>> _send(Future<http.Response> Function() request) async {
+  /// 要求を送り、エラーの応答を [ApiError] に、応答を取得できない失敗を [NetworkError] にする。
+  Future<http.Response> _send(Future<http.Response> Function() request) async {
     final http.Response response;
     try {
       response = await request();
@@ -72,7 +85,7 @@ class ApiClient {
       }
       throw error;
     }
-    return _decodeJson(response);
+    return response;
   }
 
   /// エラーの応答を [ApiError] にする。規約の形でない応答はステータスコードだけを運ぶ。

@@ -59,3 +59,13 @@ String loginErrorMessage(Object error, AppLocalizations l10n) {
   }
   return messageForError(error, l10n);
 }
+
+/// パスキーの削除の文言 (FR-3)。
+///
+/// 409 は最後の 1 つを消せないことを表すため、追加を促す文言にする (ADR-0004)。
+String deletePasskeyErrorMessage(Object error, AppLocalizations l10n) {
+  if (error is ApiError && error.status == 409) {
+    return l10n.passkeyLastDeleteError;
+  }
+  return messageForError(error, l10n);
+}

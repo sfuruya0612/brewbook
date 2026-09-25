@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../auth/auth_scope.dart';
+import '../auth/passkey_name.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/error_message.dart';
@@ -32,24 +33,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  /// 名前を検証する。前後の空白を除いて 1 文字以上 50 文字以下とする (ADR-0004)。
-  ///
-  /// 文字数は Unicode のスカラー値で数える (Backend の `validate_passkey_name` と同じ。
-  /// Dart の `String.length` は UTF-16 の符号単位のため、サロゲートペアを含む名前でずれる)。
-  String? _validateName(String value, AppLocalizations l10n) {
-    final name = value.trim();
-    if (name.isEmpty || name.runes.length > 50) {
-      return l10n.passkeyNameError;
-    }
-    return null;
-  }
-
   Future<void> _register() async {
     final l10n = AppLocalizations.of(context);
     final controller = AuthScope.read(context);
     final token = widget.token;
-    final name = _name.text.trim();
-    final nameError = _validateName(_name.text, l10n);
+    final name = passkeyNameForRequest(_name.text);
+    final nameError = validatePasskeyName(_name.text, l10n);
     setState(() {
       _nameError = nameError;
       _errorMessage = null;

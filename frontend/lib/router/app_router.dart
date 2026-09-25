@@ -13,9 +13,11 @@ import '../screens/purchase_detail_screen.dart';
 import '../screens/purchase_form_screen.dart';
 import '../screens/purchase_list_screen.dart';
 import '../screens/register_screen.dart';
+import '../screens/settings_screen.dart';
 import '../screens/shop_form_screen.dart';
 import '../screens/shop_list_screen.dart';
 import '../screens/stats_screen.dart';
+import '../settings/settings_services.dart';
 
 /// 画面の経路の台帳 (ADR-0007)。
 ///
@@ -30,6 +32,9 @@ abstract final class AppRoutes {
 
   /// ホーム (抽出の一覧。FR-11)。
   static const String home = '/';
+
+  /// 設定 (パスキーの管理、エクスポート、アカウントの削除、ログアウト。FR-3、FR-4、FR-14、FR-15)。
+  static const String settings = '/settings';
 
   /// 抽出の登録 (FR-11)。
   static const String brewNew = '/brews/new';
@@ -107,7 +112,8 @@ abstract final class AppRoutes {
 /// [observers] は画面数の成功指標 (PRD の成功指標) を測るテストが渡す。
 GoRouter createAppRouter(
   AuthController controller,
-  RecordServices services, {
+  RecordServices services,
+  SettingsServices settings, {
   List<NavigatorObserver> observers = const <NavigatorObserver>[],
 }) {
   return GoRouter(
@@ -147,6 +153,11 @@ GoRouter createAppRouter(
         path: AppRoutes.login,
         name: AppRoutes.login,
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.settings,
+        name: AppRoutes.settings,
+        builder: (context, state) => SettingsScreen(services: settings),
       ),
       GoRoute(
         path: AppRoutes.register,

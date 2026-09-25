@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:coffee_log/api/api_client.dart';
 import 'package:coffee_log/api/api_error.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +23,18 @@ void main() {
       httpClient: MockClient((request) async => http.Response('', 200)),
     );
     expect(await client.postJson('/auth/logout'), isEmpty);
+  });
+
+  test('GET の応答の本文をバイト列で返す', () async {
+    final body = utf8.encode('{"shops":[],"brews":[]}');
+    final client = ApiClient(
+      httpClient: MockClient((request) async {
+        expect(request.url.path, '/api/export');
+        expect(request.method, 'GET');
+        return http.Response.bytes(body, 200);
+      }),
+    );
+    expect(await client.getBytes('/export'), body);
   });
 
   test('エラーの応答を共通の型にする', () async {

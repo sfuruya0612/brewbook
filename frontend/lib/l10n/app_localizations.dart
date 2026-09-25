@@ -925,6 +925,144 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'時間と評価'**
   String get statsRatingTimeTitle;
+
+  /// No description provided for @settingsTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'設定'**
+  String get settingsTitle;
+
+  /// No description provided for @passkeysTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'パスキー'**
+  String get passkeysTitle;
+
+  /// No description provided for @passkeysDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'ログインに使うパスキーを追加したり削除したりできます。'**
+  String get passkeysDescription;
+
+  /// No description provided for @addPasskeyTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'パスキーを追加'**
+  String get addPasskeyTitle;
+
+  /// No description provided for @addPasskeyButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'パスキーを追加'**
+  String get addPasskeyButton;
+
+  /// No description provided for @renamePasskeyTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'パスキーの名前を変更'**
+  String get renamePasskeyTitle;
+
+  /// No description provided for @renameButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'名前を変更'**
+  String get renameButton;
+
+  /// パスキーの登録日時の表示
+  ///
+  /// In ja, this message translates to:
+  /// **'登録: {timestamp}'**
+  String passkeyCreatedAt(String timestamp);
+
+  /// パスキーの最終使用日時の表示
+  ///
+  /// In ja, this message translates to:
+  /// **'最終使用: {timestamp}'**
+  String passkeyLastUsedAt(String timestamp);
+
+  /// No description provided for @passkeyNotUsedYet.
+  ///
+  /// In ja, this message translates to:
+  /// **'まだ使われていません'**
+  String get passkeyNotUsedYet;
+
+  /// No description provided for @passkeyAddedMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'パスキーを追加しました。'**
+  String get passkeyAddedMessage;
+
+  /// No description provided for @passkeyRenamedMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'パスキーの名前を変更しました。'**
+  String get passkeyRenamedMessage;
+
+  /// No description provided for @passkeyDeletedMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'パスキーを削除しました。'**
+  String get passkeyDeletedMessage;
+
+  /// No description provided for @passkeyLastDeleteError.
+  ///
+  /// In ja, this message translates to:
+  /// **'最後の 1 つのパスキーは削除できません。先に別のパスキーを追加してください。'**
+  String get passkeyLastDeleteError;
+
+  /// No description provided for @exportTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'エクスポート'**
+  String get exportTitle;
+
+  /// No description provided for @exportDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'全記録を 1 つの JSON ファイルとしてダウンロードできます。'**
+  String get exportDescription;
+
+  /// No description provided for @exportButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'エクスポートをダウンロード'**
+  String get exportButton;
+
+  /// No description provided for @exportDoneMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'エクスポートをダウンロードしました。'**
+  String get exportDoneMessage;
+
+  /// No description provided for @deleteAccountTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'アカウントの削除'**
+  String get deleteAccountTitle;
+
+  /// No description provided for @deleteAccountDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'アカウントと全記録を削除します。元に戻せません。'**
+  String get deleteAccountDescription;
+
+  /// No description provided for @deleteAccountButton.
+  ///
+  /// In ja, this message translates to:
+  /// **'アカウントを削除'**
+  String get deleteAccountButton;
+
+  /// No description provided for @deleteAccountConfirmTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'アカウントを削除しますか？'**
+  String get deleteAccountConfirmTitle;
+
+  /// No description provided for @deleteAccountConfirmMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'アカウントと全記録を削除します。元に戻せません。'**
+  String get deleteAccountConfirmMessage;
 }
 
 class _AppLocalizationsDelegate
