@@ -45,6 +45,7 @@ depends = [
   "frontend:test",
   "frontend:test-web",
   "frontend:test-integration",
+  "frontend:test-same-origin",
 ]
 
 [tasks.check]
@@ -66,7 +67,27 @@ run = "cargo test --workspace -- --skip wrangler_"
 [tasks."backend:test-integration"]
 description = "wrangler dev を起動する結合テストを実行する"
 dir = "backend"
-run = "cargo test -p coffee_log --test dev_server --test d1_binding --test wrangler_auth_api --test wrangler_passkey_flow --test wrangler_records_api --test wrangler_purchases_brews_api --test wrangler_suggestions_api --test wrangler_photos_api --test wrangler_stats_api --test wrangler_export_api --test wrangler_account_api --test wrangler_records_scale --test wrangler_stats_scale"
+# wrangler dev は Static Assets のディレクトリが無いと起動しないため、先に Flutter をビルドする (0017)。
+depends = ["frontend:build"]
+run = "cargo test -p coffee_log --test dev_server --test d1_binding --test wrangler_auth_api --test wrangler_passkey_flow --test wrangler_records_api --test wrangler_purchases_brews_api --test wrangler_suggestions_api --test wrangler_photos_api --test wrangler_stats_api --test wrangler_export_api --test wrangler_account_api --test wrangler_records_scale --test wrangler_stats_scale --test wrangler_same_origin_api"
+
+[tasks.dev]
+description = "ローカル開発の画面と API を同じオリジンから配信する"
+depends = ["frontend:build"]
+dir = "backend/coffee_log"
+# Flutter の開発サーバーは使わない (別オリジンになり、CORS を許可しない決定と Origin の検証に反する)。
+# 画面は wrangler dev の Static Assets から返し、http://localhost:8787/ で開く (ADR-0005)。
+# `[vars]` の RP_ID と ORIGIN は本番 (workers.dev) の値のため、ローカルの開発では ADR-0004 の
+# 既定値 (`localhost` と `http://localhost:8787`) で上書きする。本番の値へ置き換えた後も同じタスクで開発できる。
+run = "wrangler dev --var RP_ID:localhost --var ORIGIN:http://localhost:8787"
+
+[tasks.deploy]
+description = "Flutter をビルドしてから、画面と API を 1 つの Worker にデプロイする"
+depends = ["frontend:build"]
+dir = "backend/coffee_log"
+# スキーマ変更を含むリリースでは、先に `mise run db-migrate-remote` を実行する (README のデプロイ手順)。
+# デプロイのタスクは `mise run check` に含めない (0002 の規則)。
+run = "wrangler deploy"
 
 [tasks."frontend:setup"]
 description = "Frontend の依存を取得する"
@@ -79,6 +100,13 @@ dir = "frontend"
 # Flutter 3.47.5 の CLI にレンダラの指定は無く、JavaScript のビルドは CanvasKit を使う
 # (skwasm は --wasm のときだけ使う)。よって指定は付けない (ADR-0007)。
 run = "flutter build web"
+
+[tasks."frontend:build-e2e"]
+description = "実バックエンドの統合テスト (0017) が配信する、テストコード入りの Web ビルドを作る"
+dir = "frontend"
+# テストのブラウザは Worker の Static Assets から画面を読むため、テストの本体を
+# ビルドに含める必要がある。check が作る配布用のビルド (build/web) とは混ぜない。
+run = 'flutter build web -t integration_test/same_origin_test.dart -o "$PWD/build/e2e-web"'
 
 [tasks."frontend:analyze"]
 description = "Frontend の静的検査を実行する"
@@ -106,6 +134,14 @@ chromedriver_pid=$!
 trap 'kill "$chromedriver_pid"' EXIT
 flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d web-server --browser-name=chrome --headless
 """
+
+[tasks."frontend:test-same-origin"]
+description = "実バックエンドと仮想認証器で、ログインから抽出の保存までを検証する"
+depends = ["frontend:build-e2e"]
+dir = "backend"
+# Rust のハーネスが wrangler dev と chromedriver を起動し、テストコード入りの Web ビルドを
+# Static Assets として配信して、実際の画面を chrome で操作する (0017)。
+run = "cargo test -p coffee_log --test wrangler_same_origin_e2e"
 
 [tasks."r2-setup"]
 description = "R2 バケットの CORS とライフサイクルを適用する (本番環境に触るため check には含めない)"

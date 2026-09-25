@@ -2,6 +2,10 @@
 //!
 //! セッションの Cookie は自動で保持せず、テストが応答の `Set-Cookie` から取り出して渡す。
 //! `Secure` の Cookie を HTTP のクライアントの jar が保存するかどうかに依存しないためである。
+//!
+//! 状態を変更するメソッド (POST、PUT、PATCH、DELETE) には、呼び出し先と同じオリジンの
+//! `Origin` を自動で付ける (ADR-0005 の `Origin` の検証を通すため)。別オリジンと `Origin` の
+//! 無い呼び出しは、[`ApiClient::with_origin`] と [`ApiClient::without_origin`] で作る。
 
 use std::time::Duration;
 
@@ -14,12 +18,16 @@ use super::DevServer;
 /// API を呼ぶクライアント。セッションの Cookie を持てる。
 pub struct ApiClient {
     base_url: String,
+    /// 状態を変更するメソッドに付ける `Origin`。`None` なら付けない。
+    origin: Option<String>,
     client: Client,
     cookie: Option<String>,
 }
 
 impl ApiClient {
     /// API の基底 URL とセッションのトークンから作る。`None` ならセッションを持たない。
+    ///
+    /// `Origin` は基底 URL のオリジン (基底 URL 自体) にする。
     pub fn new(base_url: &str, token: Option<&str>) -> Self {
         Self::with_timeout(base_url, token, Duration::from_secs(30))
     }
@@ -28,6 +36,7 @@ impl ApiClient {
     pub fn with_timeout(base_url: &str, token: Option<&str>, timeout: Duration) -> Self {
         Self {
             base_url: base_url.to_owned(),
+            origin: Some(base_url.to_owned()),
             client: Client::builder()
                 .timeout(timeout)
                 .build()
@@ -39,6 +48,18 @@ impl ApiClient {
     /// サーバーの基底 URL から作る。
     pub fn for_server(server: &DevServer, token: Option<&str>) -> Self {
         Self::new(&server.base_url(), token)
+    }
+
+    /// 状態を変更するメソッドに付ける `Origin` を差し替える (別オリジンからの呼び出しの検査に使う)。
+    pub fn with_origin(mut self, origin: &str) -> Self {
+        self.origin = Some(origin.to_owned());
+        self
+    }
+
+    /// 状態を変更するメソッドに `Origin` を付けない (検証できない呼び出しの検査に使う)。
+    pub fn without_origin(mut self) -> Self {
+        self.origin = None;
+        self
     }
 
     pub fn get(&self, path: &str) -> Response {
@@ -61,11 +82,16 @@ impl ApiClient {
         self.send(Method::DELETE, path, None)
     }
 
-    /// 1 件のリクエストを送る。
+    /// プリフライト (OPTIONS) を送る。応答に CORS のヘッダが無いことの検査に使う。
+    pub fn options(&self, path: &str) -> Response {
+        self.send(Method::OPTIONS, path, None)
+    }
+
+    /// 1 件のリクエストを送る。GET と HEAD 以外には `Origin` を付ける (ブラウザの挙動に合わせる)。
     fn send(&self, method: Method, path: &str, body: Option<&Value>) -> Response {
         let mut request = self
             .client
-            .request(method, format!("{}{path}", self.base_url));
+            .request(method.clone(), format!("{}{path}", self.base_url));
         if let Some(body) = body {
             request = request
                 .header("content-type", "application/json")
@@ -74,10 +100,20 @@ impl ApiClient {
         if let Some(cookie) = &self.cookie {
             request = request.header("cookie", cookie);
         }
+        if origin_is_sent(&method) {
+            if let Some(origin) = &self.origin {
+                request = request.header("origin", origin);
+            }
+        }
         request
             .send()
             .expect("the request must reach the dev server")
     }
+}
+
+/// ブラウザが `Origin` を付けるメソッドか (GET と HEAD には付けない)。
+fn origin_is_sent(method: &Method) -> bool {
+    !matches!(*method, Method::GET | Method::HEAD)
 }
 
 /// 応答の状態コードと JSON の本体を返す。

@@ -2,7 +2,10 @@
   "rules": [
     {
       "allowed": {
-        "origins": ["https://coffee-log.example.workers.dev"],
+        "origins": [
+          "http://localhost:8787",
+          "https://coffee-log.example.workers.dev"
+        ],
         "methods": ["PUT"],
         "headers": ["Content-Type"]
       }

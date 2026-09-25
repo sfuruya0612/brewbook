@@ -1,6 +1,6 @@
 //! パスキーを伴う結合テスト。CDP の仮想認証器 (Chrome DevTools Protocol) を使う (ADR-0004)。
 //!
-//! テストページ (`/__test_page`、`TEST_PAGE` の var で有効) の `window.coffeeLogTest` を呼び、
+//! テストページ (`/api/__test_page`、`TEST_PAGE` の var で有効) の `window.coffeeLogTest` を呼び、
 //! 登録、ログイン、パスキーの追加、名前の変更、削除を一連で検査する。
 //!
 //! 検査する経路と種別 (0001 の台帳の照合)。

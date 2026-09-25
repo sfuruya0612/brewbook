@@ -4,13 +4,16 @@
 //! 応答し、それ以外は台帳に無い経路と同じ 404 になる。結合テストは
 //! `wrangler dev --var TEST_PAGE:true` で有効にする (本番の vars には無い)。
 //!
+//! `/api/*` 以外の経路は Static Assets が返し、Static Assets は静的ファイルの無いパスに
+//! `index.html` を返す (ADR-0005)。Worker が処理するページは `d1_check` と同じく `/api/` の下に置く。
+//!
 //! ページは、同じオリジンの API を呼び、`navigator.credentials` でパスキーを作る・使うための
 //! 最小限の関数を持つ。仮想認証器はテストが Chrome DevTools Protocol で付ける。
 
 use worker::{Env, Method, Request, Response, Result};
 
-/// このページのパス。
-pub const PATH: &str = "/__test_page";
+/// このページのパス。`/api/*` は Worker が先に処理する (`run_worker_first`、ADR-0005)。
+pub const PATH: &str = "/api/__test_page";
 /// このページの経路名。ログの `route` に使う。
 pub const ROUTE_NAME: &str = "test_page";
 /// このページを有効にする vars の名前。

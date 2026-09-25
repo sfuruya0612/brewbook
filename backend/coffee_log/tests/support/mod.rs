@@ -322,6 +322,18 @@ impl DevServer {
         vars: impl FnOnce(u16) -> Vec<(String, String)>,
         seed_sql: &str,
     ) -> Result<Self, String> {
+        Self::start_with_assets(vars, seed_sql, None)
+    }
+
+    /// Static Assets のディレクトリを差し替えて `wrangler dev` を起動する。
+    ///
+    /// 実バックエンドの統合テスト (0017) が、テストコード入りの Web ビルドを配信するために使う。
+    /// `None` なら `wrangler.toml` の `[assets]` のディレクトリを使う。
+    pub fn start_with_assets(
+        vars: impl FnOnce(u16) -> Vec<(String, String)>,
+        seed_sql: &str,
+        assets_dir: Option<&Path>,
+    ) -> Result<Self, String> {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let sequence = START_COUNTER.fetch_add(1, Ordering::Relaxed);
         let persist_dir = std::env::temp_dir().join(format!(
@@ -331,6 +343,11 @@ impl DevServer {
         ));
         std::fs::create_dir_all(&persist_dir)
             .map_err(|error| format!("failed to create {}: {error}", persist_dir.display()))?;
+        ensure_assets_dir(&manifest_dir, assets_dir)?;
+        let config = match assets_dir {
+            Some(assets_dir) => Some(override_config(&manifest_dir, &persist_dir, assets_dir)?),
+            None => None,
+        };
         let port = free_port()?;
 
         apply_migrations(&manifest_dir, &persist_dir)?;
@@ -357,6 +374,9 @@ impl DevServer {
             .env_remove("CLAUDECODE")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        if let Some(config) = &config {
+            command.arg("--config").arg(config);
+        }
         for (key, value) in vars(port) {
             command.arg("--var").arg(format!("{key}:{value}"));
         }
@@ -822,11 +842,80 @@ fn has_d1_binding(config: &str) -> bool {
 }
 
 /// OS に空きポートを 1 つ選ばせる。wrangler が bind するまでの間に他プロセスが使う可能性は残る。
-fn free_port() -> Result<u16, String> {
+pub fn free_port() -> Result<u16, String> {
     let listener = TcpListener::bind("127.0.0.1:0")
         .map_err(|error| format!("failed to find a free port: {error}"))?;
     listener
         .local_addr()
         .map(|address| address.port())
         .map_err(|error| format!("failed to read the local address: {error}"))
+}
+
+/// `wrangler dev` が読む Static Assets のディレクトリを用意する。
+///
+/// `wrangler.toml` の `[assets]` のディレクトリが無いと `wrangler dev` は起動しない。
+/// `check` は先に Flutter をビルドするが、単体のテストの実行でも起動できるように、
+/// 無ければ空のディレクトリを作る。
+fn ensure_assets_dir(manifest_dir: &Path, assets_dir: Option<&Path>) -> Result<(), String> {
+    let dir = assets_dir.map_or_else(|| manifest_dir.join(DEFAULT_ASSETS_DIR), Path::to_path_buf);
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("failed to create {}: {error}", dir.display()))
+}
+
+/// `wrangler.toml` の `[assets]` が指す、既定の Web ビルドのディレクトリ。
+const DEFAULT_ASSETS_DIR: &str = "../../frontend/build/web";
+
+/// `wrangler.toml` をもとに、テスト用のビルドを配信する一時の設定を書く。
+///
+/// `wrangler dev --assets` は `[assets]` の `run_worker_first` と `not_found_handling` を
+/// 引き継がない。テストは本番と同じルーティング (`/api/*` は Worker、それ以外は Static Assets と
+/// single-page-application) で動かす必要があるため、`wrangler.toml` のパスだけを絶対パスにした
+/// 設定を作って `--config` で渡す。設定は状態ディレクトリに置き、`wrangler dev` の停止で消える。
+fn override_config(
+    manifest_dir: &Path,
+    persist_dir: &Path,
+    assets_dir: &Path,
+) -> Result<PathBuf, String> {
+    let source = manifest_dir.join("wrangler.toml");
+    let mut text = std::fs::read_to_string(&source)
+        .map_err(|error| format!("failed to read {}: {error}", source.display()))?;
+    let main = manifest_dir.join("build/worker/shim.mjs");
+    let migrations = manifest_dir.join("migrations");
+    replace_once(
+        &mut text,
+        "main = \"build/worker/shim.mjs\"",
+        &format!("main = \"{}\"", main.display()),
+    )?;
+    replace_once(
+        &mut text,
+        "directory = \"../../frontend/build/web\"",
+        &format!("directory = \"{}\"", assets_dir.display()),
+    )?;
+    replace_once(
+        &mut text,
+        "migrations_dir = \"migrations\"",
+        &format!("migrations_dir = \"{}\"", migrations.display()),
+    )?;
+    // 設定を別のディレクトリに置くため、ビルドの作業ディレクトリを明示する。
+    replace_once(
+        &mut text,
+        "[build]\ncommand = \"worker-build --release\"",
+        &format!(
+            "[build]\ncommand = \"worker-build --release\"\ncwd = \"{}\"",
+            manifest_dir.display()
+        ),
+    )?;
+    let config = persist_dir.join("wrangler-override.toml");
+    std::fs::write(&config, text)
+        .map_err(|error| format!("failed to write {}: {error}", config.display()))?;
+    Ok(config)
+}
+
+/// 文字列を 1 か所だけ置き換える。`wrangler.toml` の形が変わったら気付けるようにする。
+fn replace_once(text: &mut String, from: &str, to: &str) -> Result<(), String> {
+    if !text.contains(from) {
+        return Err(format!("wrangler.toml must contain the line {from:?}"));
+    }
+    *text = text.replace(from, to);
+    Ok(())
 }

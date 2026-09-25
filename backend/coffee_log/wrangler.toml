@@ -1,9 +1,26 @@
 name = "coffee-log"
 main = "build/worker/shim.mjs"
 compatibility_date = "2026-09-21"
+# workers.dev のホスト名で配信する (ADR-0005)。独自ドメインは取得しない。
+workers_dev = true
+
+# Flutter のビルド成果物を、同じ Worker の Static Assets として同一オリジンで配信する
+# (ADR-0005)。`directory` はこの設定ファイルのあるディレクトリからの相対で解決される。
+# `/api/*` は Rust の処理に渡し (run_worker_first)、一致する静的ファイルの無いパスには
+# `index.html` を 200 で返して Flutter のルーティングを扱う (not_found_handling)。
+# 除外パターンは置かない。iOS 向けの `/.well-known/*` は iOS 対応時に Static Assets から返す。
+[assets]
+directory = "../../frontend/build/web"
+run_worker_first = ["/api/*"]
+not_found_handling = "single-page-application"
 
 [build]
 command = "worker-build --release"
+
+# Workers Logs を有効にする。Worker はリクエスト 1 件ごとに経路名と処理時間を JSON で出し、
+# リリース後に保持期間の全量で応答時間の p95 を集計する (PRD の成功指標、README のデプロイ手順)。
+[observability]
+enabled = true
 
 # D1 のバインディング (ADR-0002)。データベースは 1 つとし、管理者 Worker (0018) も同じ
 # database_id を参照する。管理者 Worker はマイグレーションを持たず、適用はこの設定から行う。
@@ -25,6 +42,12 @@ bucket_name = "coffee-log-photos"
 [vars]
 # 写真のバケット名 (ADR-0003)。バインディングの `bucket_name` と同じ値にする。
 R2_BUCKET = "coffee-log-photos"
+# パスキーの Relying Party ID と、アプリの Origin (ADR-0004、ADR-0005)。
+# workers.dev のサブドメインはアカウントに 1 つで、デプロイするアカウントによって変わるため、
+# 本番の値はデプロイの前に実際のサブドメインへ置き換える (README のデプロイ手順)。
+# ローカルの開発は `mise run dev` が ADR-0004 の既定値 (`localhost`) で上書きする。
+RP_ID = "coffee-log.example.workers.dev"
+ORIGIN = "https://coffee-log.example.workers.dev"
 # S3 互換エンドポイント (R2_ENDPOINT) と API トークン (R2_ACCESS_KEY_ID、
 # R2_SECRET_ACCESS_KEY) は環境ごとに違うため、開発では `.dev.vars` (git 管理外)、
 # 本番ではデプロイ時に設定し、リポジトリに実値を含めない (PRD のセキュリティ)。

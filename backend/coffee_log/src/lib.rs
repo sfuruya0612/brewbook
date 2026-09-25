@@ -12,6 +12,7 @@ pub mod d1_check;
 pub mod db;
 pub mod export;
 pub mod logging;
+pub mod origin;
 pub mod r2_check;
 pub mod random;
 pub mod records;
@@ -25,10 +26,26 @@ pub async fn main(mut req: Request, env: Env, _ctx: Context) -> Result<Response>
     let path = req.path();
 
     let (route_name, status, response) = match matched(&method, &path) {
-        Some(route) => {
-            let (status, response) = run_router(req, env).await;
-            (route.name, status, response)
-        }
+        Some(route) => match origin_check(route.method, &req) {
+            Ok(true) => {
+                let (status, response) = run_router(req, env).await;
+                (route.name, status, response)
+            }
+            // 状態を変更する API は、同一オリジン以外と `Origin` の無いリクエストを 403 で拒否する。
+            Ok(false) => (
+                route.name,
+                ErrorCode::Forbidden.status(),
+                origin::forbidden(),
+            ),
+            Err(error) => {
+                console_error!("failed to check the request origin: {error}");
+                (
+                    route.name,
+                    ErrorCode::Internal.status(),
+                    respond::error(ErrorCode::Internal, "internal error"),
+                )
+            }
+        },
         // 台帳に無い経路は、テスト専用の経路だけを処理する。
         None => unmatched_route(&mut req, &env).await,
     };
@@ -41,6 +58,14 @@ pub async fn main(mut req: Request, env: Env, _ctx: Context) -> Result<Response>
         duration_ms,
     ));
     Ok(response)
+}
+
+/// 状態を変更する経路の `Origin` を検証する。検証の対象外のメソッドは常に通す。
+fn origin_check(method: Method, req: &Request) -> Result<bool> {
+    if !origin::changes_state(method) {
+        return Ok(true);
+    }
+    origin::is_same_origin(req)
 }
 
 /// Router を実行し、失敗を PRD の形式のエラー応答に変換する。

@@ -24,6 +24,10 @@ dependencies:
   intl: any
   # Web で `navigator.credentials` を呼ぶ JS 相互運用 (ADR-0007)。
   web: ^1.1.1
+  # ブラウザの URL をパス形式で扱う (ADR-0005)。Worker の Static Assets が Flutter の
+  # ルーティングのパスに `index.html` を 200 で返すため、登録用リンクを直接開けるようにする (issue 0017)。
+  flutter_web_plugins:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:
