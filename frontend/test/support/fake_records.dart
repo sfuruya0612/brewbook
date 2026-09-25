@@ -120,6 +120,93 @@ Map<String, Object?> brewJson({
   };
 }
 
+/// 抽出回数と豆の消費量の 1 区間の応答 (FR-18)。
+Map<String, Object?> brewPeriodJson({
+  String period = '2026-09-01',
+  int brewCount = 1,
+  double doseGrams = 15.0,
+}) {
+  return <String, Object?>{
+    'period': period,
+    'brew_count': brewCount,
+    'dose_grams': doseGrams,
+  };
+}
+
+/// 購入金額と重量の 1 区間と通貨コードの組の応答 (FR-18)。
+Map<String, Object?> purchasePeriodJson({
+  String period = '2026-09-01',
+  String? priceCurrency = 'JPY',
+  int priceAmount = 1200,
+  int weightGrams = 200,
+  int purchaseCount = 1,
+}) {
+  return <String, Object?>{
+    'period': period,
+    'price_currency': priceCurrency,
+    'price_amount': priceAmount,
+    'weight_grams': weightGrams,
+    'purchase_count': purchaseCount,
+  };
+}
+
+/// 抽出条件と評価の関係の 1 件の応答 (FR-18)。
+Map<String, Object?> brewRatingJson({
+  String id = 'brew-1',
+  double? doseGrams,
+  double? waterGrams,
+  double? waterTempC,
+  int? brewTimeSeconds,
+  int rating = 4,
+}) {
+  return <String, Object?>{
+    'id': id,
+    'dose_grams': doseGrams,
+    'water_grams': waterGrams,
+    'water_temp_c': waterTempC,
+    'brew_time_seconds': brewTimeSeconds,
+    'rating': rating,
+  };
+}
+
+/// 購入ごとの評価の推移の 1 件の応答 (FR-18)。
+Map<String, Object?> ratingHistoryJson({
+  String id = 'brew-1',
+  String brewedAt = '2026-09-01T00:00:00.000Z',
+  int rating = 4,
+}) {
+  return <String, Object?>{
+    'id': id,
+    'brewed_at': brewedAt,
+    'rating': rating,
+  };
+}
+
+/// 統計の API の応答を登録する (FR-18)。
+///
+/// 統計画面は 3 つの API を呼ぶため、テストは 1 回の登録で全ての応答を用意できる。
+void onStats(
+  FakeApi api, {
+  List<Map<String, Object?>> brews = const <Map<String, Object?>>[],
+  List<Map<String, Object?>> purchases = const <Map<String, Object?>>[],
+  List<Map<String, Object?>> brewRatings = const <Map<String, Object?>>[],
+}) {
+  api
+    ..on('GET', '/api/stats/brews', status: 200, body: <String, Object?>{'brews': brews})
+    ..on(
+      'GET',
+      '/api/stats/purchases',
+      status: 200,
+      body: <String, Object?>{'purchases': purchases},
+    )
+    ..on(
+      'GET',
+      '/api/stats/brew-ratings',
+      status: 200,
+      body: <String, Object?>{'brew_ratings': brewRatings},
+    );
+}
+
 /// カーソル方式の一覧の応答 (ADR-0002)。
 Map<String, Object?> pageJson({
   required String key,

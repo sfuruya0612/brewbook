@@ -9,11 +9,11 @@ import '../router/app_router.dart';
 import '../widgets/detail_row.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/error_message.dart';
+import '../widgets/stats_charts.dart';
 
-/// 購入の詳細の画面 (FR-9、FR-10、UC-6)。
+/// 購入の詳細の画面 (FR-9、FR-10、UC-6、FR-18)。
 ///
-/// 商品と店をたどれるようにし、写真を表示する。評価の推移のグラフの場所はここに置き、
-/// 描画は 0015 が作る (FR-18)。
+/// 商品と店をたどれるようにし、写真と評価の推移の折れ線グラフを表示する。
 class PurchaseDetailScreen extends StatefulWidget {
   const PurchaseDetailScreen({super.key, required this.services, required this.id});
 
@@ -29,7 +29,12 @@ class PurchaseDetailScreen extends StatefulWidget {
 
 class _PurchaseDetailScreenState extends State<PurchaseDetailScreen> {
   Purchase? _purchase;
+  List<RatingHistoryEntry> _ratings = const <RatingHistoryEntry>[];
   String? _errorMessage;
+  String? _ratingErrorMessage;
+
+  /// 読み込みの世代。古い読み込みの応答を捨てるために使う。
+  int _loadGeneration = 0;
   bool _loading = false;
 
   @override
@@ -52,27 +57,51 @@ class _PurchaseDetailScreenState extends State<PurchaseDetailScreen> {
     }
   }
 
-  /// 購入を読み込む。アーカイブ済みでも返る (FR-12)。
+  /// 購入と評価の推移を読み込む。アーカイブ済みでも返る (FR-12)。
+  ///
+  /// 読み込みが重なると古い応答が新しい表示を上書きするため、読み込みの世代を持ち、
+  /// 最新の世代の応答だけを反映する。
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
     setState(() {
       _loading = true;
       _errorMessage = null;
+      _ratingErrorMessage = null;
     });
     try {
       final purchase = await widget.services.records.purchase(widget.id);
-      if (!mounted) {
+      if (!mounted || generation != _loadGeneration) {
         return;
       }
       setState(() => _purchase = purchase);
+      await _loadRatings(generation);
     } catch (error) {
-      if (!mounted) {
+      if (!mounted || generation != _loadGeneration) {
         return;
       }
       setState(() => _errorMessage = messageForError(error, AppLocalizations.of(context)));
     } finally {
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(() => _loading = false);
       }
+    }
+  }
+
+  /// 評価の推移を読み込む (FR-18)。
+  ///
+  /// 読み込みの失敗は、購入の表示を残したままグラフの区画にだけ出す。
+  Future<void> _loadRatings(int generation) async {
+    try {
+      final ratings = await widget.services.stats.ratingHistory(widget.id);
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
+      setState(() => _ratings = ratings);
+    } catch (error) {
+      if (!mounted || generation != _loadGeneration) {
+        return;
+      }
+      setState(() => _ratingErrorMessage = messageForError(error, AppLocalizations.of(context)));
     }
   }
 
@@ -195,8 +224,18 @@ class _PurchaseDetailScreenState extends State<PurchaseDetailScreen> {
               style: Theme.of(context).textTheme.titleMedium,
             ),
           ),
-          // 評価の推移のグラフの場所。描画は 0015 が fl_chart で作る (FR-18)。
-          const SizedBox(height: 160, key: Key('purchase-rating-history')),
+          // その購入の評価の推移の折れ線グラフ (FR-18)。
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: RatingHistoryChart(entries: _ratings),
+          ),
+          if (_ratingErrorMessage != null) ...<Widget>[
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ErrorBanner(message: _ratingErrorMessage!, onRetry: _load),
+            ),
+          ],
           if (_errorMessage != null) ...<Widget>[
             const SizedBox(height: 16),
             ErrorBanner(message: _errorMessage!),

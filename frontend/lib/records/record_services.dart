@@ -3,23 +3,28 @@ import 'package:http/http.dart' as http;
 
 import '../api/api_client.dart';
 import '../api/records_api.dart';
+import '../api/stats_api.dart';
 import '../photo/image_converter.dart';
 import '../photo/photo_picker.dart';
 import '../photo/photo_uploader.dart';
+import 'clock.dart';
 
 /// 記録の画面が使う依存の束 (ADR-0007)。
 ///
-/// API の呼び出しと、実行環境で実装が変わる写真の選択と変換を、この 1 つの型で画面へ配る。
-/// 実行環境に合う実装は [createPhotoPicker] と [createImageConverter] が返し、テストは偽の
-/// 実装を差し込む。
+/// API の呼び出しと、実行環境で実装が変わる写真の選択と変換と端末の時計を、この 1 つの型で
+/// 画面へ配る。実行環境に合う実装は [createPhotoPicker] と [createImageConverter] が返し、
+/// テストは偽の実装を差し込む。
 class RecordServices {
   RecordServices({
     required ApiClient apiClient,
     PhotoPicker? photoPicker,
     ImageConverter? imageConverter,
     http.Client? photoUploadClient,
+    DeviceClock? clock,
   }) : this._(
          records: RecordsApi(apiClient),
+         stats: StatsApi(apiClient),
+         clock: clock ?? const DeviceClock(),
          picker: photoPicker ?? createPhotoPicker(),
          converter: imageConverter ?? createImageConverter(),
          photoUploadClient: photoUploadClient,
@@ -27,6 +32,8 @@ class RecordServices {
 
   RecordServices._({
     required RecordsApi records,
+    required this.stats,
+    required this.clock,
     required this.picker,
     required this.converter,
     http.Client? photoUploadClient,
@@ -35,6 +42,12 @@ class RecordServices {
 
   /// 記録の API (FR-6 から FR-13)。
   final RecordsApi records;
+
+  /// 統計と評価の推移の API (FR-18)。
+  final StatsApi stats;
+
+  /// 端末の時計とタイムゾーン (FR-18)。統計の期間と UTC オフセットに使う。
+  final DeviceClock clock;
 
   /// 写真のファイルの選択 (FR-10)。
   final PhotoPicker picker;

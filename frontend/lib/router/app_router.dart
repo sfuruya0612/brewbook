@@ -15,6 +15,7 @@ import '../screens/purchase_list_screen.dart';
 import '../screens/register_screen.dart';
 import '../screens/shop_form_screen.dart';
 import '../screens/shop_list_screen.dart';
+import '../screens/stats_screen.dart';
 
 /// 画面の経路の台帳 (ADR-0007)。
 ///
@@ -68,6 +69,9 @@ abstract final class AppRoutes {
 
   /// 店の編集 (FR-6)。
   static const String shopEdit = '/shops/:id/edit';
+
+  /// 統計 (FR-18)。
+  static const String stats = '/stats';
 
   /// 登録の画面のトークンのクエリパラメータの名前。
   static const String tokenParameter = 'token';
@@ -221,6 +225,11 @@ GoRouter createAppRouter(
         name: AppRoutes.shopEdit,
         builder: (context, state) =>
             ShopFormScreen(services: services, id: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: AppRoutes.stats,
+        name: AppRoutes.stats,
+        builder: (context, state) => StatsScreen(services: services),
       ),
     ],
   );

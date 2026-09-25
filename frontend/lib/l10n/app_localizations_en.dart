@@ -388,4 +388,68 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get validationCurrency =>
       'Enter the ISO 4217 currency code (three uppercase letters).';
+
+  @override
+  String get statsTitle => 'Stats';
+
+  @override
+  String get statsPeriodCurrentMonth => 'This month';
+
+  @override
+  String get statsPeriodThreeMonths => '3 months';
+
+  @override
+  String get statsPeriodSixMonths => '6 months';
+
+  @override
+  String get statsPeriodTwelveMonths => '12 months';
+
+  @override
+  String get statsPeriodAllTime => 'All time';
+
+  @override
+  String get statsPeriodCustom => 'Custom';
+
+  @override
+  String get statsStartLabel => 'Start date';
+
+  @override
+  String get statsEndLabel => 'End date';
+
+  @override
+  String get statsApplyButton => 'Apply';
+
+  @override
+  String get validationPeriod => 'Enter a date on or after the start date.';
+
+  @override
+  String get statsBrewCountTitle => 'Brew count';
+
+  @override
+  String get statsBrewDoseTitle => 'Dose';
+
+  @override
+  String statsPurchaseAmountTitle(String currency) {
+    return 'Purchase amount ($currency)';
+  }
+
+  @override
+  String statsPurchaseWeightTitle(String currency) {
+    return 'Purchase weight ($currency)';
+  }
+
+  @override
+  String get statsCurrencyNone => 'No currency';
+
+  @override
+  String get statsRatingDoseTitle => 'Dose and rating';
+
+  @override
+  String get statsRatingWaterTitle => 'Water and rating';
+
+  @override
+  String get statsRatingTempTitle => 'Water temperature and rating';
+
+  @override
+  String get statsRatingTimeTitle => 'Time and rating';
 }

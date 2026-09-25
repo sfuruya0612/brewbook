@@ -10,6 +10,7 @@ import 'l10n/app_localizations.dart';
 import 'l10n/locale_resolution.dart';
 import 'photo/image_converter.dart';
 import 'photo/photo_picker.dart';
+import 'records/clock.dart';
 import 'records/record_services.dart';
 import 'router/app_router.dart';
 
@@ -26,6 +27,7 @@ class CoffeeLogApp extends StatefulWidget {
     this.photoPicker,
     this.imageConverter,
     this.photoUploadClient,
+    this.clock,
     this.navigatorObservers = const <NavigatorObserver>[],
   });
 
@@ -40,6 +42,9 @@ class CoffeeLogApp extends StatefulWidget {
 
   /// R2 への PUT に使う HTTP のクライアント (テストが差し替える)。
   final http.Client? photoUploadClient;
+
+  /// 端末の時計とタイムゾーン (FR-18)。無いときは実行環境の値を使う。
+  final DeviceClock? clock;
 
   /// ルーターの監視 (画面数の成功指標を測るテストが渡す。PRD の成功指標)。
   final List<NavigatorObserver> navigatorObservers;
@@ -65,6 +70,7 @@ class _CoffeeLogAppState extends State<CoffeeLogApp> {
       photoPicker: widget.photoPicker,
       imageConverter: widget.imageConverter,
       photoUploadClient: widget.photoUploadClient,
+      clock: widget.clock,
     );
     // 401 の応答でセッションが失われたときは、ログイン画面へ遷移させる (ADR-0007)。
     widget.apiClient.onUnauthorized = _controller.markSignedOut;

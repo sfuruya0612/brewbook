@@ -1,4 +1,4 @@
-/// 記録の API の応答の型 (FR-6 から FR-13)。
+/// 記録の API の応答の型 (FR-6 から FR-13、FR-18)。
 ///
 /// 項目名はスキーマの列名に対応させ、API の応答をそのまま表す。画面はこの型から表示を作る。
 /// 日付と日時は API の形式の文字列のまま保持し、端末のタイムゾーンへの変換は表示の直前に行う。
@@ -245,6 +245,135 @@ class RecordPage<T> {
   final String? nextCursor;
 }
 
+/// 抽出回数と豆の消費量の 1 区間 (FR-18)。
+class BrewPeriod {
+  const BrewPeriod({required this.period, required this.brewCount, required this.doseGrams});
+
+  /// JSON のオブジェクトから組み立てる。
+  factory BrewPeriod.fromJson(Map<String, Object?> json) {
+    return BrewPeriod(
+      period: _string(json, 'period'),
+      brewCount: _int(json, 'brew_count'),
+      doseGrams: _double(json, 'dose_grams'),
+    );
+  }
+
+  /// 区間のキー (日別は `YYYY-MM-DD`、月別は `YYYY-MM`)。
+  final String period;
+
+  /// 区間内の抽出の件数。
+  final int brewCount;
+
+  /// 区間内の豆の量の合計 (グラム)。
+  final double doseGrams;
+}
+
+/// 購入金額と重量の 1 区間と通貨コードの組 (FR-18)。
+class PurchasePeriod {
+  const PurchasePeriod({
+    required this.period,
+    this.priceCurrency,
+    required this.priceAmount,
+    required this.weightGrams,
+    required this.purchaseCount,
+  });
+
+  /// JSON のオブジェクトから組み立てる。
+  factory PurchasePeriod.fromJson(Map<String, Object?> json) {
+    return PurchasePeriod(
+      period: _string(json, 'period'),
+      priceCurrency: _optionalString(json, 'price_currency'),
+      priceAmount: _int(json, 'price_amount'),
+      weightGrams: _int(json, 'weight_grams'),
+      purchaseCount: _int(json, 'purchase_count'),
+    );
+  }
+
+  /// 区間のキー (日別は `YYYY-MM-DD`、月別は `YYYY-MM`)。
+  final String period;
+
+  /// ISO 4217 の通貨コード。価格が無い購入は null。
+  final String? priceCurrency;
+
+  /// 区間内の価格の合計 (通貨の最小単位)。
+  final int priceAmount;
+
+  /// 区間内の重量の合計 (グラム)。
+  final int weightGrams;
+
+  /// 区間内の購入の件数。
+  final int purchaseCount;
+}
+
+/// 抽出条件と評価の関係の 1 件の抽出 (FR-18)。
+class BrewRating {
+  const BrewRating({
+    required this.id,
+    this.doseGrams,
+    this.waterGrams,
+    this.waterTempC,
+    this.brewTimeSeconds,
+    required this.rating,
+  });
+
+  /// JSON のオブジェクトから組み立てる。
+  factory BrewRating.fromJson(Map<String, Object?> json) {
+    return BrewRating(
+      id: _string(json, 'id'),
+      doseGrams: _optionalDouble(json, 'dose_grams'),
+      waterGrams: _optionalDouble(json, 'water_grams'),
+      waterTempC: _optionalDouble(json, 'water_temp_c'),
+      brewTimeSeconds: _optionalInt(json, 'brew_time_seconds'),
+      rating: _int(json, 'rating'),
+    );
+  }
+
+  /// 抽出の ID。
+  final String id;
+
+  /// 豆の量 (グラム)。条件が無ければ null。
+  final double? doseGrams;
+
+  /// 湯量 (グラム)。条件が無ければ null。
+  final double? waterGrams;
+
+  /// 湯の温度 (摂氏)。条件が無ければ null。
+  final double? waterTempC;
+
+  /// 時間 (秒)。条件が無ければ null。
+  final int? brewTimeSeconds;
+
+  /// 評価 (1 から 5)。
+  final int rating;
+}
+
+/// 購入ごとの評価の推移の 1 件の抽出 (FR-18)。
+class RatingHistoryEntry {
+  const RatingHistoryEntry({
+    required this.id,
+    required this.brewedAt,
+    required this.rating,
+  });
+
+  /// JSON のオブジェクトから組み立てる。
+  factory RatingHistoryEntry.fromJson(Map<String, Object?> json) {
+    return RatingHistoryEntry(
+      id: _string(json, 'id'),
+      brewedAt: _string(json, 'brewed_at'),
+      rating: _int(json, 'rating'),
+    );
+  }
+
+  /// 抽出の ID。
+  final String id;
+
+  /// 抽出日時 (ISO 8601 の UTC)。
+  final String brewedAt;
+
+  /// 評価 (1 から 5)。
+  final int rating;
+}
+
 /// 文字列の項目を読む。
 String _string(Map<String, Object?> json, String key) {
   final value = json[key];
@@ -264,6 +393,24 @@ String? _optionalString(Map<String, Object?> json, String key) {
     return value;
   }
   throw FormatException('the $key field must be a string but was $value');
+}
+
+/// 整数の項目を読む。無い場合と `null` は形式の違反にする (必須の項目)。
+int _int(Map<String, Object?> json, String key) {
+  final value = _optionalInt(json, key);
+  if (value == null) {
+    throw FormatException('the $key field must be a number but was ${json[key]}');
+  }
+  return value;
+}
+
+/// 小数の項目を読む。無い場合と `null` は形式の違反にする (必須の項目)。
+double _double(Map<String, Object?> json, String key) {
+  final value = _optionalDouble(json, key);
+  if (value == null) {
+    throw FormatException('the $key field must be a number but was ${json[key]}');
+  }
+  return value;
 }
 
 /// 整数の項目を読む。無い場合と `null` は null にする。

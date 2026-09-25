@@ -90,6 +90,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   value: AppRoutes.shops,
                   child: Text(l10n.shopsTitle),
                 ),
+                PopupMenuItem<String>(
+                  value: AppRoutes.stats,
+                  child: Text(l10n.statsTitle),
+                ),
               ],
             ),
           if (signedIn)

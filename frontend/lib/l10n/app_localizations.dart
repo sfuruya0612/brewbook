@@ -805,6 +805,126 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'通貨コードを ISO 4217 の 3 文字の英大文字で入力してください。'**
   String get validationCurrency;
+
+  /// 統計画面の見出し (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'統計'**
+  String get statsTitle;
+
+  /// 統計の期間の切り替え (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'当月'**
+  String get statsPeriodCurrentMonth;
+
+  /// 統計の期間の切り替え (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'3 か月'**
+  String get statsPeriodThreeMonths;
+
+  /// 統計の期間の切り替え (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'6 か月'**
+  String get statsPeriodSixMonths;
+
+  /// 統計の期間の切り替え (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'12 か月'**
+  String get statsPeriodTwelveMonths;
+
+  /// 統計の期間の切り替え (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'全期間'**
+  String get statsPeriodAllTime;
+
+  /// 統計の期間の切り替え (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'任意'**
+  String get statsPeriodCustom;
+
+  /// 任意の期間の開始日 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'開始日'**
+  String get statsStartLabel;
+
+  /// 任意の期間の終了日 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'終了日'**
+  String get statsEndLabel;
+
+  /// 任意の期間の適用 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'適用'**
+  String get statsApplyButton;
+
+  /// 任意の期間の検証 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'開始日以降の日付を入力してください。'**
+  String get validationPeriod;
+
+  /// 抽出回数と豆の消費量の棒グラフ (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'抽出回数'**
+  String get statsBrewCountTitle;
+
+  /// 抽出回数と豆の消費量の棒グラフ (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'豆の消費量'**
+  String get statsBrewDoseTitle;
+
+  /// 購入金額の棒グラフの見出し (通貨コードごと。FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'購入金額 ({currency})'**
+  String statsPurchaseAmountTitle(String currency);
+
+  /// 購入重量の棒グラフの見出し (通貨コードごと。FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'購入重量 ({currency})'**
+  String statsPurchaseWeightTitle(String currency);
+
+  /// 価格が無い購入の通貨コードの表示 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'通貨なし'**
+  String get statsCurrencyNone;
+
+  /// 抽出条件と評価の関係の散布図 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'豆の量と評価'**
+  String get statsRatingDoseTitle;
+
+  /// 抽出条件と評価の関係の散布図 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'湯量と評価'**
+  String get statsRatingWaterTitle;
+
+  /// 抽出条件と評価の関係の散布図 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'湯の温度と評価'**
+  String get statsRatingTempTitle;
+
+  /// 抽出条件と評価の関係の散布図 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'時間と評価'**
+  String get statsRatingTimeTitle;
 }
 
 class _AppLocalizationsDelegate

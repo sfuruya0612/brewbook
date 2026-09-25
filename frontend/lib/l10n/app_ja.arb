@@ -214,5 +214,95 @@
       }
     }
   },
-  "validationCurrency": "通貨コードを ISO 4217 の 3 文字の英大文字で入力してください。"
+  "validationCurrency": "通貨コードを ISO 4217 の 3 文字の英大文字で入力してください。",
+  "statsTitle": "統計",
+  "@statsTitle": {
+    "description": "統計画面の見出し (FR-18)"
+  },
+  "statsPeriodCurrentMonth": "当月",
+  "@statsPeriodCurrentMonth": {
+    "description": "統計の期間の切り替え (FR-18)"
+  },
+  "statsPeriodThreeMonths": "3 か月",
+  "@statsPeriodThreeMonths": {
+    "description": "統計の期間の切り替え (FR-18)"
+  },
+  "statsPeriodSixMonths": "6 か月",
+  "@statsPeriodSixMonths": {
+    "description": "統計の期間の切り替え (FR-18)"
+  },
+  "statsPeriodTwelveMonths": "12 か月",
+  "@statsPeriodTwelveMonths": {
+    "description": "統計の期間の切り替え (FR-18)"
+  },
+  "statsPeriodAllTime": "全期間",
+  "@statsPeriodAllTime": {
+    "description": "統計の期間の切り替え (FR-18)"
+  },
+  "statsPeriodCustom": "任意",
+  "@statsPeriodCustom": {
+    "description": "統計の期間の切り替え (FR-18)"
+  },
+  "statsStartLabel": "開始日",
+  "@statsStartLabel": {
+    "description": "任意の期間の開始日 (FR-18)"
+  },
+  "statsEndLabel": "終了日",
+  "@statsEndLabel": {
+    "description": "任意の期間の終了日 (FR-18)"
+  },
+  "statsApplyButton": "適用",
+  "@statsApplyButton": {
+    "description": "任意の期間の適用 (FR-18)"
+  },
+  "validationPeriod": "開始日以降の日付を入力してください。",
+  "@validationPeriod": {
+    "description": "任意の期間の検証 (FR-18)"
+  },
+  "statsBrewCountTitle": "抽出回数",
+  "@statsBrewCountTitle": {
+    "description": "抽出回数と豆の消費量の棒グラフ (FR-18)"
+  },
+  "statsBrewDoseTitle": "豆の消費量",
+  "@statsBrewDoseTitle": {
+    "description": "抽出回数と豆の消費量の棒グラフ (FR-18)"
+  },
+  "statsPurchaseAmountTitle": "購入金額 ({currency})",
+  "@statsPurchaseAmountTitle": {
+    "description": "購入金額の棒グラフの見出し (通貨コードごと。FR-18)",
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "statsPurchaseWeightTitle": "購入重量 ({currency})",
+  "@statsPurchaseWeightTitle": {
+    "description": "購入重量の棒グラフの見出し (通貨コードごと。FR-18)",
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "statsCurrencyNone": "通貨なし",
+  "@statsCurrencyNone": {
+    "description": "価格が無い購入の通貨コードの表示 (FR-18)"
+  },
+  "statsRatingDoseTitle": "豆の量と評価",
+  "@statsRatingDoseTitle": {
+    "description": "抽出条件と評価の関係の散布図 (FR-18)"
+  },
+  "statsRatingWaterTitle": "湯量と評価",
+  "@statsRatingWaterTitle": {
+    "description": "抽出条件と評価の関係の散布図 (FR-18)"
+  },
+  "statsRatingTempTitle": "湯の温度と評価",
+  "@statsRatingTempTitle": {
+    "description": "抽出条件と評価の関係の散布図 (FR-18)"
+  },
+  "statsRatingTimeTitle": "時間と評価",
+  "@statsRatingTimeTitle": {
+    "description": "抽出条件と評価の関係の散布図 (FR-18)"
+  }
 }

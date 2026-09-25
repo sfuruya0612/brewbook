@@ -9,6 +9,7 @@ import 'package:coffee_log/screens/purchase_detail_screen.dart';
 import 'package:coffee_log/screens/purchase_form_screen.dart';
 import 'package:coffee_log/screens/purchase_list_screen.dart';
 import 'package:coffee_log/screens/shop_form_screen.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -40,7 +41,11 @@ void main() {
   }
 
   /// 購入の詳細の画面を開いた状態にする。
-  Future<FakeApi> openPurchaseDetail(WidgetTester tester, {Map<String, Object?>? purchase}) async {
+  Future<FakeApi> openPurchaseDetail(
+    WidgetTester tester, {
+    Map<String, Object?>? purchase,
+    List<Map<String, Object?>> ratings = const <Map<String, Object?>>[],
+  }) async {
     final api = signedInApi()
       ..on(
         'GET',
@@ -53,6 +58,13 @@ void main() {
         '/api/purchases/purchase-1',
         status: 200,
         body: purchase ?? purchaseJson(id: 'purchase-1'),
+      )
+      // 購入ごとの評価の推移 (FR-18)。
+      ..on(
+        'GET',
+        '/api/purchases/purchase-1/rating-history',
+        status: 200,
+        body: <String, Object?>{'ratings': ratings},
       );
     await pumpApp(tester, apiClient: api.client(), passkeyClient: FakePasskeyClient());
     await openLocation(tester, AppRoutes.purchasePath('purchase-1'));
@@ -211,8 +223,9 @@ void main() {
     expect(find.text(l10n.priceValue('1200', 'JPY')), findsOneWidget);
     expect(find.text(l10n.gramsValue('200')), findsOneWidget);
     expect(find.byKey(const Key('purchase-photo')), findsOneWidget);
-    // 評価の推移のグラフの場所を置く (描画は 0015 が作る。FR-18)。
-    expect(find.byKey(const Key('purchase-rating-history')), findsOneWidget);
+    // 評価の推移の折れ線グラフ (FR-18)。評価が無ければ記録が無い旨を出す。
+    expect(find.byKey(const Key('purchase-rating-history-chart')), findsNothing);
+    expect(find.text(l10n.noRecords), findsOneWidget);
 
     await tester.tap(find.text('Ethiopia'));
     await tester.pumpAndSettle();
@@ -223,6 +236,124 @@ void main() {
     await tester.tap(find.text('Test Shop'));
     await tester.pumpAndSettle();
     expect(find.byType(ShopFormScreen), findsOneWidget);
+  });
+
+  /// 評価の推移の折れ線の点 (x と y の組) を読む。
+  List<List<double>> ratingHistoryValues(WidgetTester tester) {
+    final chart = tester.widget<LineChart>(
+      find.byKey(const Key('purchase-rating-history-chart')),
+    );
+    return chart.data.lineBarsData.single.spots
+        .map((spot) => <double>[spot.x, spot.y])
+        .toList();
+  }
+
+  testWidgets('詳細でその購入の評価の推移の折れ線グラフを表示する', (tester) async {
+    final api = await openPurchaseDetail(
+      tester,
+      ratings: <Map<String, Object?>>[
+        ratingHistoryJson(id: 'brew-1', brewedAt: '2026-09-01T00:00:00.000Z', rating: 2),
+        ratingHistoryJson(id: 'brew-2', brewedAt: '2026-09-10T00:00:00.000Z', rating: 5),
+      ],
+    );
+
+    expect(api.calls, contains('GET /api/purchases/purchase-1/rating-history'));
+    // 抽出日時の昇順の抽出の評価を、折れ線の系列にする (FR-18)。
+    expect(ratingHistoryValues(tester), <List<double>>[
+      <double>[0.0, 2.0],
+      <double>[1.0, 5.0],
+    ]);
+  });
+
+  testWidgets('評価の推移の読み込みが重なっても古い応答で上書きしない', (tester) async {
+    final l10n = await loadL10n();
+    final api = signedInApi()
+      ..on(
+        'GET',
+        '/api/brews',
+        status: 200,
+        body: pageJson(key: 'brews', items: <Map<String, Object?>>[]),
+      )
+      ..on(
+        'GET',
+        '/api/purchases/purchase-1',
+        status: 200,
+        body: purchaseJson(id: 'purchase-1'),
+      )
+      ..on(
+        'POST',
+        '/api/purchases/purchase-1/archive',
+        status: 200,
+        body: purchaseJson(id: 'purchase-1', archivedAt: '2026-09-03T00:00:00.000Z'),
+      );
+    // 1 回目の評価は 2、2 回目は 5 にして、どちらの応答が表示されたか分かるようにする。
+    var ratingsCalls = 0;
+    api.onQuery('GET', '/api/purchases/purchase-1/rating-history', (query) {
+      ratingsCalls += 1;
+      final rating = ratingsCalls == 1 ? 2 : 5;
+      return (
+        status: 200,
+        body: <String, Object?>{
+          'ratings': <Map<String, Object?>>[
+            ratingHistoryJson(id: 'brew-1', brewedAt: '2026-09-01T00:00:00.000Z', rating: rating),
+          ],
+        },
+      );
+    });
+    // 最初の読み込みの評価の推移の応答を保留し、その間にアーカイブで読み直させる。
+    api.holdOnce('GET', '/api/purchases/purchase-1/rating-history');
+    await pumpApp(tester, apiClient: api.client(), passkeyClient: FakePasskeyClient());
+    await openLocation(tester, AppRoutes.purchasePath('purchase-1'));
+
+    await tester.tap(find.byTooltip(l10n.archiveButton));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    // 保留されていない 2 回目の読み込みの応答が表示される (応答は消費の順に 2、5 を返す)。
+    final shown = ratingHistoryValues(tester);
+    expect(shown, <List<double>>[
+      <double>[0.0, 2.0],
+    ]);
+
+    // 古い読み込みの応答 (5) を解放しても、表示は変わらない。
+    api.release('GET', '/api/purchases/purchase-1/rating-history');
+    await tester.pumpAndSettle();
+
+    expect(ratingHistoryValues(tester), shown);
+  });
+
+  testWidgets('詳細で評価の推移の読み込みに失敗すると再試行を促す', (tester) async {
+    final l10n = await loadL10n();
+    final api = signedInApi()
+      ..on(
+        'GET',
+        '/api/brews',
+        status: 200,
+        body: pageJson(key: 'brews', items: <Map<String, Object?>>[]),
+      )
+      ..on('GET', '/api/purchases/purchase-1', status: 200, body: purchaseJson(id: 'purchase-1'))
+      ..onNetworkError('GET', '/api/purchases/purchase-1/rating-history');
+    await pumpApp(tester, apiClient: api.client(), passkeyClient: FakePasskeyClient());
+    await openLocation(tester, AppRoutes.purchasePath('purchase-1'));
+
+    // 購入の表示は残し、グラフの区画にだけ失敗を出す。
+    expect(find.text(l10n.errorNetwork), findsOneWidget);
+    expect(find.text(l10n.purchaseDetailTitle), findsOneWidget);
+
+    api.on(
+      'GET',
+      '/api/purchases/purchase-1/rating-history',
+      status: 200,
+      body: <String, Object?>{
+        'ratings': <Object?>[
+          ratingHistoryJson(id: 'brew-1', brewedAt: '2026-09-01T00:00:00.000Z', rating: 4),
+        ],
+      },
+    );
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.retryButton));
+
+    expect(find.text(l10n.errorNetwork), findsNothing);
+    expect(find.byKey(const Key('purchase-rating-history-chart')), findsOneWidget);
   });
 
   testWidgets('詳細でアーカイブとアーカイブ解除ができる', (tester) async {

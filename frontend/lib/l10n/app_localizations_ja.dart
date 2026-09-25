@@ -378,4 +378,68 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get validationCurrency => '通貨コードを ISO 4217 の 3 文字の英大文字で入力してください。';
+
+  @override
+  String get statsTitle => '統計';
+
+  @override
+  String get statsPeriodCurrentMonth => '当月';
+
+  @override
+  String get statsPeriodThreeMonths => '3 か月';
+
+  @override
+  String get statsPeriodSixMonths => '6 か月';
+
+  @override
+  String get statsPeriodTwelveMonths => '12 か月';
+
+  @override
+  String get statsPeriodAllTime => '全期間';
+
+  @override
+  String get statsPeriodCustom => '任意';
+
+  @override
+  String get statsStartLabel => '開始日';
+
+  @override
+  String get statsEndLabel => '終了日';
+
+  @override
+  String get statsApplyButton => '適用';
+
+  @override
+  String get validationPeriod => '開始日以降の日付を入力してください。';
+
+  @override
+  String get statsBrewCountTitle => '抽出回数';
+
+  @override
+  String get statsBrewDoseTitle => '豆の消費量';
+
+  @override
+  String statsPurchaseAmountTitle(String currency) {
+    return '購入金額 ($currency)';
+  }
+
+  @override
+  String statsPurchaseWeightTitle(String currency) {
+    return '購入重量 ($currency)';
+  }
+
+  @override
+  String get statsCurrencyNone => '通貨なし';
+
+  @override
+  String get statsRatingDoseTitle => '豆の量と評価';
+
+  @override
+  String get statsRatingWaterTitle => '湯量と評価';
+
+  @override
+  String get statsRatingTempTitle => '湯の温度と評価';
+
+  @override
+  String get statsRatingTimeTitle => '時間と評価';
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:coffee_log/api/api_client.dart';
@@ -62,6 +63,26 @@ class FakeApi {
     _queryResponses['$method $path'] = respond;
   }
 
+  /// 次に届く `method` と `path` の応答を保留する予約。キーは `method path`。
+  final Map<String, Completer<void>> _holds = <String, Completer<void>>{};
+
+  /// 実際に待っている応答。`release` が完了させる。
+  final Map<String, Completer<void>> _held = <String, Completer<void>>{};
+
+  /// 次に届く `method` と `path` の応答を 1 回だけ保留する。
+  ///
+  /// 期間の切り替えのように読み込みが重なる状況をテストで作るのに使う。
+  /// 2 回目以降の要求は保留しない (テストが古い応答だけを解放できるようにするため)。
+  void holdOnce(String method, String path) {
+    _holds['$method $path'] = Completer<void>();
+  }
+
+  /// 保留した応答を解放する。
+  void release(String method, String path) {
+    final key = '$method $path';
+    (_holds.remove(key) ?? _held.remove(key))?.complete();
+  }
+
   /// `method` と `path` の呼び出しを接続の失敗にする。
   void onNetworkError(String method, String path) {
     _responses['$method $path'] = const _FakeResponse.network();
@@ -81,10 +102,29 @@ class FakeApi {
     return null;
   }
 
+  /// `method` と `path` に一致する直近の要求のクエリパラメータを返す。無ければ null。
+  ///
+  /// 統計の API に期間と粒度と UTC オフセットが渡ることを確認するのに使う (FR-18)。
+  Map<String, String>? lastQuery(String method, String path) {
+    for (final request in requests.reversed) {
+      if ('${request.method} ${request.url.path}' == '$method $path') {
+        return request.url.queryParameters;
+      }
+    }
+    return null;
+  }
+
   Future<http.Response> _handle(http.Request request) async {
     final key = '${request.method} ${request.url.path}';
     calls.add(key);
     requests.add(request);
+    final hold = _holds.remove(key);
+    if (hold != null) {
+      // 待っている間も `release` が完了できるよう、別の置き場に移してから待つ。
+      _held[key] = hold;
+      await hold.future;
+      _held.remove(key);
+    }
     final respond = _queryResponses[key];
     if (respond != null) {
       final result = respond(request.url.queryParameters);
