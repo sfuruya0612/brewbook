@@ -30,6 +30,8 @@
   - @sfuruya0612
 - [ADD] Flutter の統計とグラフの画面を追加する
   - @sfuruya0612
+- [ADD] Flutter の設定の画面とパスキー管理とエクスポートとアカウント削除を追加する
+  - @sfuruya0612
 
 ### misc
 
