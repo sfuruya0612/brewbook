@@ -32,6 +32,8 @@
   - @sfuruya0612
 - [ADD] Flutter の設定の画面とパスキー管理とエクスポートとアカウント削除を追加する
   - @sfuruya0612
+- [ADD] 画面と API を同一オリジンの 1 つの Worker から配信する
+  - @sfuruya0612
 
 ### misc
 

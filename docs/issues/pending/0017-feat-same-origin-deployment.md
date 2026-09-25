@@ -59,20 +59,18 @@ Backend は CORS を許可せず、状態を変更する API は `Origin` ヘッ
   CanvasKit で問題がある場合は skwasm への変更を ADR-0007 の改訂として提案する (ADR-0007 の結果)。
 - 採らない案: 別ホスト名の Pages と Workers (CORS とトークンの管理が必要になり、Relying Party ID も一致しない。ADR-0005)、Worker から Pages をプロキシする (Static Assets で足りる。ADR-0005)、開発時だけ CORS を許可する (本番と構成が変わる)。
 
-## 完了条件
+## 調査タスク
 
-- `mise run dev` で起動した環境で、`http://localhost:8787/` の画面と `/api/*` の API が同じオリジンから配信される。
-  Flutter のルーティングのパス (`/register` など) を直接開くと `index.html` が 200 で返り、画面が表示されることをテストで確認する。
-- `mise run deploy` が Flutter のビルドを先に実行し、1 回のデプロイで画面と API を更新する。
-  デプロイ先は `coffee-log.<アカウントのサブドメイン>.workers.dev` である。
-- デプロイ手順に、スキーマ変更時の `mise run db-migrate-remote` の実行と、リリース後の p95 の集計が含まれている。
-- 状態を変更する API に別オリジンの `Origin` を付けたリクエストが 403 になり、`Origin` の無いリクエストも 403 になることを自動テストで確認する。
-- 0003 と 0005 から 0012 の結合テストのうち状態を変更する経路の呼び出しが、同一オリジンの `Origin` 付きで成功する。
-- API の応答に CORS のヘッダが含まれない。
-- R2 の CORS の設定にアプリのオリジンが含まれ、ブラウザからの写真の PUT が成功する。
-- ログインから抽出の保存までの統合テストが 1 本成功する。
-- 初回ロードの転送量の測定結果が issue 本文に追記され、CanvasKit のまま進めるかの判断が書かれている。
-- `mise run check` が通過する。
+2026-09-25 に実装と自動テストを完了した (ローカルの `mise run check` は通過)。実装は 6e48c94 (本体)、3f2f593 (実装詳細の乖離) に記録し、その後のレビューの指摘への対応 (CI のジョブの上限を 60 分に延長、`Origin` を URL として正規化して比べる形と境界値の単体テスト、`r2_cors.rs` のコメントの修正) を加えた。
+
+確認できた完了条件: 画面と API が同じオリジンから配信され、`/`、`/register`、`/brews/new`、`/stats` が `index.html` を 200 で返すことと `/api/*` が Worker の JSON を返すこと (`wrangler_same_origin_api.rs`)、別オリジンと `Origin` の無い変更が 403 になること (同テストと `test_origin.rs`)、既存の結合テストが同一オリジンの `Origin` 付きで成功すること、CORS のヘッダが無いこと、R2 の CORS に端末の開発オリジンと本番のオリジンが含まれること (`r2_cors.rs`)、ログインから抽出の保存までの統合テスト 1 本 (`wrangler_same_origin_e2e.rs`)、`mise run dev` の起動での同一オリジン配信 (`/register` が 200 の HTML、`/api/passkeys` が JSON)、初回ロードの転送量の測定と判断 (下の「## 初回ロードの転送量」)。
+
+残るのは次の確認である。
+
+- `mise run deploy` を実行し、`coffee-log.<アカウントのサブドメイン>.workers.dev` で画面と API が 1 回のデプロイで更新されることと、画面の表示、登録用リンクからのパスキーの登録、ログイン、抽出の保存、写真のアップロードを確認する。
+- `mise run r2-setup` で実環境の R2 のバケットに CORS を適用し、アプリのオリジンから写真を PUT できることを確認する。
+- リリース後に Workers Logs の保持期間の全量で p95 を集計し、成功指標 (一覧と単件は 200 ms、統計は 500 ms) を満たすことを確認する。
+- デプロイの前に、`wrangler.toml` の `[vars]` の `RP_ID` と `ORIGIN`、`cors.json` の本番のオリジンを、実際の workers.dev のサブドメインの値へ置き換える (README のデプロイ手順 1)。
 
 ## 関連
 
@@ -94,3 +92,34 @@ Backend は CORS を許可せず、状態を変更する API は `Origin` ヘッ
 7. テストコード入りの Web ビルドは `frontend:build-e2e` が `build/e2e-web` に作り、配布用の `build/web` と混ぜない (配布用のビルドを配信するとテストが時間切れになるまで気付けないため、Rust のハーネスがビルドにテスト固有の文字列があることを確かめる)。
 8. `frontend:test-same-origin` を `mise run check` に含めた (既存の `frontend:test-integration` と同じ扱い)。
 9. `backend:test-integration` に `frontend:build` の依存を足した (`wrangler.toml` の `[assets]` のディレクトリが無いと `wrangler dev` が起動しないため)。
+
+## 初回ロードの転送量
+
+`mise run frontend:build` の配布用のビルドを `mise run dev` の `wrangler dev` から配信し、`curl --compressed` で受け取った転送量を測った (2026-09-25。`wrangler dev` は `Accept-Encoding: br` に `Content-Encoding: br` を返すことを確認した)。
+
+| 資産 | 転送量 |
+| --- | --- |
+| `index.html` | 780 バイト |
+| `flutter_bootstrap.js` | 5.2 KB |
+| `main.dart.js` | 1.05 MB |
+| `canvaskit/canvaskit.js` | 27.7 KB |
+| `canvaskit/canvaskit.wasm` | 2.94 MB |
+| `assets/fonts/MaterialIcons-Regular.otf` (使うアイコンだけに削減済み) | 4.2 KB |
+| `manifest.json`、`version.json`、`flutter_service_worker.js`、フォントのマニフェスト | 1.3 KB |
+| 合計 (同一オリジン) | 約 4.03 MB |
+
+CanvasKit は日本語の表示に必要な Noto Sans JP のサブセットを `fonts.gstatic.com` から追加で取得する (1 サブセットあたり約 43 KB。表示する文字により複数)。
+
+判断: 初回の 1 回だけで、以後は Service Worker が同じ資産をキャッシュするため、CanvasKit のまま進める (skwasm への変更はしない)。
+
+## pending にした理由
+
+2026-09-25 に実装と自動テストを完了し、コミット 6e48c94 と 3f2f593 に記録した (その後のレビューの指摘への対応も反映済み)。完了条件のうち、画面と API の同一オリジン配信、`Origin` の検証、CORS のヘッダが無いこと、R2 の CORS の設定の検査、ログインから抽出の保存までの統合テスト、初回ロードの転送量の測定はローカルで確認済みである。
+
+残るのは、Cloudflare のアカウントの資格情報が要る次の 3 つで、この環境では実行できないため pending にした。
+
+- `mise run deploy` の実行と workers.dev の URL での動作
+- 実環境の R2 のバケットへの CORS の適用と、ブラウザからの写真の PUT
+- リリース後の p95 の集計
+
+再開の条件: Cloudflare のアカウントの資格情報が使える環境で、所有者がデプロイ手順 (README) に従って `mise run deploy`、`mise run r2-setup`、p95 の集計を実行し、結果を本 issue に記録する。`CHANGES.md` の `[ADD]` エントリはこの pending への移動のコミットに含める (close のときに重ねて追記しない)。
