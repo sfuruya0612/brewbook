@@ -99,6 +99,19 @@ fn client_without_origin(base_url: &str) -> ApiClient {
     ApiClient::new(base_url, None).without_origin()
 }
 
+/// 同じホストで別のポートのオリジンを作る (port を無視する実装への退行の検査)。
+///
+/// scheme の違いは `wrangler dev` が `Origin` の scheme をリクエストの scheme に合わせてから
+/// Worker に渡すため、ここでは再現できない。scheme の境界は `test_origin.rs` が検査する。
+fn origin_with_another_port(base_url: &str) -> String {
+    let host = base_url
+        .split("://")
+        .nth(1)
+        .and_then(|rest| rest.split(':').next())
+        .expect("the base URL must have a host");
+    format!("http://{host}:1")
+}
+
 /// 応答のヘッダーを 1 つ読む。
 fn header(response: &Response, name: &str) -> Option<String> {
     response
@@ -195,6 +208,18 @@ fn wrangler_cross_origin_post_forbidden_403() {
     let lease = server();
     let base_url = lease.use_server(|server| server.base_url());
     assert_forbidden(client_from_another_origin(&base_url).post("/api/auth/login/begin"));
+}
+
+#[test]
+fn wrangler_another_port_post_forbidden_403() {
+    let lease = server();
+    let base_url = lease.use_server(|server| server.base_url());
+    // オリジンは scheme、host、port の組で比較する。ホストが同じでもポートが違えば別のオリジンである。
+    assert_forbidden(
+        ApiClient::new(&base_url, None)
+            .with_origin(&origin_with_another_port(&base_url))
+            .post("/api/auth/login/begin"),
+    );
 }
 
 #[test]

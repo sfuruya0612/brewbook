@@ -9,7 +9,7 @@
 
 use serde_json::Value;
 
-/// リポジトリのルートからの `cors.json` のパス。
+/// クレートのルートからの `cors.json` のパス。
 const CORS_JSON: &str = "cors.json";
 
 /// `cors.json` を読む。

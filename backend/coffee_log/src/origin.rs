@@ -12,7 +12,7 @@
 
 use coffee_log_core::error::ErrorCode;
 use coffee_log_core::routes::Method;
-use worker::{Request, Response, Result};
+use worker::{Request, Response, Result, Url};
 
 use crate::respond;
 
@@ -30,11 +30,26 @@ pub fn changes_state(method: Method) -> bool {
 /// ブラウザも `Url::origin` も表記に含めないため、表記のまま比較できる。
 /// `Origin` が無いリクエストは、同じオリジンからのものかを検証できないため一致しない扱いにする。
 pub fn is_same_origin(req: &Request) -> Result<bool> {
-    let Some(origin) = req.headers().get("Origin")? else {
+    let origin = req.headers().get("Origin")?;
+    is_same_origin_value(origin.as_deref(), req.url()?.as_str())
+}
+
+/// `Origin` ヘッダとリクエストの URL から同一オリジンかを判定する。
+///
+/// どちらも URL として解釈してからオリジンを比べる。`Origin` はブラウザが必ずオリジンの形で
+/// 送るが、既定のポート (`http` の 80、`https` の 443) は表記に含めないため、URL として
+/// 解釈して正規化したうえで比較する。`Origin` が URL として読めない場合は一致しない扱いにする。
+/// 境界値 (scheme、host、port の違い) は単体テストがこの関数を直接検査する。
+/// `wrangler dev` は `Origin` の scheme をリクエストの scheme に合わせてから Worker に渡すため、
+/// scheme の違いは `wrangler dev` の結合テストでは再現できない。
+pub fn is_same_origin_value(origin: Option<&str>, request_url: &str) -> Result<bool> {
+    let Some(origin) = origin else {
         return Ok(false);
     };
-    let expected = req.url()?.origin().ascii_serialization();
-    Ok(origin == expected)
+    let Ok(origin) = Url::parse(origin) else {
+        return Ok(false);
+    };
+    Ok(origin.origin() == Url::parse(request_url)?.origin())
 }
 
 /// `Origin` の検証に失敗したリクエストの応答 (403)。

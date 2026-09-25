@@ -14,7 +14,9 @@ jobs:
   check:
     runs-on: ubuntu-latest
     # 外部プロセス (wrangler dev) を起動するテストがハングした場合に runner を占有し続けないようにする。
-    timeout-minutes: 30
+    # check は 0017 の e2e (flutter drive) を含めて手元で 27 分前後かかるため、ハングしたテストが
+    # 後続の検査を巻き込まない余裕として 60 分にする。
+    timeout-minutes: 60
     steps:
       # action の版はタグで固定する (ADR-0009)。
       - uses: actions/checkout@v7.0.1
