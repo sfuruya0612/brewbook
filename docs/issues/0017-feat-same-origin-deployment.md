@@ -80,3 +80,17 @@ Backend は CORS を許可せず、状態を変更する API は `Origin` ヘッ
 - 0009 が R2 の CORS を設定する。
 - 0013 から 0016 が画面を作る。
 - 0018 が管理者 Worker のデプロイと、デプロイ後の確認のタスクを追加する。
+
+## 実装詳細の乖離
+
+方式は変えず、実装の詳細として次を選んだ。
+
+1. `wrangler.toml` に `[observability]` を有効にした (README の p95 の集計の前提。応答ログを出す既存の仕組みは変えていない)。
+2. `Origin` の比較は、`[vars]` の `ORIGIN` ではなくリクエスト自身の URL のオリジンに対して行う (リクエストを受け取ったオリジンが正であり、`vars` の設定漏れで検証が緩まないため)。`ORIGIN` は WebAuthn の期待オリジンとして 0005 から使う。
+3. テスト専用ページのパスを `/__test_page` から `/api/__test_page` に変えた (`/api/*` 以外のパスは Static Assets と SPA の `index.html` が返すため、Worker が処理するページは `/api/` の下に置く必要がある)。
+4. `frontend/lib/main.dart` に `usePathUrlStrategy()` を入れた (パス形式の URL にして、SPA のパスを直接開けるようにするため。`flutter_web_plugins` を追加)。
+5. テストの `ApiClient` は、状態を変更するメソッドに同一オリジンの `Origin` を既定で付ける (0003 と 0005 から 0012 の結合テストの呼び出しを書き換えずに同じ前提に揃えるため。別オリジンと `Origin` の無い呼び出しの検査は `with_origin` と `without_origin` で行う)。
+6. テスト用の Static Assets の配信は、一時の wrangler の設定 (`--config`) で行う (`wrangler dev --assets` は `run_worker_first` と `not_found_handling` を引き継がず、本番と同じルーティングにならないため)。
+7. テストコード入りの Web ビルドは `frontend:build-e2e` が `build/e2e-web` に作り、配布用の `build/web` と混ぜない (配布用のビルドを配信するとテストが時間切れになるまで気付けないため、Rust のハーネスがビルドにテスト固有の文字列があることを確かめる)。
+8. `frontend:test-same-origin` を `mise run check` に含めた (既存の `frontend:test-integration` と同じ扱い)。
+9. `backend:test-integration` に `frontend:build` の依存を足した (`wrangler.toml` の `[assets]` のディレクトリが無いと `wrangler dev` が起動しないため)。
