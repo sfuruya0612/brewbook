@@ -1,6 +1,6 @@
-//! 管理者画面の HTML エスケープ (`coffee_log_admin/src/html.rs`) の PBT。
+//! 管理者画面の HTML エスケープ (`brew_book_admin/src/html.rs`) の PBT。
 
-use coffee_log_admin::html::escape;
+use brew_book_admin::html::escape;
 use proptest::prelude::*;
 
 /// エスケープが作る実体参照。

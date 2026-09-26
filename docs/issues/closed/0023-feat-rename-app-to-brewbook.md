@@ -2,6 +2,7 @@
 
 Created: 2026-09-26
 Model: deepseek-v4p1-flash
+Completed: 2026-09-26
 対応 ADR: ADR-0010 (docs/adr/0010-app-name-and-namespace-brewbook.md)、ADR-0001、ADR-0005、ADR-0008
 関連 PRD: 制約と前提 (アプリ名)、セキュリティ (RP ID、Origin、R2 の CORS)、運用 (デプロイ)
 依存: 0021、0022
@@ -86,3 +87,36 @@ ADR-0010 の対応表に従う。主な対応は次の通り。
 - README のホスト名が `brewbook.<サブドメイン>.workers.dev` と `brewbook-admin.<サブドメイン>.workers.dev` を指し、デプロイのコマンドが `brewbook` と `brewbook-admin` を使う。
 - pending と open の issue の旧名と旧パスが新名になっている。
 - `CHANGES.md` に `[CHANGE]` のエントリ (「アプリ名と名前空間を brewbook に変更する」) がある。
+
+## 解決方法
+
+アプリ名と名前空間を brewbook / brew_book に変更した (ADR-0010)。
+
+- ディレクトリとファイルの改名 (`git mv`): `backend/coffee_log` → `backend/brew_book`、`backend/coffee_log_admin` → `backend/brew_book_admin`、`backend/coffee_log_core` → `backend/brew_book_core`、`docs/prd/coffee-log.md` → `docs/prd/brewbook.md`。
+- 追跡ファイル 152 件の内容 (`git status --porcelain` の 153 行から `CHANGES.md` を除く) の文字列を置換した (`coffee_log` → `brew_book`、`coffee-log` → `brewbook`、`coffeeLog` → `brewBook`、`CoffeeLog` → `BrewBook`、`Coffee Log` → `Brew Book`)。
+  対象は `backend/` (100 件)、`frontend/` (41 件)、`docs/` (8 件: ADR-0001 の PRD 参照、`docs/issues/pending/` の 5 件、`docs/issues/0019-bug-dev-server-leaves-workerd-processes.md`、`docs/issues/0020-bug-worker-build-race-in-the-shared-build-directory.md`)、`.gitignore`、`README.md`、`mise.toml` である。
+- 記録として残すファイルは置換していない: `CHANGES.md` の過去のエントリ、`docs/issues/closed/` 以下、ADR-0002 から ADR-0010、本 issue のファイル。
+- `docs/adr/0001-backend-rust-on-cloudflare-workers.md` は、PRD を指す参照 (9 行目) だけを `docs/prd/brewbook.md` に更新し、本文 (クレート名の記録、26 行目) は変更していない。
+- `docs/prd/brewbook.md` はファイル名だけを変えた。本文の現在の名前は先の PRD の更新で既に新しくなっており、旧名は 2026-09-21 と 2026-09-26 の決定の記録 (72 行目と 102 行目) だけである。
+- Web の表示名 (`frontend/web/index.html` の `<title>` と `apple-mobile-web-app-title`、`frontend/web/manifest.json` の `name` と `short_name`) は、ADR-0010 の対応表どおりアプリ名の `brewbook` にした (パッケージ名の `brew_book` ではない)。
+- pending と open の issue (0009、0010、0012、0017、0018、0019、0020) の旧名と旧パスを新名に読み替えた。
+- `CHANGES.md` に `[CHANGE]` のエントリ (「アプリ名と名前空間を brewbook に変更する」) を追加した。
+
+完了条件の検証:
+
+- `git grep -l -i -E 'coffee[ _-]?log'` の結果は、`docs/issues/closed/` 以下、ADR-0001 (26 行目)、ADR-0004、ADR-0005、ADR-0008、ADR-0010、`docs/prd/brewbook.md`、本 issue のファイルだけになった (`CHANGES.md` には旧名は無い)。backend/、frontend/、`mise.toml`、`README.md`、`.github/`、pending の issue、open の issue (0019、0020、0024 から 0030) には現れない。
+- `docs/prd/brewbook.md` の旧名は 72 行目と 102 行目の 2 行だけである (決定の記録)。
+- `docs/prd/brewbook.md` が存在し、`docs/prd/coffee-log.md` は存在しない。
+- `backend/brew_book`、`backend/brew_book_admin`、`backend/brew_book_core` が存在し、`backend/coffee_log`、`backend/coffee_log_admin`、`backend/coffee_log_core` は存在しない。
+- `backend/brew_book/wrangler.toml` の `name` は `brewbook`、`database_name` は `brewbook`、`bucket_name` と `R2_BUCKET` は `brewbook-photos`、`RP_ID` は `brewbook.example.workers.dev`、`ORIGIN` は `https://brewbook.example.workers.dev` である。`backend/brew_book_admin/wrangler.toml` の `name` は `brewbook-admin`、`database_name` は `brewbook`、`APP_ORIGIN` は `https://brewbook.example.workers.dev` である。
+- `frontend/pubspec.yaml` の `name` は `brew_book`、ARB の `appTitle` と `homeTitle` は `brewbook`、`frontend/lib/settings/settings_services.dart` の `exportFileName` は `brewbook-export.json`、`frontend/ios/Runner/Info.plist` の CFBundleDisplayName は `Brew Book`、CFBundleName は `brew_book`、`frontend/ios/Runner.xcodeproj/project.pbxproj` の bundle identifier は `com.example.brewBook` である。
+- `mise run db-migrate` が成功した。
+- `mise run check` が通過した。実行の内訳: 改名後の初回の既定の並列実行は `mise run fmt` (`cargo fmt --all --check`) が失敗し (`cargo fmt --all` で修正)、直列実行 (`mise run --jobs 1 check`) の 1 回目と 2 回目はスケールテスト `wrangler_account_delete_removes_the_assumed_scale_of_the_r2_objects_by_cursor` が miniflare の接続断で失敗し (0030)、3 回目の直列実行で通過した (1932 秒)。直列実行を選んだのは、既定の並列実行で起きる Chrome の起動失敗 (0029。0022 の実装時に並列実行で 2 回発生) を避けるためである。CI は既定の並列実行の `mise run check` を使うため、改名後に CI で通過することは未確認である。
+- `mise run dev` を起動し、`http://localhost:8787/` が 44 秒で応答することを確認した。HTML は `<title>brewbook</title>` と `flutter_bootstrap.js` を含み、SPA のルート `/register` も 200 (index.html) を返した。`mise run frontend:test-same-origin` は `mise run check` に含まれる同一オリジンの統合テスト (0017) で通過した。
+- README のホスト名が `brewbook.<サブドメイン>.workers.dev` と `brewbook-admin.<サブドメイン>.workers.dev` を指し、デプロイのコマンドが `brewbook` と `brewbook-admin` を使う。
+- pending と open の issue の旧名と旧パスが新名になっている。
+- `CHANGES.md` に `[CHANGE]` のエントリがある。
+
+方針からの乖離: 無し。
+補足: 文字列の置換で Rust の識別子名が短くなり、rustfmt の行幅に収まって折り返しが結合されたため、`cargo fmt --all` の整形が 3 ファイルで必要になった (整形のみで、意味は変えていない)。
+補足: ディレクトリとファイルの改名 (`git mv`) は、その後の bug issue 0030 の登録のコミット (`4d41195`) に混入してコミットされた (`git mv` が移動をステージ済みにし、その後の git add が他のステージ済みの変更を外さないため)。本 issue の close のコミットには、rename 後のパスに対する内容の変更 (153 ファイル) と本 issue の close を含める。以後のコミットはパスを指定して行う (`git commit -- <パス>`)。

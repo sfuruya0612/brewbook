@@ -4,8 +4,8 @@
 //! ヘッダと URL の文字列を受け取る `is_same_origin_value` を直接検査する。
 //! `wrangler dev` の結合テスト (`tests/wrangler_admin_api.rs`) は、実際のリクエストでの検証を担う。
 
-use coffee_log_admin::origin::{changes_state, is_same_origin_value};
-use coffee_log_core::routes::Method;
+use brew_book_admin::origin::{changes_state, is_same_origin_value};
+use brew_book_core::routes::Method;
 
 #[test]
 fn post_put_patch_delete_change_state() {
@@ -28,8 +28,8 @@ fn same_origin_value_passes() {
     );
     // 既定のポートは `Origin` にも URL にも表記されない。
     assert!(is_same_origin_value(
-        Some("https://coffee-log-admin.example.workers.dev"),
-        "https://coffee-log-admin.example.workers.dev/users"
+        Some("https://brewbook-admin.example.workers.dev"),
+        "https://brewbook-admin.example.workers.dev/users"
     )
     .unwrap());
 }
@@ -44,7 +44,7 @@ fn another_scheme_or_host_or_port_is_not_same_origin() {
     .unwrap());
     assert!(!is_same_origin_value(
         Some("https://evil.example"),
-        "https://coffee-log-admin.example.workers.dev/users"
+        "https://brewbook-admin.example.workers.dev/users"
     )
     .unwrap());
     // 同じ host でも port が違えば別のオリジンである。
@@ -74,7 +74,7 @@ fn the_default_port_is_normalized() {
 fn missing_origin_is_not_same_origin() {
     // `Origin` が無いリクエストは、同じオリジンからのものかを検証できないため一致しない扱いにする。
     assert!(
-        !is_same_origin_value(None, "https://coffee-log-admin.example.workers.dev/users").unwrap()
+        !is_same_origin_value(None, "https://brewbook-admin.example.workers.dev/users").unwrap()
     );
 }
 

@@ -2,9 +2,9 @@
 
 mod support;
 
-use coffee_log::records::ListParams;
-use coffee_log_core::cursor::CursorKey;
-use coffee_log_core::query::{Archived, OrderKind};
+use brew_book::records::ListParams;
+use brew_book_core::cursor::CursorKey;
+use brew_book_core::query::{Archived, OrderKind};
 
 /// 並び順のキーの種類以外は固定のパラメータ。
 fn params(limit: u32) -> ListParams {

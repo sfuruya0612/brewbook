@@ -1,4 +1,4 @@
-use coffee_log_core::error::{body, envelope, ErrorCode};
+use brew_book_core::error::{body, envelope, ErrorCode};
 
 #[test]
 fn codes_and_statuses_follow_the_prd_table() {

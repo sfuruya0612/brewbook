@@ -1,6 +1,6 @@
-//! 表示名の検証 (`coffee_log_admin/src/input.rs`) の PBT (FR-17)。
+//! 表示名の検証 (`brew_book_admin/src/input.rs`) の PBT (FR-17)。
 
-use coffee_log_admin::input::{validate_display_name, DISPLAY_NAME_MAX_CHARS};
+use brew_book_admin::input::{validate_display_name, DISPLAY_NAME_MAX_CHARS};
 use proptest::prelude::*;
 
 /// 任意の文字列を作る (制御文字や空白も含む)。

@@ -5,7 +5,7 @@
 
 use std::collections::BTreeSet;
 
-use coffee_log_admin::queries::{self, STATEMENTS, TABLES};
+use brew_book_admin::queries::{self, STATEMENTS, TABLES};
 
 /// SELECT を含む文か。
 fn has_select(sql: &str) -> bool {

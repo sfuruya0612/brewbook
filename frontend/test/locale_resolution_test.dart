@@ -1,6 +1,6 @@
-import 'package:coffee_log/l10n/app_localizations.dart';
-import 'package:coffee_log/l10n/locale_resolution.dart';
-import 'package:coffee_log/screens/login_screen.dart';
+import 'package:brew_book/l10n/app_localizations.dart';
+import 'package:brew_book/l10n/locale_resolution.dart';
+import 'package:brew_book/screens/login_screen.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 

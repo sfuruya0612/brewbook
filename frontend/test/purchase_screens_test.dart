@@ -1,14 +1,14 @@
 import 'dart:typed_data';
 
-import 'package:coffee_log/photo/photo_picker.dart';
-import 'package:coffee_log/records/values.dart';
-import 'package:coffee_log/router/app_router.dart';
-import 'package:coffee_log/screens/login_screen.dart';
-import 'package:coffee_log/screens/product_form_screen.dart';
-import 'package:coffee_log/screens/purchase_detail_screen.dart';
-import 'package:coffee_log/screens/purchase_form_screen.dart';
-import 'package:coffee_log/screens/purchase_list_screen.dart';
-import 'package:coffee_log/screens/shop_form_screen.dart';
+import 'package:brew_book/photo/photo_picker.dart';
+import 'package:brew_book/records/values.dart';
+import 'package:brew_book/router/app_router.dart';
+import 'package:brew_book/screens/login_screen.dart';
+import 'package:brew_book/screens/product_form_screen.dart';
+import 'package:brew_book/screens/purchase_detail_screen.dart';
+import 'package:brew_book/screens/purchase_form_screen.dart';
+import 'package:brew_book/screens/purchase_list_screen.dart';
+import 'package:brew_book/screens/shop_form_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

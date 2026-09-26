@@ -1,7 +1,7 @@
-# coffee-log の Frontend のパッケージ定義 (ADR-0007)。
+# brewbook の Frontend のパッケージ定義 (ADR-0007)。
 # 依存を追加する理由は issue 0013 の「設計判断」に記す。
-name: coffee_log
-description: "coffee-log の Frontend (ADR-0007)"
+name: brew_book
+description: "brewbook の Frontend (ADR-0007)"
 publish_to: 'none'
 version: 1.0.0+1
 

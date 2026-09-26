@@ -1,6 +1,6 @@
-import 'package:coffee_log/auth/passkey_error.dart';
-import 'package:coffee_log/screens/home_screen.dart';
-import 'package:coffee_log/screens/login_screen.dart';
+import 'package:brew_book/auth/passkey_error.dart';
+import 'package:brew_book/screens/home_screen.dart';
+import 'package:brew_book/screens/login_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

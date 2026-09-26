@@ -4,8 +4,8 @@ library;
 
 import 'dart:math' as math;
 
-import 'package:coffee_log/photo/image_converter.dart';
-import 'package:coffee_log/photo/image_converter_web.dart';
+import 'package:brew_book/photo/image_converter.dart';
+import 'package:brew_book/photo/image_converter_web.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'canvas_images.dart';

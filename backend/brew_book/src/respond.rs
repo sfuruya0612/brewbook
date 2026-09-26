@@ -3,7 +3,7 @@
 //! エラー応答は `{"error": {"code": "<snake_case>", "message": "<英語>"}}` に統一する。
 //! 成功の応答は JSON とし、セッションを発行した経路は `Set-Cookie` を付ける。
 
-use coffee_log_core::error::{envelope, ErrorCode};
+use brew_book_core::error::{envelope, ErrorCode};
 use serde::Serialize;
 use worker::{console_error, Response, Result};
 

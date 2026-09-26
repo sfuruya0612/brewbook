@@ -8,9 +8,9 @@
 //! 16.4 の認証の入力は UP と UV が両方立っている唯一の none の ES256 の組なので、成功の経路に使う。
 //! 16.2 の認証の入力は UV が立っていないため、UV の欠落の経路に使う。
 
-use coffee_log_core::base64url;
-use coffee_log_core::cose;
-use coffee_log_core::webauthn::{
+use brew_book_core::base64url;
+use brew_book_core::cose;
+use brew_book_core::webauthn::{
     check_sign_count, verify_authentication, verify_registration, AuthenticationInput, Error,
     RegistrationInput, SignCounter,
 };
@@ -724,7 +724,7 @@ mod malformed {
     fn an_attestation_object_that_is_not_cbor_is_rejected() {
         assert_eq!(
             verify_broken_registration(&base64url::encode(&[0x19, 0x01])),
-            Error::Cbor(coffee_log_core::cbor::Error::UnexpectedEnd)
+            Error::Cbor(brew_book_core::cbor::Error::UnexpectedEnd)
         );
     }
 
@@ -752,7 +752,7 @@ mod malformed {
         object.push(0x00);
         assert_eq!(
             verify_broken_registration(&base64url::encode(&object)),
-            Error::Cbor(coffee_log_core::cbor::Error::TrailingBytes)
+            Error::Cbor(brew_book_core::cbor::Error::TrailingBytes)
         );
     }
 
@@ -836,7 +836,7 @@ mod malformed {
         assert_eq!(
             error,
             Error::PublicKey(cose::Error::Cbor(
-                coffee_log_core::cbor::Error::UnexpectedEnd
+                brew_book_core::cbor::Error::UnexpectedEnd
             ))
         );
     }
@@ -860,7 +860,7 @@ mod malformed {
             Error::SignatureInvalid,
             Error::SignCounterRegressed,
             Error::Base64Url(base64url::Error::InvalidCharacter),
-            Error::Cbor(coffee_log_core::cbor::Error::TooLarge),
+            Error::Cbor(brew_book_core::cbor::Error::TooLarge),
             Error::PublicKey(cose::Error::UnsupportedAlgorithm),
         ] {
             let message = error.to_string();

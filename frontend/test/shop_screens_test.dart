@@ -1,8 +1,8 @@
-import 'package:coffee_log/router/app_router.dart';
-import 'package:coffee_log/screens/home_screen.dart';
-import 'package:coffee_log/screens/login_screen.dart';
-import 'package:coffee_log/screens/shop_form_screen.dart';
-import 'package:coffee_log/screens/shop_list_screen.dart';
+import 'package:brew_book/router/app_router.dart';
+import 'package:brew_book/screens/home_screen.dart';
+import 'package:brew_book/screens/login_screen.dart';
+import 'package:brew_book/screens/shop_form_screen.dart';
+import 'package:brew_book/screens/shop_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

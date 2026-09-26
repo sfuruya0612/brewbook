@@ -3,8 +3,8 @@
 //! 個別の誤り (プレフィックスや拡張子の欠落、上位のディレクトリへ移動する並び) は
 //! 単体テスト (`test_photo.rs`) が担う。
 
-use coffee_log_core::ids::{uuid_bytes, uuid_v4_from_bytes};
-use coffee_log_core::photo::{
+use brew_book_core::ids::{uuid_bytes, uuid_v4_from_bytes};
+use brew_book_core::photo::{
     parse_pending_key, pending_key, pending_prefix, photo_key, user_prefix,
 };
 use proptest::prelude::*;

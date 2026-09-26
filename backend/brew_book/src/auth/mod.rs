@@ -7,15 +7,15 @@
 //! 秘密値 (登録用トークン、チャレンジ、セッションのトークン) は 32 バイトの乱数を base64url で
 //! 符号化した文字列とし、D1 には SHA-256 のハッシュだけを保存する。生の値は応答と Cookie にだけ
 //! 載せる。有効期限は ISO 8601 UTC の固定長文字列で持ち、辞書順の比較で判定する
-//! (`coffee_log_core::auth`)。
+//! (`brew_book_core::auth`)。
 
 pub mod login;
 pub mod passkeys;
 pub mod register;
 pub mod session;
 
-use coffee_log_core::auth;
-use coffee_log_core::error::ErrorCode;
+use brew_book_core::auth;
+use brew_book_core::error::ErrorCode;
 use serde::Serialize;
 use worker::d1::{D1Database, D1PreparedStatement, D1Type};
 use worker::{Date, Env, Error, Result};
@@ -41,9 +41,9 @@ pub const DEFAULT_ORIGIN: &str = "http://localhost:8787";
 
 /// 認証の設定。vars から読む。
 pub struct Config {
-    /// Relying Party ID (例: `coffee-log.example.workers.dev`)。
+    /// Relying Party ID (例: `brewbook.example.workers.dev`)。
     pub rp_id: String,
-    /// RP の Origin (例: `https://coffee-log.example.workers.dev`)。
+    /// RP の Origin (例: `https://brewbook.example.workers.dev`)。
     pub origin: String,
     /// チャレンジの有効期限 (秒)。
     pub challenge_ttl_seconds: i64,
@@ -125,7 +125,7 @@ pub fn creation_options(
         challenge: challenge.to_owned(),
         rp: RelyingParty {
             id: config.rp_id.clone(),
-            name: "coffee-log",
+            name: "brewbook",
         },
         user: UserEntity {
             id: user_id_bytes(user_id)?,
@@ -187,9 +187,9 @@ pub fn random_bytes_32() -> Result<[u8; 32]> {
 
 /// 利用者 ID の 16 バイトを base64url にした文字列。WebAuthn の `user.id` に入れる (ADR-0004)。
 pub fn user_id_bytes(user_id: &str) -> Result<String> {
-    let bytes = coffee_log_core::ids::uuid_bytes(user_id)
+    let bytes = brew_book_core::ids::uuid_bytes(user_id)
         .ok_or_else(|| Error::RustError(format!("the user id is not a UUID: {user_id}")))?;
-    Ok(coffee_log_core::base64url::encode(&bytes))
+    Ok(brew_book_core::base64url::encode(&bytes))
 }
 
 /// 期限切れのチャレンジの行を削除する。

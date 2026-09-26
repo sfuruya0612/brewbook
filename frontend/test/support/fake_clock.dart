@@ -1,7 +1,7 @@
 /// テスト用の固定の時計とタイムゾーン (FR-18)。
 library;
 
-import 'package:coffee_log/records/clock.dart';
+import 'package:brew_book/records/clock.dart';
 
 /// 決まった日時と UTC オフセットを返す端末の時計。
 ///

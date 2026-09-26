@@ -1,6 +1,6 @@
 //! パスキーを伴う結合テスト。CDP の仮想認証器 (Chrome DevTools Protocol) を使う (ADR-0004)。
 //!
-//! テストページ (`/api/__test_page`、`TEST_PAGE` の var で有効) の `window.coffeeLogTest` を呼び、
+//! テストページ (`/api/__test_page`、`TEST_PAGE` の var で有効) の `window.brewBookTest` を呼び、
 //! 登録、ログイン、パスキーの追加、名前の変更、削除を一連で検査する。
 //!
 //! 検査する経路と種別 (0001 の台帳の照合)。
@@ -21,8 +21,8 @@ use std::sync::OnceLock;
 use std::thread;
 use std::time::Duration;
 
-use coffee_log_core::auth;
-use coffee_log_core::base64url;
+use brew_book_core::auth;
+use brew_book_core::base64url;
 use serde_json::Value;
 use support::cdp::{js_string, TestBrowser};
 use support::seed::{user_id, Seed};
@@ -52,10 +52,7 @@ fn vars(port: u16, extra: Vec<(&str, String)>) -> Vec<(String, String)> {
     let mut vars = vec![
         ("RP_ID".to_owned(), "localhost".to_owned()),
         ("ORIGIN".to_owned(), format!("http://localhost:{port}")),
-        (
-            coffee_log::test_page::VAR_NAME.to_owned(),
-            "true".to_owned(),
-        ),
+        (brew_book::test_page::VAR_NAME.to_owned(), "true".to_owned()),
     ];
     vars.extend(
         extra
@@ -133,7 +130,7 @@ fn challenge_server() -> ServerLease {
                 vars(
                     port,
                     vec![(
-                        coffee_log::auth::CHALLENGE_TTL_VAR,
+                        brew_book::auth::CHALLENGE_TTL_VAR,
                         SHORT_TTL_SECONDS.to_string(),
                     )],
                 )
@@ -152,7 +149,7 @@ fn session_server() -> ServerLease {
                 vars(
                     port,
                     vec![(
-                        coffee_log::auth::SESSION_TTL_VAR,
+                        brew_book::auth::SESSION_TTL_VAR,
                         SHORT_TTL_SECONDS.to_string(),
                     )],
                 )
@@ -165,7 +162,7 @@ fn session_server() -> ServerLease {
 
 /// テストページの URL。
 fn page_url(lease: &ServerLease) -> String {
-    lease.use_server(|server| format!("{}{}", server.localhost_url(), coffee_log::test_page::PATH))
+    lease.use_server(|server| format!("{}{}", server.localhost_url(), brew_book::test_page::PATH))
 }
 
 /// アサーションの authenticatorData (base64url) から署名カウンタを読む。
@@ -197,11 +194,11 @@ fn wrangler_auth_register_complete_ok_and_logout_401() {
     let lease = main_server();
     let browser = TestBrowser::open(&page_url(&lease)).expect("Chrome must open the test page");
     let script = r#"(async () => {
-      const registered = await window.coffeeLogTest.registerWithToken(__TOKEN__, "登録したパスキー");
-      const listed = await window.coffeeLogTest.listPasskeys();
-      const again = await window.coffeeLogTest.registerWithToken(__TOKEN__, "2 回目");
-      const loggedOut = await window.coffeeLogTest.logout();
-      const afterLogout = await window.coffeeLogTest.listPasskeys();
+      const registered = await window.brewBookTest.registerWithToken(__TOKEN__, "登録したパスキー");
+      const listed = await window.brewBookTest.listPasskeys();
+      const again = await window.brewBookTest.registerWithToken(__TOKEN__, "2 回目");
+      const loggedOut = await window.brewBookTest.logout();
+      const afterLogout = await window.brewBookTest.listPasskeys();
       return { registered, listed, again, loggedOut, afterLogout };
     })()"#
         .replace("__TOKEN__", &js_string(&data.tokens[0]));
@@ -270,14 +267,14 @@ fn wrangler_passkeys_complete_ok_and_the_passkey_is_managed() {
     let lease = main_server();
     let browser = TestBrowser::open(&page_url(&lease)).expect("Chrome must open the test page");
     let script = r#"(async () => {
-      const registered = await window.coffeeLogTest.registerWithToken(__TOKEN__, "最初のパスキー");
-      const added = await window.coffeeLogTest.addPasskey("2 つ目のパスキー");
-      const listed = await window.coffeeLogTest.listPasskeys();
-      const renamed = await window.coffeeLogTest.renamePasskey(added.body.id, "変えた名前");
-      const deleted = await window.coffeeLogTest.deletePasskey(registered.body.passkey.id);
-      const remaining = await window.coffeeLogTest.listPasskeys();
-      const last = await window.coffeeLogTest.deletePasskey(added.body.id);
-      const stillRemaining = await window.coffeeLogTest.listPasskeys();
+      const registered = await window.brewBookTest.registerWithToken(__TOKEN__, "最初のパスキー");
+      const added = await window.brewBookTest.addPasskey("2 つ目のパスキー");
+      const listed = await window.brewBookTest.listPasskeys();
+      const renamed = await window.brewBookTest.renamePasskey(added.body.id, "変えた名前");
+      const deleted = await window.brewBookTest.deletePasskey(registered.body.passkey.id);
+      const remaining = await window.brewBookTest.listPasskeys();
+      const last = await window.brewBookTest.deletePasskey(added.body.id);
+      const stillRemaining = await window.brewBookTest.listPasskeys();
       return { registered, added, listed, renamed, deleted, remaining, last, stillRemaining };
     })()"#
         .replace("__TOKEN__", &js_string(&data.tokens[1]));
@@ -349,11 +346,11 @@ fn wrangler_auth_login_complete_ok_and_last_used_at_is_updated() {
     let lease = main_server();
     let browser = TestBrowser::open(&page_url(&lease)).expect("Chrome must open the test page");
     let script = r#"(async () => {
-      const registered = await window.coffeeLogTest.registerWithToken(__TOKEN__, "ログイン用のパスキー");
-      const before = await window.coffeeLogTest.listPasskeys();
-      const loggedOut = await window.coffeeLogTest.logout();
-      const loggedIn = await window.coffeeLogTest.login();
-      const after = await window.coffeeLogTest.listPasskeys();
+      const registered = await window.brewBookTest.registerWithToken(__TOKEN__, "ログイン用のパスキー");
+      const before = await window.brewBookTest.listPasskeys();
+      const loggedOut = await window.brewBookTest.logout();
+      const loggedIn = await window.brewBookTest.login();
+      const after = await window.brewBookTest.listPasskeys();
       return { registered, before, loggedOut, loggedIn, after };
     })()"#
         .replace("__TOKEN__", &js_string(&data.tokens[2]));
@@ -401,11 +398,11 @@ fn wrangler_auth_login_complete_reused_challenge_409_and_bad_signature_400() {
     let lease = main_server();
     let browser = TestBrowser::open(&page_url(&lease)).expect("Chrome must open the test page");
     let script = r#"(async () => {
-      const registered = await window.coffeeLogTest.registerWithToken(__TOKEN__, "使い捨てのパスキー");
-      const first = await window.coffeeLogTest.login();
-      const reuse = await window.coffeeLogTest.completeLogin(first.credential);
-      const assertion = await window.coffeeLogTest.getAssertion();
-      const tampered = await window.coffeeLogTest.completeLoginWithBadSignature(assertion.credential);
+      const registered = await window.brewBookTest.registerWithToken(__TOKEN__, "使い捨てのパスキー");
+      const first = await window.brewBookTest.login();
+      const reuse = await window.brewBookTest.completeLogin(first.credential);
+      const assertion = await window.brewBookTest.getAssertion();
+      const tampered = await window.brewBookTest.completeLoginWithBadSignature(assertion.credential);
       return { registered, first, reuse, assertion, tampered };
     })()"#
         .replace("__TOKEN__", &js_string(&data.tokens[3]));
@@ -445,8 +442,8 @@ fn wrangler_auth_login_complete_regressed_sign_count_409() {
     let lease = main_server();
     let browser = TestBrowser::open(&page_url(&lease)).expect("Chrome must open the test page");
     let script = r#"(async () => {
-      const registered = await window.coffeeLogTest.registerWithToken(__TOKEN__, "カウンタのパスキー");
-      const first = await window.coffeeLogTest.login();
+      const registered = await window.brewBookTest.registerWithToken(__TOKEN__, "カウンタのパスキー");
+      const first = await window.brewBookTest.login();
       return { registered, first, credentialId: first.credential.id };
     })()"#
         .replace("__TOKEN__", &js_string(&data.tokens[4]));
@@ -465,7 +462,7 @@ fn wrangler_auth_login_complete_regressed_sign_count_409() {
         .set_sign_count(&credential_id, 0)
         .expect("the signature counter must be replaced");
     let regressed = browser
-        .evaluate_json("await window.coffeeLogTest.login()")
+        .evaluate_json("await window.brewBookTest.login()")
         .expect("the login must return JSON");
     assert_eq!(
         status_of(&regressed),
@@ -478,7 +475,7 @@ fn wrangler_auth_login_complete_regressed_sign_count_409() {
         .set_sign_count(&credential_id, 100)
         .expect("the signature counter must be replaced");
     let accepted = browser
-        .evaluate_json("await window.coffeeLogTest.login()")
+        .evaluate_json("await window.brewBookTest.login()")
         .expect("the login must return JSON");
     assert_eq!(
         status_of(&accepted),
@@ -513,7 +510,7 @@ fn wrangler_auth_login_complete_expired_challenge_410_and_deleted_on_issue() {
 
     // 期限切れのチャレンジは 410 になり、その行は削除される (ADR-0004)。
     let expired = browser
-        .evaluate_json("await window.coffeeLogTest.beginLogin()")
+        .evaluate_json("await window.brewBookTest.beginLogin()")
         .expect("the login begin must return JSON");
     let expired_challenge = expired["body"]["challenge"]
         .as_str()
@@ -522,7 +519,7 @@ fn wrangler_auth_login_complete_expired_challenge_410_and_deleted_on_issue() {
     thread::sleep(SHORT_TTL_WAIT);
     let result = browser
         .evaluate_json(&format!(
-            "await window.coffeeLogTest.completeLoginWithChallenge({})",
+            "await window.brewBookTest.completeLoginWithChallenge({})",
             js_string(&expired_challenge)
         ))
         .expect("the completion must return JSON");
@@ -543,7 +540,7 @@ fn wrangler_auth_login_complete_expired_challenge_410_and_deleted_on_issue() {
 
     // 期限切れの行は、次のチャレンジの発行でも削除される。
     let stale = browser
-        .evaluate_json("await window.coffeeLogTest.beginLogin()")
+        .evaluate_json("await window.brewBookTest.beginLogin()")
         .expect("the login begin must return JSON");
     let stale_challenge = stale["body"]["challenge"]
         .as_str()
@@ -551,7 +548,7 @@ fn wrangler_auth_login_complete_expired_challenge_410_and_deleted_on_issue() {
         .to_owned();
     thread::sleep(SHORT_TTL_WAIT);
     let fresh = browser
-        .evaluate_json("await window.coffeeLogTest.beginLogin()")
+        .evaluate_json("await window.brewBookTest.beginLogin()")
         .expect("the login begin must return JSON");
     let fresh_challenge = fresh["body"]["challenge"]
         .as_str()
@@ -560,7 +557,7 @@ fn wrangler_auth_login_complete_expired_challenge_410_and_deleted_on_issue() {
     // 行が残っていれば 410 になる。削除されていれば、使用済みと同じ 409 になる。
     let result = browser
         .evaluate_json(&format!(
-            "await window.coffeeLogTest.completeLoginWithChallenge({})",
+            "await window.brewBookTest.completeLoginWithChallenge({})",
             js_string(&stale_challenge)
         ))
         .expect("the completion must return JSON");
@@ -582,7 +579,7 @@ fn wrangler_auth_login_complete_expired_challenge_410_and_deleted_on_issue() {
     // 発行し直したチャレンジは、まだ使われていない (使用済みと同じ 409 にはならない)。
     let result = browser
         .evaluate_json(&format!(
-            "await window.coffeeLogTest.completeLoginWithChallenge({})",
+            "await window.brewBookTest.completeLoginWithChallenge({})",
             js_string(&fresh_challenge)
         ))
         .expect("the completion must return JSON");
@@ -601,8 +598,8 @@ fn wrangler_auth_session_expired_401() {
     let lease = session_server();
     let browser = TestBrowser::open(&page_url(&lease)).expect("Chrome must open the test page");
     let script = r#"(async () => {
-      const registered = await window.coffeeLogTest.registerWithToken(__TOKEN__, "短命のセッション");
-      const before = await window.coffeeLogTest.listPasskeys();
+      const registered = await window.brewBookTest.registerWithToken(__TOKEN__, "短命のセッション");
+      const before = await window.brewBookTest.listPasskeys();
       return { registered, before };
     })()"#
         .replace("__TOKEN__", &js_string(&data.token));
@@ -614,7 +611,7 @@ fn wrangler_auth_session_expired_401() {
 
     thread::sleep(SHORT_TTL_WAIT);
     let after = browser
-        .evaluate_json("await window.coffeeLogTest.listPasskeys()")
+        .evaluate_json("await window.brewBookTest.listPasskeys()")
         .expect("the list must return JSON");
     assert_eq!(
         status_of(&after),

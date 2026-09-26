@@ -240,7 +240,7 @@ pub const SUITE: &[SuiteEntry] = &[
 
 /// 台帳とスイートが一致するかを検査する。
 pub fn suite_covers_ledger() -> Result<(), String> {
-    covers(coffee_log_core::routes::ROUTES, SUITE)
+    covers(brew_book_core::routes::ROUTES, SUITE)
 }
 
 /// 経路の台帳とスイートのテスト種別が一致するかを検査する。
@@ -248,7 +248,7 @@ pub fn suite_covers_ledger() -> Result<(), String> {
 /// 台帳の全経路が同じ名前のスイートの項目を持ち、スイートの種別が必要な種別 (正常系、
 /// 未認証 401、入力不正 400) と過不足なく一致することを確認する。
 pub fn covers(
-    routes: &[coffee_log_core::routes::Route],
+    routes: &[brew_book_core::routes::Route],
     suite: &[SuiteEntry],
 ) -> Result<(), String> {
     let mut route_names: Vec<&str> = routes.iter().map(|route| route.name).collect();
@@ -266,7 +266,7 @@ pub fn covers(
             .iter()
             .find(|entry| entry.route == route.name)
             .expect("the route names match above");
-        let requirements = coffee_log_core::routes::test_requirements(route);
+        let requirements = brew_book_core::routes::test_requirements(route);
         let mut expected: Vec<&str> = Vec::new();
         if requirements.ok {
             expected.push(KIND_OK);
@@ -337,7 +337,7 @@ impl DevServer {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let sequence = START_COUNTER.fetch_add(1, Ordering::Relaxed);
         let persist_dir = std::env::temp_dir().join(format!(
-            "coffee-log-dev-server-{}-{}",
+            "brewbook-dev-server-{}-{}",
             std::process::id(),
             sequence
         ));

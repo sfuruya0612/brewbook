@@ -8,8 +8,8 @@
 //! `wrangler r2 object put` は 1 件につき 1 プロセスを要するため、バインディングでまとめて置き、
 //! カーソルを繰り返して残件数を数える操作をここに置く。
 
-use coffee_log_core::error::{envelope, ErrorCode};
-use coffee_log_core::photo;
+use brew_book_core::error::{envelope, ErrorCode};
+use brew_book_core::photo;
 use serde::{Deserialize, Serialize};
 use worker::{Env, Error, HttpMetadata, Method, Request, Response, Result};
 

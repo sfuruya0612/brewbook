@@ -12,7 +12,7 @@ mod support;
 
 use std::sync::OnceLock;
 
-use coffee_log_core::routes::{Method, ROUTES};
+use brew_book_core::routes::{Method, ROUTES};
 use serde_json::json;
 use support::http::ApiClient;
 use support::seed::{user_id, Seed};
@@ -88,7 +88,7 @@ fn wrangler_display_name_never_appears_in_the_responses() {
         let client = ApiClient::for_server(server, Some(&data.session));
         // セッションを消す経路 (ログアウトとアカウント削除) は最後に呼ぶ。先に呼ぶと、
         // 以降の経路が全て 401 になり、応答の中身を確かめられない。
-        let mut routes: Vec<&coffee_log_core::routes::Route> = ROUTES.iter().collect();
+        let mut routes: Vec<&brew_book_core::routes::Route> = ROUTES.iter().collect();
         routes.sort_by_key(|route| matches!(route.name, "auth_logout" | "account_delete"));
         for route in routes {
             let path = concrete_path(route.pattern);

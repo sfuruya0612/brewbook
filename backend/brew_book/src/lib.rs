@@ -1,7 +1,7 @@
 //! 利用者向けの Worker。`/api/*` を Router で処理し、リクエストごとにログを出す。
 
-use coffee_log_core::error::ErrorCode;
-use coffee_log_core::routes::{matched, Method, Route, NOT_FOUND_ROUTE, ROUTES};
+use brew_book_core::error::ErrorCode;
+use brew_book_core::routes::{matched, Method, Route, NOT_FOUND_ROUTE, ROUTES};
 use worker::{
     console_error, event, Context, Date, Env, Request, Response, Result, RouteContext, Router,
 };

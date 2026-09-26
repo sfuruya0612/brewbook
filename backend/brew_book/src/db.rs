@@ -1,11 +1,11 @@
 //! D1 の実行と、現在時刻と UUID の共通の補助。
 //!
-//! 認証 (0005) と記録の API (0006) が共有する。SQL の組み立ては `coffee_log_core::query` が持ち、
+//! 認証 (0005) と記録の API (0006) が共有する。SQL の組み立ては `brew_book_core::query` が持ち、
 //! ここは組み立てた文の実行と、値の D1 への変換だけを行う。
 
-use coffee_log_core::datetime::format_epoch_millis;
-use coffee_log_core::ids::uuid_v4_from_bytes;
-use coffee_log_core::query::{Statement, Value};
+use brew_book_core::datetime::format_epoch_millis;
+use brew_book_core::ids::uuid_v4_from_bytes;
+use brew_book_core::query::{Statement, Value};
 use worker::d1::{D1Database, D1PreparedStatement, D1Type};
 use worker::{console_error, Date, Env, Error, Result};
 

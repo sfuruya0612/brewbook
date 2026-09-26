@@ -1,6 +1,6 @@
 //! `ids` の単体テスト。往復と形の検査は PBT (`prop_ids.rs`) が担う。
 
-use coffee_log_core::ids::{uuid_bytes, uuid_v4_from_bytes};
+use brew_book_core::ids::{uuid_bytes, uuid_v4_from_bytes};
 
 #[test]
 fn all_zero_bytes_set_the_version_and_variant_bits() {

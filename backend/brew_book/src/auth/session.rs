@@ -7,7 +7,7 @@
 //! 認証が不要な経路はセッションを解決しない。認証が必要な経路の判定は経路の台帳 (0001) が持ち、
 //! 実際の解決はここ 1 か所 (`resolve`) に置く。
 
-use coffee_log_core::auth;
+use brew_book_core::auth;
 use worker::d1::{D1Database, D1PreparedStatement, D1Type};
 use worker::{Env, Request, Response, Result};
 

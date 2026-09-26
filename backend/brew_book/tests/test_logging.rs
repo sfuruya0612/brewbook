@@ -1,4 +1,4 @@
-use coffee_log::logging::{line, RequestLog};
+use brew_book::logging::{line, RequestLog};
 
 #[test]
 fn log_line_contains_only_the_route_metadata() {

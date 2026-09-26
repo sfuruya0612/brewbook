@@ -1,4 +1,4 @@
-import 'package:coffee_log/records/values.dart';
+import 'package:brew_book/records/values.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// 入力の値の変換 (FR-9、FR-11) の単体テスト。

@@ -5,8 +5,8 @@
 
 mod support;
 
-use coffee_log_admin::routes::ROUTES;
-use coffee_log_core::routes::{Method, Route};
+use brew_book_admin::routes::ROUTES;
+use brew_book_core::routes::{Method, Route};
 use support::{SuiteEntry, KIND_INVALID_INPUT_400, KIND_OK};
 
 /// 照合の検査を試すための経路。実際の経路は `ROUTES` が持つ。
@@ -94,5 +94,5 @@ fn the_checker_detects_a_route_present_on_one_side_only() {
 fn the_router_registration_does_not_panic() {
     // ネイティブでは wasm のディスパッチを実行できないため、ここで確認できるのは
     // 台帳の経路の登録がパニックしないことまで。ディスパッチは結合テストが確認する。
-    let _router = coffee_log_admin::build_router_from(ROUTES);
+    let _router = brew_book_admin::build_router_from(ROUTES);
 }

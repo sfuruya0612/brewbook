@@ -1,5 +1,5 @@
 [package]
-name = "coffee_log-fuzz"
+name = "brew_book-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
@@ -12,7 +12,7 @@ libfuzzer-sys = "0.4"
 # authenticatorData の rpIdHash を組み立てるため (検証のフラグ検査まで到達させる)。
 sha2 = "0.11"
 
-[dependencies.coffee_log_core]
+[dependencies.brew_book_core]
 path = ".."
 
 # 親のワークスペース (backend/Cargo.toml) の members には入れない。

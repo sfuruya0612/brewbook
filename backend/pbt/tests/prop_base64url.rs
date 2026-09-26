@@ -3,7 +3,7 @@
 //! WebAuthn の base64url は、URL とファイル名に安全なアルファベットを使い、末尾の `=` を省く
 //! (W3C WebAuthn Level 3 の 3)。
 
-use coffee_log_core::base64url::{decode, encode, Error};
+use brew_book_core::base64url::{decode, encode, Error};
 use proptest::prelude::*;
 
 proptest! {

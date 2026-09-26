@@ -154,9 +154,9 @@ impl std::error::Error for Error {}
 /// 登録の検証の入力。base64url の文字列は API の入力 JSON と同じ形で受け取る。
 #[derive(Debug, Clone, Copy)]
 pub struct RegistrationInput<'a> {
-    /// Relying Party ID (例: `coffee-log.example.workers.dev`)。
+    /// Relying Party ID (例: `brewbook.example.workers.dev`)。
     pub rp_id: &'a str,
-    /// RP の Origin (例: `https://coffee-log.example.workers.dev`)。
+    /// RP の Origin (例: `https://brewbook.example.workers.dev`)。
     pub origin: &'a str,
     /// 期待するチャレンジ (base64url)。0005 が発行して D1 に保存した値。
     pub expected_challenge: &'a str,
@@ -180,9 +180,9 @@ pub struct RegisteredCredential {
 /// ログインの検証の入力。base64url の文字列は API の入力 JSON と同じ形で受け取る。
 #[derive(Debug, Clone, Copy)]
 pub struct AuthenticationInput<'a> {
-    /// Relying Party ID (例: `coffee-log.example.workers.dev`)。
+    /// Relying Party ID (例: `brewbook.example.workers.dev`)。
     pub rp_id: &'a str,
-    /// RP の Origin (例: `https://coffee-log.example.workers.dev`)。
+    /// RP の Origin (例: `https://brewbook.example.workers.dev`)。
     pub origin: &'a str,
     /// 期待するチャレンジ (base64url)。0005 が発行して D1 に保存した値。
     pub expected_challenge: &'a str,

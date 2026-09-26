@@ -1,4 +1,4 @@
-name = "coffee-log"
+name = "brewbook"
 main = "build/worker/shim.mjs"
 compatibility_date = "2026-09-21"
 # workers.dev のホスト名で配信する (ADR-0005)。独自ドメインは取得しない。
@@ -26,9 +26,9 @@ enabled = true
 # database_id を参照する。管理者 Worker はマイグレーションを持たず、適用はこの設定から行う。
 [[d1_databases]]
 binding = "DB"
-database_name = "coffee-log"
+database_name = "brewbook"
 migrations_dir = "migrations"
-# 本番の database_id は `wrangler d1 create coffee-log` が返す値に差し替える。
+# 本番の database_id は `wrangler d1 create brewbook` が返す値に差し替える。
 # ローカルの wrangler dev と `--local` のマイグレーションはこの値を参照しない。
 database_id = "00000000-0000-0000-0000-000000000000"
 
@@ -37,17 +37,17 @@ database_id = "00000000-0000-0000-0000-000000000000"
 # CORS とライフサイクルは `cors.json` と `lifecycle.json` を `mise run r2-setup` で適用する。
 [[r2_buckets]]
 binding = "PHOTOS"
-bucket_name = "coffee-log-photos"
+bucket_name = "brewbook-photos"
 
 [vars]
 # 写真のバケット名 (ADR-0003)。バインディングの `bucket_name` と同じ値にする。
-R2_BUCKET = "coffee-log-photos"
+R2_BUCKET = "brewbook-photos"
 # パスキーの Relying Party ID と、アプリの Origin (ADR-0004、ADR-0005)。
 # workers.dev のサブドメインはアカウントに 1 つで、デプロイするアカウントによって変わるため、
 # 本番の値はデプロイの前に実際のサブドメインへ置き換える (README のデプロイ手順)。
 # ローカルの開発は `mise run dev` が ADR-0004 の既定値 (`localhost`) で上書きする。
-RP_ID = "coffee-log.example.workers.dev"
-ORIGIN = "https://coffee-log.example.workers.dev"
+RP_ID = "brewbook.example.workers.dev"
+ORIGIN = "https://brewbook.example.workers.dev"
 # S3 互換エンドポイント (R2_ENDPOINT) と API トークン (R2_ACCESS_KEY_ID、
 # R2_SECRET_ACCESS_KEY) は環境ごとに違うため、開発では `.dev.vars` (git 管理外)、
 # 本番ではデプロイ時に設定し、リポジトリに実値を含めない (PRD のセキュリティ)。

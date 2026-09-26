@@ -69,7 +69,7 @@ PRD の未確定論点は、R2 が Content-Length の不一致を拒否するか
 
 ### 設定と運用
 
-- `backend/coffee_log/wrangler.toml` に R2 バケットのバインディング (`PHOTOS`) を追加し、バケット名は `coffee-log-photos` とする。
+- `backend/brew_book/wrangler.toml` に R2 バケットのバインディング (`PHOTOS`) を追加し、バケット名は `brewbook-photos` とする。
 - R2 の API トークン (アクセスキーとシークレット) は Workers の Secret に置き、リポジトリに含めない。
   バケット名と S3 互換のエンドポイントは vars に置く。
   開発では開発用のバケットと API トークンを使う。
@@ -106,12 +106,12 @@ PRD の未確定論点は、R2 が Content-Length の不一致を拒否するか
 
 1. 完了通知の入力に申告サイズ (`size`) を追加した。方針の経路表はキーだけと書くが、方針はサイズ (申告サイズと一致して 5 MB 以下) の確認を要求し、発行時の申告を保存する列が D1 に無いため、完了通知でもう一度受け取る。
 2. `wrangler.toml` の `[vars]` には `R2_BUCKET` を置き、`R2_ENDPOINT` は実値が環境ごと (アカウント ID を含む) のためプレースホルダを置かず、設定箇所をコメントで明示した。コードは未設定なら内部エラー (500) にして、黙って誤った署名を返さない。
-3. `cors.json` のアプリのオリジンは `https://coffee-log.example.workers.dev` を置いた (0017 が確定して置き換える前提)。
+3. `cors.json` のアプリのオリジンは `https://brewbook.example.workers.dev` を置いた (0017 が確定して置き換える前提)。
 4. 秘密の読み出しは vars と同じ経路 (`var_or`) で行う (Workers では Secret も env のプロパティとして公開されるため、どちらでも読める)。
 5. 差し替え時の古いオブジェクトの削除は `users/` で始まるキーだけを対象にした (DB の値が壊れていても他の利用者の `pending/` を消さないため)。
 6. 写真が無い購入の削除も 404 にした (方針の「購入に写真が紐づいていない場合も資源が無いものとして 404 にする」を削除にも適用)。
 7. 結合テストは署名付き URL への PUT を行わず、`wrangler r2 object put` で `pending/` のオブジェクトを置いてから完了通知を送る (実サービスへの PUT は資格情報とネットワークが要るため)。ハーネスに `DevServer::put_r2_object` と `get_r2_object` を追加した。
-8. `backend/coffee_log_core/fuzz/Cargo.lock` を更新した (`coffee_log_core` への依存追加に伴うワークスペース外の fuzz クレートの追随)。
+8. `backend/brew_book_core/fuzz/Cargo.lock` を更新した (`brew_book_core` への依存追加に伴うワークスペース外の fuzz クレートの追随)。
 9. `shiguredo_s3` は `=2026.1.0-canary.7` の既定 feature (`rust-crypto`) のままで、`aws_lc_rs` が有効でないことを `cargo tree -e features` で確認した。wasm32-unknown-unknown のビルドは `wrangler dev` の `worker-build --release` で実行され、結合テストがその Worker で通る。
 
 ## pending にした理由

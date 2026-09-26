@@ -1,7 +1,7 @@
 //! 管理者向けの Worker (ADR-0008)。
 //!
 //! 利用者の作成と登録用トークンの発行 (FR-17) を、サーバー側で生成する HTML のフォームで行う
-//! (`coffee-log-admin.<アカウントのサブドメイン>.workers.dev`)。Flutter と JavaScript は使わない。
+//! (`brewbook-admin.<アカウントのサブドメイン>.workers.dev`)。Flutter と JavaScript は使わない。
 //!
 //! アプリ内の認証は持たず、安全性は Worker 単位の Cloudflare Access 保護だけに依存する。
 //! Access が付ける JWT は検証しない (rsa 相当の依存を増やさないため。ADR-0008)。
@@ -20,8 +20,8 @@ pub mod routes;
 pub mod tokens;
 pub mod users;
 
-use coffee_log_core::error::ErrorCode;
-use coffee_log_core::routes::{match_route, Method, Route};
+use brew_book_core::error::ErrorCode;
+use brew_book_core::routes::{match_route, Method, Route};
 use worker::{console_error, event, Context, Env, Request, Response, Result, RouteContext, Router};
 
 #[event(fetch)]

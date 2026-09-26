@@ -136,7 +136,7 @@ fn start_chromedriver(port: u16) -> Child {
 /// `flutter drive` を実行し、終了を待つ。失敗した場合はログの末尾を報告する。
 fn run_flutter_drive(frontend: &Path, driver_port: u16, launch_url: &str) -> Result<(), String> {
     let log_path = std::env::temp_dir().join(format!(
-        "coffee-log-e2e-flutter-drive-{}.log",
+        "brewbook-e2e-flutter-drive-{}.log",
         std::process::id()
     ));
     let log = File::create(&log_path)

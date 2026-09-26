@@ -462,7 +462,7 @@ fn assert_timestamp(value: &Value) {
         value.as_str().is_some_and(|text| {
             text.len() == 24
                 && text.ends_with('Z')
-                && coffee_log_core::datetime::parse_epoch_millis(text).is_ok()
+                && brew_book_core::datetime::parse_epoch_millis(text).is_ok()
         }),
         "the value must be an ISO 8601 UTC timestamp: {value}"
     );

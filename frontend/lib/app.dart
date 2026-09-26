@@ -21,8 +21,8 @@ import 'settings/settings_services.dart';
 /// API クライアントとパスキーのクライアントは差し替えられる (テストが使う)。パスキーの
 /// クライアントは実行環境に合う実装を [createPasskeyClient] が返す (ADR-0007)。
 /// 写真の選択と変換も同じく実行環境に合う実装を既定にし、テストは偽の実装を差し込む。
-class CoffeeLogApp extends StatefulWidget {
-  const CoffeeLogApp({
+class BrewBookApp extends StatefulWidget {
+  const BrewBookApp({
     super.key,
     required this.apiClient,
     required this.passkeyClient,
@@ -56,10 +56,10 @@ class CoffeeLogApp extends StatefulWidget {
   final List<NavigatorObserver> navigatorObservers;
 
   @override
-  State<CoffeeLogApp> createState() => _CoffeeLogAppState();
+  State<BrewBookApp> createState() => _BrewBookAppState();
 }
 
-class _CoffeeLogAppState extends State<CoffeeLogApp> {
+class _BrewBookAppState extends State<BrewBookApp> {
   late final AuthController _controller;
   late final RecordServices _services;
   late final SettingsServices _settings;

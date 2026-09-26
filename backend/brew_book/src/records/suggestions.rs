@@ -6,8 +6,8 @@
 //! アーカイブ済みの記録の値も候補に含め、他の利用者の値は含めない (FR-13)。
 //! API は候補を返すだけで、候補に無い値の入力を妨げない。
 
-use coffee_log_core::query::{self, parse_suggestion_field, SuggestionFieldError};
-use coffee_log_core::records::trim_text;
+use brew_book_core::query::{self, parse_suggestion_field, SuggestionFieldError};
+use brew_book_core::records::trim_text;
 use serde::{Deserialize, Serialize};
 use worker::{console_error, Env, Request, Response, Result};
 

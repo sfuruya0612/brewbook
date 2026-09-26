@@ -5,7 +5,7 @@
 //!
 //! 組み立てる関数ごとの SQL は [`queries`]、条件の付け忘れの検出は [`conditions`] が検査する。
 
-use coffee_log_core::stats::{self, Granularity, Period, StatsError};
+use brew_book_core::stats::{self, Granularity, Period, StatsError};
 
 const USER_ID: &str = "9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60";
 const PURCHASE_ID: &str = "0d2b6f5e-3a4c-4a7b-9c8d-7e6f5a4b3c2d";
@@ -161,7 +161,7 @@ mod validation {
 
 mod queries {
     use super::*;
-    use coffee_log_core::query::Value;
+    use brew_book_core::query::Value;
 
     /// 日別の抽出回数と豆の消費量の SQL。
     #[test]
@@ -369,7 +369,7 @@ mod queries {
 
 mod conditions {
     use super::*;
-    use coffee_log_core::query::{Statement, Value};
+    use brew_book_core::query::{Statement, Value};
 
     /// 統計の文の一覧。
     fn every_statement() -> Vec<(&'static str, Statement)> {

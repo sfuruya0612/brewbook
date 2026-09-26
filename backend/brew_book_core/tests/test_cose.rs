@@ -5,8 +5,8 @@
 //! 拒否の経路は、公開された鍵のバイト列を書き換えて作る。
 //! PBT で実現できない意図的なエラーパスを確かめる。
 
-use coffee_log_core::cbor;
-use coffee_log_core::cose::{self, Ec2PublicKey, Error};
+use brew_book_core::cbor;
+use brew_book_core::cose::{self, Ec2PublicKey, Error};
 
 /// 16.2 の ES256 の COSE の鍵 (kty 2、alg -7、crv 1、x と y が 32 バイト)。
 const ES256_KEY: &str = "a5010203262001215820afefa16f97ca9b2d23eb86ccb64098d20db90856062eb249c33a9b672f26df61225820930a56b87a2fca66334b03458abf879717c12cc68ed73290af2e2664796b9220";

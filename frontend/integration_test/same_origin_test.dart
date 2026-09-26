@@ -11,8 +11,8 @@
 //! Rust のハーネス (`tests/wrangler_same_origin_e2e.rs`) が `wrangler dev` と chromedriver を起動し、
 //! `flutter drive` でこのテストを実行する。
 
-import 'package:coffee_log/l10n/app_localizations.dart';
-import 'package:coffee_log/main.dart' as app;
+import 'package:brew_book/l10n/app_localizations.dart';
+import 'package:brew_book/main.dart' as app;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';

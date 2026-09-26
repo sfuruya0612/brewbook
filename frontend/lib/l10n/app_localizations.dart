@@ -101,7 +101,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In ja, this message translates to:
-  /// **'coffee-log'**
+  /// **'brewbook'**
   String get appTitle;
 
   /// No description provided for @loading.
@@ -209,7 +209,7 @@ abstract class AppLocalizations {
   /// No description provided for @homeTitle.
   ///
   /// In ja, this message translates to:
-  /// **'coffee-log'**
+  /// **'brewbook'**
   String get homeTitle;
 
   /// No description provided for @retryButton.

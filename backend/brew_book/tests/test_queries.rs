@@ -5,13 +5,13 @@
 //! 取得する列が増えたときに `display_name` が応答に混ざっても列の検査をし抜けるため、
 //! 両方を検査する。
 //!
-//! 列挙は、このクレートの SQL の定数 (`coffee_log::queries::STATEMENTS`) と、記録と統計の
-//! クエリを組み立てる `coffee_log_core` の呼び出しを合わせて行う。`coffee_log_core` が
+//! 列挙は、このクレートの SQL の定数 (`brew_book::queries::STATEMENTS`) と、記録と統計の
+//! クエリを組み立てる `brew_book_core` の呼び出しを合わせて行う。`brew_book_core` が
 //! 組み立てる SELECT は、この検査が知らない列を足せない (列の並びは定数だけが持つ)。
 
-use coffee_log::queries::{self, STATEMENTS};
-use coffee_log_core::query::{self, Archived, SuggestionItem};
-use coffee_log_core::stats::{self, Granularity};
+use brew_book::queries::{self, STATEMENTS};
+use brew_book_core::query::{self, Archived, SuggestionItem};
+use brew_book_core::stats::{self, Granularity};
 
 /// テスト用の利用者の ID。
 const USER: &str = "00000000-0000-4000-8000-000000000001";
@@ -23,7 +23,7 @@ const ID: &str = "00000000-0000-4000-8000-000000000002";
 fn statements() -> Vec<String> {
     let mut statements: Vec<String> = STATEMENTS.iter().map(|sql| (*sql).to_owned()).collect();
 
-    // 記録の一覧と 1 件の取得 (coffee_log_core::query)。列の並びは定数が持つ。
+    // 記録の一覧と 1 件の取得 (brew_book_core::query)。列の並びは定数が持つ。
     for archived in [Archived::Exclude, Archived::Include] {
         statements.push(
             query::shops_list(USER, archived, None, 20)

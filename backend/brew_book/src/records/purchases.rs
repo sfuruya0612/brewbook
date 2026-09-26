@@ -12,8 +12,8 @@
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 //! `updated_at` は更新、アーカイブ、アーカイブ解除で現在時刻にする (ADR-0006)。
 
-use coffee_log_core::query::{self, Archived, OrderKind, PurchaseValues};
-use coffee_log_core::records::{trim_optional, validate_count, validate_currency, validate_day};
+use brew_book_core::query::{self, Archived, OrderKind, PurchaseValues};
+use brew_book_core::records::{trim_optional, validate_count, validate_currency, validate_day};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Database;
 use worker::{Env, Request, Response, Result};
@@ -60,7 +60,7 @@ pub struct PurchaseListResponse {
     pub next_cursor: Option<String>,
 }
 
-/// 購入と商品と店を結合した行。項目名は `coffee_log_core::query` が付ける列の別名と同じ。
+/// 購入と商品と店を結合した行。項目名は `brew_book_core::query` が付ける列の別名と同じ。
 /// 抽出の行も同じ列を持つため、項目は `records` の配下から読めるようにする。
 #[derive(Debug, Deserialize)]
 pub(super) struct PurchaseJoinRow {
@@ -540,7 +540,7 @@ fn merge_price(
             "the price currency cannot be null when the price is set",
         ));
     } else if currency.is_none() {
-        currency = Some(coffee_log_core::records::DEFAULT_CURRENCY.to_owned());
+        currency = Some(brew_book_core::records::DEFAULT_CURRENCY.to_owned());
     }
     Ok((amount, currency))
 }

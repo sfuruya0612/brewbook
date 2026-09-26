@@ -6,7 +6,7 @@ Status: Accepted
 
 ## 背景
 
-コーヒー記録アプリ (PRD: `docs/prd/coffee-log.md`) の Backend は、Cloudflare Workers 上で動かし、データベースに D1、写真の保存先に R2 を使う。
+コーヒー記録アプリ (PRD: `docs/prd/brewbook.md`) の Backend は、Cloudflare Workers 上で動かし、データベースに D1、写真の保存先に R2 を使う。
 当初の案は Python + FastAPI だった。
 
 Cloudflare Workers で Python を動かす Python Workers は、Pyodide (WebAssembly 上の CPython) で実行される。

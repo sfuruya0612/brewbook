@@ -5,7 +5,7 @@
 
 mod support;
 
-use coffee_log_core::cbor::{decode, decode_prefix, Error, Value, MAX_DEPTH, MAX_INPUT_LEN};
+use brew_book_core::cbor::{decode, decode_prefix, Error, Value, MAX_DEPTH, MAX_INPUT_LEN};
 use proptest::prelude::*;
 use support::{encode_array, encode_bytes, encode_integer, encode_map, encode_text};
 

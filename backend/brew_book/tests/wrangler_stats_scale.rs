@@ -16,7 +16,7 @@ mod support;
 
 use std::time::{Duration, Instant};
 
-use coffee_log_core::datetime::{format_epoch_millis, parse_epoch_millis};
+use brew_book_core::datetime::{format_epoch_millis, parse_epoch_millis};
 use support::http::{read, ApiClient};
 use support::seed::{user_id, Seed};
 

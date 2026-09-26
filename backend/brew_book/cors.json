@@ -4,7 +4,7 @@
       "allowed": {
         "origins": [
           "http://localhost:8787",
-          "https://coffee-log.example.workers.dev"
+          "https://brewbook.example.workers.dev"
         ],
         "methods": ["PUT"],
         "headers": ["Content-Type"]

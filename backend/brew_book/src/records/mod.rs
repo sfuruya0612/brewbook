@@ -1,7 +1,7 @@
 //! 店と商品と Flavor Notes のタグと、購入と抽出と写真の API (FR-6 から FR-12) と、
 //! 過去の入力値のサジェストの API (FR-13)。
 //!
-//! 入力の検証は `coffee_log_core::records`、SQL の組み立ては `coffee_log_core::query` が持つ。
+//! 入力の検証は `brew_book_core::records`、SQL の組み立ては `brew_book_core::query` が持つ。
 //! ここは経路の処理 (入力の読み取り、D1 の実行、応答の組み立て) だけを行う。
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 
@@ -16,10 +16,10 @@ pub mod tags;
 
 use std::collections::HashMap;
 
-use coffee_log_core::cursor::{parse_page_size, CursorKey};
-use coffee_log_core::error::ErrorCode;
-use coffee_log_core::query::{self, parse_include_archived, Archived, OrderKind, QueryError};
-use coffee_log_core::records::validate_name;
+use brew_book_core::cursor::{parse_page_size, CursorKey};
+use brew_book_core::error::ErrorCode;
+use brew_book_core::query::{self, parse_include_archived, Archived, OrderKind, QueryError};
+use brew_book_core::records::validate_name;
 use worker::d1::D1Database;
 use worker::{console_error, Request, Response, Result};
 

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:coffee_log/api/api_client.dart';
+import 'package:brew_book/api/api_client.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 

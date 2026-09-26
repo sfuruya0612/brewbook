@@ -2,8 +2,8 @@
 //!
 //! 一覧と発行の応答が、利用者の表示名とリンクを HTML エスケープして 1 回だけ載せることを検査する。
 
-use coffee_log_admin::html::{error_page, escape, token_page, users_page};
-use coffee_log_admin::queries::UserRow;
+use brew_book_admin::html::{error_page, escape, token_page, users_page};
+use brew_book_admin::queries::UserRow;
 
 /// テスト用の利用者の行。
 fn user(id: &str, display_name: &str, created_at: &str, passkey_count: i64) -> UserRow {
@@ -66,7 +66,7 @@ fn users_page_shows_a_message_when_there_are_no_users() {
 
 #[test]
 fn token_page_shows_the_link_once() {
-    let link = "https://coffee-log.example.workers.dev/register?token=abc";
+    let link = "https://brewbook.example.workers.dev/register?token=abc";
     let page = token_page(link);
     assert_eq!(page.matches(link).count(), 1, "{page}");
     assert!(page.contains("再表示できません"), "{page}");
@@ -74,7 +74,7 @@ fn token_page_shows_the_link_once() {
 
 #[test]
 fn token_page_escapes_the_link() {
-    let link = "https://coffee-log.example.workers.dev/register?token=a&b=c";
+    let link = "https://brewbook.example.workers.dev/register?token=a&b=c";
     let page = token_page(link);
     assert!(page.contains("token=a&amp;b=c"), "{page}");
     assert!(!page.contains("token=a&b=c"), "{page}");

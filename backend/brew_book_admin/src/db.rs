@@ -1,12 +1,12 @@
 //! D1 の実行と、現在時刻と UUID の共通の補助。
 //!
 //! SQL の組み立ては `crate::queries` が持ち、ここは文の実行と、値の D1 への変換だけを行う。
-//! 利用者向けの Worker (`coffee_log::db`) と同じ処理である。両者は別のクレートで、共有すると
-//! `coffee_log_core` が `worker` に依存してしまうため、同じ実装をここに持つ。
+//! 利用者向けの Worker (`brew_book::db`) と同じ処理である。両者は別のクレートで、共有すると
+//! `brew_book_core` が `worker` に依存してしまうため、同じ実装をここに持つ。
 
-use coffee_log_core::auth;
-use coffee_log_core::datetime::format_epoch_millis;
-use coffee_log_core::ids::uuid_v4_from_bytes;
+use brew_book_core::auth;
+use brew_book_core::datetime::format_epoch_millis;
+use brew_book_core::ids::uuid_v4_from_bytes;
 use worker::d1::{D1Database, D1PreparedStatement, D1Type};
 use worker::{console_error, Date, Env, Error, Result};
 

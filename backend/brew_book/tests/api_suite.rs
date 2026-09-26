@@ -1,6 +1,6 @@
 mod support;
 
-use coffee_log_core::routes::{Method, Route};
+use brew_book_core::routes::{Method, Route};
 
 /// 台帳とスイートの照合の検査を試すための経路。実際の経路は 0005 以降が追加する。
 /// 5 つのメソッドと、認証と入力の 4 通りの組み合わせを含める。
@@ -149,5 +149,5 @@ fn the_router_registration_does_not_panic_for_a_ledger_with_every_method() {
     // ネイティブでは wasm のディスパッチを実行できないため、ここで確認できるのは
     // 5 つのメソッドの登録がパニックしないことまで。ディスパッチは 0005 以降の結合テストが確認する。
     let ledger = sample_ledger();
-    let _router = coffee_log::build_router_from(&ledger);
+    let _router = brew_book::build_router_from(&ledger);
 }

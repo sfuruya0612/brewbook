@@ -1,9 +1,9 @@
 import 'dart:convert';
 
-import 'package:coffee_log/records/values.dart';
-import 'package:coffee_log/router/app_router.dart';
-import 'package:coffee_log/screens/login_screen.dart';
-import 'package:coffee_log/screens/settings_screen.dart';
+import 'package:brew_book/records/values.dart';
+import 'package:brew_book/router/app_router.dart';
+import 'package:brew_book/screens/login_screen.dart';
+import 'package:brew_book/screens/settings_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -352,7 +352,7 @@ void main() {
     expect(api.calls, contains('GET /api/export'));
     expect(download.saved, hasLength(1));
     final saved = download.saved.single;
-    expect(saved.fileName, 'coffee-log-export.json');
+    expect(saved.fileName, 'brewbook-export.json');
     expect(utf8.decode(saved.bytes), jsonEncode(exportBody));
   });
 

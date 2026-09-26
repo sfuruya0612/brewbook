@@ -1,6 +1,6 @@
 {
   "@@locale": "ja",
-  "appTitle": "coffee-log",
+  "appTitle": "brewbook",
   "loading": "読み込み中",
   "loginTitle": "ログイン",
   "loginDescription": "パスキーでログインします。利用者名とパスワードの入力は要りません。",
@@ -18,7 +18,7 @@
   "registerTokenNotFound": "登録用のリンクが正しくありません。",
   "registerTokenUsed": "この登録用のリンクは使用済みです。",
   "registerTokenExpired": "この登録用のリンクの有効期限が切れています。",
-  "homeTitle": "coffee-log",
+  "homeTitle": "brewbook",
   "retryButton": "再試行",
   "errorValidation": "入力の内容を確認してください。",
   "errorUnauthorized": "セッションが無効になりました。もう一度ログインしてください。",

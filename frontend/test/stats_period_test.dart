@@ -3,8 +3,8 @@
 /// 期間の切り替えの種別が、API に渡す開始日、終了日、粒度になることを確認する。
 library;
 
-import 'package:coffee_log/api/stats_api.dart';
-import 'package:coffee_log/records/stats_period.dart';
+import 'package:brew_book/api/stats_api.dart';
+import 'package:brew_book/records/stats_period.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

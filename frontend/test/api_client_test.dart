@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:coffee_log/api/api_client.dart';
-import 'package:coffee_log/api/api_error.dart';
+import 'package:brew_book/api/api_client.dart';
+import 'package:brew_book/api/api_error.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';

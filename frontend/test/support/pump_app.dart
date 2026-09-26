@@ -1,12 +1,12 @@
-import 'package:coffee_log/api/api_client.dart';
-import 'package:coffee_log/app.dart';
-import 'package:coffee_log/auth/passkey_client.dart';
-import 'package:coffee_log/download/file_download.dart';
-import 'package:coffee_log/l10n/app_localizations.dart';
-import 'package:coffee_log/photo/image_converter.dart';
-import 'package:coffee_log/photo/photo_picker.dart';
-import 'package:coffee_log/records/clock.dart';
-import 'package:coffee_log/screens/home_screen.dart';
+import 'package:brew_book/api/api_client.dart';
+import 'package:brew_book/app.dart';
+import 'package:brew_book/auth/passkey_client.dart';
+import 'package:brew_book/download/file_download.dart';
+import 'package:brew_book/l10n/app_localizations.dart';
+import 'package:brew_book/photo/image_converter.dart';
+import 'package:brew_book/photo/photo_picker.dart';
+import 'package:brew_book/records/clock.dart';
+import 'package:brew_book/screens/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -32,7 +32,7 @@ Future<void> pumpApp(
   tester.platformDispatcher.localesTestValue = locales;
   addTearDown(tester.platformDispatcher.clearLocalesTestValue);
   await tester.pumpWidget(
-    CoffeeLogApp(
+    BrewBookApp(
       apiClient: apiClient,
       passkeyClient: passkeyClient,
       photoPicker: photoPicker,

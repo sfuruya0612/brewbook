@@ -1,5 +1,5 @@
-import 'package:coffee_log/auth/passkey_client.dart';
-import 'package:coffee_log/auth/passkey_error.dart';
+import 'package:brew_book/auth/passkey_client.dart';
+import 'package:brew_book/auth/passkey_error.dart';
 
 /// テスト用のパスキーのクライアント。実際の `navigator.credentials` は呼ばない。
 class FakePasskeyClient implements PasskeyClient {

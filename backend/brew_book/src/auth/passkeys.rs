@@ -4,9 +4,9 @@
 //! 引く。名前は前後の空白を除いて 1 文字以上 50 文字以下とし、範囲外は 400 を返す。
 //! 最後の 1 つは削除できず 409、他の利用者のパスキーの変更と削除は 404 を返す (ADR-0006)。
 
-use coffee_log_core::auth::{self, validate_passkey_name};
-use coffee_log_core::base64url;
-use coffee_log_core::webauthn::{self, RegistrationInput};
+use brew_book_core::auth::{self, validate_passkey_name};
+use brew_book_core::base64url;
+use brew_book_core::webauthn::{self, RegistrationInput};
 use serde::Deserialize;
 use worker::d1::D1Type;
 use worker::{console_error, Env, Error, Request, Response, Result};

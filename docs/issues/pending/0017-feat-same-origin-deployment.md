@@ -8,7 +8,7 @@ Model: deepseek-v4p1-flash
 
 ## 背景
 
-ADR-0005 は、Flutter Web のビルド成果物を利用者向けの Worker の Static Assets として同梱し、1 つの Worker を `coffee-log.<アカウントのサブドメイン>.workers.dev` で配信すると決めた。
+ADR-0005 は、Flutter Web のビルド成果物を利用者向けの Worker の Static Assets として同梱し、1 つの Worker を `brewbook.<アカウントのサブドメイン>.workers.dev` で配信すると決めた。
 `/api/*` は Rust の処理に渡し、それ以外は Static Assets から返す。
 既定では一致する静的ファイルが Worker より先に返されるため、`run_worker_first` を `["/api/*"]` に設定する。
 Flutter のルーティングで使うパスは `not_found_handling` を `single-page-application` にして `index.html` を 200 で返すことで扱う。
@@ -22,10 +22,10 @@ Backend は CORS を許可せず、状態を変更する API は `Origin` ヘッ
 
 ## 設計判断
 
-- `backend/coffee_log/wrangler.toml` に次を設定する。
-  - Worker の名前は `coffee-log` とし、`workers_dev` を有効にする。
+- `backend/brew_book/wrangler.toml` に次を設定する。
+  - Worker の名前は `brewbook` とし、`workers_dev` を有効にする。
   - `[assets]` の `directory` を Flutter のビルド成果物のディレクトリにする。
-    `wrangler.toml` は `backend/coffee_log/` にあり、`directory` は設定ファイルのあるディレクトリからの相対で解決されるため、`../../frontend/build/web` とする。
+    `wrangler.toml` は `backend/brew_book/` にあり、`directory` は設定ファイルのあるディレクトリからの相対で解決されるため、`../../frontend/build/web` とする。
   - `run_worker_first` を `["/api/*"]`、`not_found_handling` を `single-page-application` にする。
   - 除外パターンは置かない。iOS 向けの `/.well-known/*` は iOS 対応時に Static Assets から返す。
 - 独自ドメインは取得しない (PRD のやらないこと)。
@@ -67,7 +67,7 @@ Backend は CORS を許可せず、状態を変更する API は `Origin` ヘッ
 
 残るのは次の確認である。
 
-- `mise run deploy` を実行し、`coffee-log.<アカウントのサブドメイン>.workers.dev` で画面と API が 1 回のデプロイで更新されることと、画面の表示、登録用リンクからのパスキーの登録、ログイン、抽出の保存、写真のアップロードを確認する。
+- `mise run deploy` を実行し、`brewbook.<アカウントのサブドメイン>.workers.dev` で画面と API が 1 回のデプロイで更新されることと、画面の表示、登録用リンクからのパスキーの登録、ログイン、抽出の保存、写真のアップロードを確認する。
 - `mise run r2-setup` で実環境の R2 のバケットに CORS を適用し、アプリのオリジンから写真を PUT できることを確認する。
 - リリース後に Workers Logs の保持期間の全量で p95 を集計し、成功指標 (一覧と単件は 200 ms、統計は 500 ms) を満たすことを確認する。
 - デプロイの前に、`wrangler.toml` の `[vars]` の `RP_ID` と `ORIGIN`、`cors.json` の本番のオリジンを、実際の workers.dev のサブドメインの値へ置き換える (README のデプロイ手順 1)。

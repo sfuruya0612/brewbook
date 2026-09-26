@@ -1,4 +1,4 @@
-import 'package:coffee_log/download/file_download.dart';
+import 'package:brew_book/download/file_download.dart';
 
 /// テスト用のダウンロード。保存の呼び出しを記録し、実際のファイルは作らない。
 class FakeFileDownload implements FileDownload {

@@ -7,7 +7,7 @@
 //! 購入ごとの評価の推移は期間で絞らず、アーカイブ済みの購入も指定できる (単件取得と同じ扱い)。
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 
-use coffee_log_core::stats::{self, StatsError};
+use brew_book_core::stats::{self, StatsError};
 use serde::{Deserialize, Serialize};
 use worker::{console_error, Env, Request, Response, Result};
 

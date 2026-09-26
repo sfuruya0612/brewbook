@@ -50,7 +50,7 @@ struct Table {
 }
 
 /// 写真のバケット名 (wrangler.toml の R2 バインディングと同じ)。
-const PHOTO_BUCKET: &str = "coffee-log-photos";
+const PHOTO_BUCKET: &str = "brewbook-photos";
 
 /// エクスポートの対象の 6 テーブル (ADR-0006)。親から子の順に並べる (復元の挿入の順)。
 const TABLES: &[Table] = &[
@@ -230,10 +230,10 @@ fn build_data() -> TestData {
     // エクスポートに含まれない秘密の値。生の値と、データベースに保存されるハッシュを含める。
     let secrets = vec![
         export_session.clone(),
-        coffee_log_core::auth::hash_secret(&export_session),
+        brew_book_core::auth::hash_secret(&export_session),
         passkey.credential_id.clone(),
         registration_token.clone(),
-        coffee_log_core::auth::hash_secret(&registration_token),
+        brew_book_core::auth::hash_secret(&registration_token),
         CHALLENGE.to_owned(),
     ];
 
@@ -627,7 +627,7 @@ fn wrangler_export_ok() {
     // 応答は JSON のダウンロードにする (設計判断)。
     assert_eq!(
         header(&response, "content-disposition").as_deref(),
-        Some("attachment; filename=\"coffee-log-export.json\"")
+        Some("attachment; filename=\"brewbook-export.json\"")
     );
     let content_type = header(&response, "content-type").unwrap_or_default();
     assert!(

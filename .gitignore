@@ -2,7 +2,7 @@
 /backend/target/
 
 # worker-build の出力
-/backend/coffee_log/build/
+/backend/brew_book/build/
 
 # Flutter のビルド成果物
 /frontend/build/

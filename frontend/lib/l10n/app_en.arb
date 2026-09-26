@@ -1,6 +1,6 @@
 {
   "@@locale": "en",
-  "appTitle": "coffee-log",
+  "appTitle": "brewbook",
   "loading": "Loading",
   "loginTitle": "Log in",
   "loginDescription": "Log in with a passkey. No user name or password is needed.",
@@ -18,7 +18,7 @@
   "registerTokenNotFound": "The registration link is not valid.",
   "registerTokenUsed": "This registration link has already been used.",
   "registerTokenExpired": "This registration link has expired.",
-  "homeTitle": "coffee-log",
+  "homeTitle": "brewbook",
   "retryButton": "Retry",
   "errorValidation": "Check the input.",
   "errorUnauthorized": "The session is no longer valid. Please log in again.",

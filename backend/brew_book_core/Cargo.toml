@@ -1,5 +1,5 @@
 [package]
-name = "coffee_log_core"
+name = "brew_book_core"
 version = "0.1.0"
 edition = "2021"
 publish = false

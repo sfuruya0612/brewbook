@@ -53,9 +53,9 @@ ADR-0003 は、R2 の `users/<利用者 ID>/` と `pending/<利用者 ID>/` の�
 
 方式は変えず、実装の詳細として次を選んだ。
 
-1. `backend/coffee_log/src/account.rs` に削除のハンドラを追加し、R2 の削除は `backend/coffee_log/src/records/photos.rs` の `delete_user_objects` (`users/<利用者 ID>/` と `pending/<利用者 ID>/` をカーソルで全件) に置いた (0009 の写真の操作と共有するため)。
-2. `backend/coffee_log/src/r2_check.rs` にテスト専用の経路を追加した (結合テストが R2 のオブジェクトの有無と、他の利用者のオブジェクトが残ることを確かめるため。`TEST_R2_CHECK` の var があるときだけ応答する)。
-3. `backend/coffee_log_core/src/query.rs` に `account_delete` の 11 文を追加し、`db::execute_batch` (D1 の batch、1 トランザクション) で実行する。並びは外部キーの参照元から先に消す順とした。
+1. `backend/brew_book/src/account.rs` に削除のハンドラを追加し、R2 の削除は `backend/brew_book/src/records/photos.rs` の `delete_user_objects` (`users/<利用者 ID>/` と `pending/<利用者 ID>/` をカーソルで全件) に置いた (0009 の写真の操作と共有するため)。
+2. `backend/brew_book/src/r2_check.rs` にテスト専用の経路を追加した (結合テストが R2 のオブジェクトの有無と、他の利用者のオブジェクトが残ることを確かめるため。`TEST_R2_CHECK` の var があるときだけ応答する)。
+3. `backend/brew_book_core/src/query.rs` に `account_delete` の 11 文を追加し、`db::execute_batch` (D1 の batch、1 トランザクション) で実行する。並びは外部キーの参照元から先に消す順とした。
 4. `mise.toml` の `backend:test-integration` に新しい結合テストを追加した。
 5. 想定規模の R2 の削除テストは、購入 3,000 行と `users/` 3,000 件 + `pending/` 3,000 件を用意し、削除前に一覧が 1 回で全件返らないこと (ページ数 3 以上) を確認してから、全件削除とページ境界のキーの消滅を確かめる。ローカル `wrangler dev` で 8,159 ms だった。
 

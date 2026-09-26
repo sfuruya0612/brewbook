@@ -14,12 +14,12 @@ Model: deepseek-v4p1-flash
 
 1. リポジトリのルートで `mise run backend:test-integration` (または `mise run check`) を実行する。
 2. `ps -eo pid,command | grep 'workerd serve --binary' | grep -v grep | wc -l` で残っている workerd の数を数える。起動したテストサーバーの数だけ残る。
-3. 残った workerd が多数ある状態で `cd backend/coffee_log && wrangler d1 migrations apply DB --local --persist-to /tmp/probe` を実行すると、`fetch failed` (wrangler のログには `connect EADDRNOTAVAIL 127.0.0.1:<ポート>`) で終了コード 1 になる。残っているプロセスを全て終了させると、同じコマンドは成功する。
+3. 残った workerd が多数ある状態で `cd backend/brew_book && wrangler d1 migrations apply DB --local --persist-to /tmp/probe` を実行すると、`fetch failed` (wrangler のログには `connect EADDRNOTAVAIL 127.0.0.1:<ポート>`) で終了コード 1 になる。残っているプロセスを全て終了させると、同じコマンドは成功する。
 4. `mise run check` を繰り返すと、`backend:test-integration` の `d1_binding` (`wrangler_d1_binding_inserts_and_selects_with_placeholders`、`wrangler_d1_check_is_disabled_without_its_var`) が `wrangler dev must start: "wrangler d1 migrations apply failed with exit status: 1"` で失敗する。
 
 ## 原因
 
-`backend/coffee_log/tests/support/mod.rs` の `DevServer::stop` は `child.kill()` で `wrangler` のプロセスだけを SIGKILL する。`wrangler` は SIGKILL では後始末ができず、その子の `workerd` が孤児として残る。
+`backend/brew_book/tests/support/mod.rs` の `DevServer::stop` は `child.kill()` で `wrangler` のプロセスだけを SIGKILL する。`wrangler` は SIGKILL では後始末ができず、その子の `workerd` が孤児として残る。
 残った `workerd` がローカルのポートを使い続けるため、新しい `wrangler` の接続が `EADDRNOTAVAIL` になると考えられる。この因果は、477 個残った状態で失敗し、全て終了させた後に成功した観測に基づく仮説である。
 
 ## 完了条件

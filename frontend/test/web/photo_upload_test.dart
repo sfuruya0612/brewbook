@@ -2,10 +2,10 @@
 @TestOn('browser')
 library;
 
-import 'package:coffee_log/api/api_error.dart';
-import 'package:coffee_log/api/records_api.dart';
-import 'package:coffee_log/photo/image_converter_web.dart';
-import 'package:coffee_log/photo/photo_uploader.dart';
+import 'package:brew_book/api/api_error.dart';
+import 'package:brew_book/api/records_api.dart';
+import 'package:brew_book/photo/image_converter_web.dart';
+import 'package:brew_book/photo/photo_uploader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_api.dart';

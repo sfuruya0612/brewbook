@@ -5,9 +5,9 @@
 //! ハッシュだけを保存する。存在しないトークンは 404、使用済みは 409、期限切れは 410 を返す。
 //! 登録が成功したら、トークンを使用済みにし、パスキーを利用者に紐づけ、セッションを発行する。
 
-use coffee_log_core::auth::{self, validate_passkey_name};
-use coffee_log_core::base64url;
-use coffee_log_core::webauthn::{self, RegistrationInput};
+use brew_book_core::auth::{self, validate_passkey_name};
+use brew_book_core::base64url;
+use brew_book_core::webauthn::{self, RegistrationInput};
 use serde::Deserialize;
 use worker::d1::{D1Database, D1Type};
 use worker::{console_error, Env, Error, Request, Response, Result};

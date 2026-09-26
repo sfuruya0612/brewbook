@@ -1,6 +1,6 @@
 //! base64url の復号と符号化の単体テスト。
 
-use coffee_log_core::base64url::{decode, encode, Error};
+use brew_book_core::base64url::{decode, encode, Error};
 
 /// RFC 4648 の Section 10 のテストベクタ (URL とファイル名に安全なアルファベット、パディングは省く)。
 const RFC_4648_VECTORS: &[(&[u8], &str)] = &[

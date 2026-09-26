@@ -9,7 +9,7 @@
 //! だけにするため)。
 //! 応答はダウンロード用の JSON とし、`Content-Disposition: attachment` を付ける。
 
-use coffee_log_core::query;
+use brew_book_core::query;
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Result;
 use worker::{console_error, Env, Response, Result};
@@ -19,7 +19,7 @@ use crate::db;
 use crate::respond;
 
 /// ダウンロードのファイル名。
-const FILE_NAME: &str = "coffee-log-export.json";
+const FILE_NAME: &str = "brewbook-export.json";
 
 /// 店の行。列は shops テーブルと同じ。
 #[derive(Debug, Serialize, Deserialize)]

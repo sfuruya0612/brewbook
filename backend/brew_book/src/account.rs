@@ -10,8 +10,8 @@
 //! (ADR-0002)。応答は 204 とし、セッションの Cookie を失効させる。セッションの行は消えているため、
 //! 同じ Cookie を使った以後の呼び出しは 401 になる。
 
-use coffee_log_core::auth;
-use coffee_log_core::query;
+use brew_book_core::auth;
+use brew_book_core::query;
 use worker::{Env, Response, Result};
 
 use crate::auth::session::Session;

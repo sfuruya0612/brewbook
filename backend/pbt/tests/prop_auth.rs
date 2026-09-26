@@ -1,11 +1,11 @@
 //! `auth` の PBT。往復と、時刻の比較の性質を検査する。
 
-use coffee_log_core::auth::{
+use brew_book_core::auth::{
     encode_secret, hash_secret, is_expired, session_cookie, session_token, validate_passkey_name,
     PASSKEY_NAME_MAX_CHARS, SECRET_LEN,
 };
-use coffee_log_core::base64url;
-use coffee_log_core::datetime::{format_epoch_millis, MAX_EPOCH_MILLIS, MIN_EPOCH_MILLIS};
+use brew_book_core::base64url;
+use brew_book_core::datetime::{format_epoch_millis, MAX_EPOCH_MILLIS, MIN_EPOCH_MILLIS};
 use proptest::prelude::*;
 
 proptest! {

@@ -26,7 +26,7 @@ description = "Rust の lint と、絵文字を使わない規約の検査を実
 run = [
   "cargo clippy --manifest-path backend/Cargo.toml --workspace --all-targets -- -D warnings",
   # fuzz のターゲットはワークスペース外のため、型検査をここで行う (実行は CI では行わない)。
-  "cargo check --manifest-path backend/coffee_log_core/fuzz/Cargo.toml --bins",
+  "cargo check --manifest-path backend/brew_book_core/fuzz/Cargo.toml --bins",
   # ripgrep が見つからない場合は検査が走らないため、先に版の確認で失敗させる。
   "rg --version",
   # .gitignore に従って走査し、絵文字が無いことを検査する。 -g '!.git' で .git の中身を除き、
@@ -54,7 +54,7 @@ depends = ["fmt", "lint", "frontend:build", "frontend:analyze", "test"]
 
 [tasks."backend:build"]
 description = "利用者向けの Worker をビルドする"
-dir = "backend/coffee_log"
+dir = "backend/brew_book"
 run = "worker-build --release"
 
 [tasks."backend:test"]
@@ -69,12 +69,12 @@ description = "wrangler dev を起動する結合テストを実行する"
 dir = "backend"
 # wrangler dev は Static Assets のディレクトリが無いと起動しないため、先に Flutter をビルドする (0017)。
 depends = ["frontend:build"]
-run = "cargo test -p coffee_log --test dev_server --test d1_binding --test wrangler_auth_api --test wrangler_passkey_flow --test wrangler_records_api --test wrangler_purchases_brews_api --test wrangler_suggestions_api --test wrangler_photos_api --test wrangler_stats_api --test wrangler_export_api --test wrangler_account_api --test wrangler_records_scale --test wrangler_stats_scale --test wrangler_same_origin_api --test wrangler_display_name && cargo test -p coffee_log_admin --test wrangler_admin_api"
+run = "cargo test -p brew_book --test dev_server --test d1_binding --test wrangler_auth_api --test wrangler_passkey_flow --test wrangler_records_api --test wrangler_purchases_brews_api --test wrangler_suggestions_api --test wrangler_photos_api --test wrangler_stats_api --test wrangler_export_api --test wrangler_account_api --test wrangler_records_scale --test wrangler_stats_scale --test wrangler_same_origin_api --test wrangler_display_name && cargo test -p brew_book_admin --test wrangler_admin_api"
 
 [tasks.dev]
 description = "ローカル開発の画面と API を同じオリジンから配信する"
 depends = ["frontend:build"]
-dir = "backend/coffee_log"
+dir = "backend/brew_book"
 # Flutter の開発サーバーは使わない (別オリジンになり、CORS を許可しない決定と Origin の検証に反する)。
 # 画面は wrangler dev の Static Assets から返し、http://localhost:8787/ で開く (ADR-0005)。
 # `[vars]` の RP_ID と ORIGIN は本番 (workers.dev) の値のため、ローカルの開発では ADR-0004 の
@@ -84,21 +84,21 @@ run = "wrangler dev --var RP_ID:localhost --var ORIGIN:http://localhost:8787"
 [tasks.deploy]
 description = "Flutter をビルドしてから、画面と API を 1 つの Worker にデプロイする"
 depends = ["frontend:build"]
-dir = "backend/coffee_log"
+dir = "backend/brew_book"
 # スキーマ変更を含むリリースでは、先に `mise run db-migrate-remote` を実行する (README のデプロイ手順)。
 # デプロイのタスクは `mise run check` に含めない (0002 の規則)。
 run = "wrangler deploy"
 
 [tasks."dev-admin"]
 description = "管理者 Worker をローカルで起動する"
-dir = "backend/coffee_log_admin"
+dir = "backend/brew_book_admin"
 # 登録用リンクの利用者向けのオリジンは `[vars]` の `APP_ORIGIN` (本番の値) のため、
 # ローカルでは利用者向けの `mise run dev` のオリジンで上書きする (ADR-0008)。
 run = "wrangler dev --var APP_ORIGIN:http://localhost:8787"
 
 [tasks."deploy-admin"]
 description = "管理者 Worker をデプロイする"
-dir = "backend/coffee_log_admin"
+dir = "backend/brew_book_admin"
 # 管理者 Worker は利用者向けの Worker と同じ D1 をバインディングで参照し、マイグレーションを持たない (ADR-0002)。
 # スキーマの適用は利用者向けの Worker のデプロイ手順で行い、Cloudflare Access の設定はデプロイの後に行う (README)。
 # デプロイのタスクは `mise run check` に含めない (0002 の規則)。
@@ -108,7 +108,7 @@ run = "wrangler deploy"
 description = "デプロイ後の確認: 管理者画面が Cloudflare Access で保護されていることを確認する"
 # 認証なしで管理者画面 (GET /) と状態を変更する経路 (POST /users) を取得し、Access の
 # ログイン画面への 302 になることを検証する。302 でなければ失敗させる (ADR-0008)。
-# 対象の Worker の URL は環境変数 ADMIN_ORIGIN で渡す (例: https://coffee-log-admin.<サブドメイン>.workers.dev)。
+# 対象の Worker の URL は環境変数 ADMIN_ORIGIN で渡す (例: https://brewbook-admin.<サブドメイン>.workers.dev)。
 run = """
 if [ -z "${ADMIN_ORIGIN:-}" ]; then
   echo "ADMIN_ORIGIN must be set to the admin worker origin" >&2
@@ -186,23 +186,23 @@ depends = ["frontend:build-e2e"]
 dir = "backend"
 # Rust のハーネスが wrangler dev と chromedriver を起動し、テストコード入りの Web ビルドを
 # Static Assets として配信して、実際の画面を chrome で操作する (0017)。
-run = "cargo test -p coffee_log --test wrangler_same_origin_e2e"
+run = "cargo test -p brew_book --test wrangler_same_origin_e2e"
 
 [tasks."r2-setup"]
 description = "R2 バケットの CORS とライフサイクルを適用する (本番環境に触るため check には含めない)"
-dir = "backend/coffee_log"
+dir = "backend/brew_book"
 # デプロイ手順に含めて実行する。cors.json のオリジンは 0017 が確定させて置き換える。
 run = [
-  "wrangler r2 bucket cors set coffee-log-photos --file cors.json",
-  "wrangler r2 bucket lifecycle set coffee-log-photos --file lifecycle.json",
+  "wrangler r2 bucket cors set brewbook-photos --file cors.json",
+  "wrangler r2 bucket lifecycle set brewbook-photos --file lifecycle.json",
 ]
 
 [tasks."db-migrate"]
 description = "ローカルの D1 にマイグレーションを適用する"
-dir = "backend/coffee_log"
+dir = "backend/brew_book"
 run = "wrangler d1 migrations apply DB --local"
 
 [tasks."db-migrate-remote"]
 description = "本番の D1 にマイグレーションを適用する (デプロイ手順の中でだけ実行する)"
-dir = "backend/coffee_log"
+dir = "backend/brew_book"
 run = "wrangler d1 migrations apply DB --remote"

@@ -8,9 +8,9 @@
 //! 返してログインを拒否し、受理なら保存値を更新する。ログインに成功したら、そのパスキーの
 //! 最終使用日時を更新する。
 
-use coffee_log_core::auth;
-use coffee_log_core::base64url;
-use coffee_log_core::webauthn::{self, AuthenticationInput, SignCounter};
+use brew_book_core::auth;
+use brew_book_core::base64url;
+use brew_book_core::webauthn::{self, AuthenticationInput, SignCounter};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Type;
 use worker::{console_error, Env, Error, Request, Response, Result};

@@ -4,7 +4,7 @@
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use coffee_log_core::photo::{
+use brew_book_core::photo::{
     parse_pending_key, pending_key, photo_key, presign_put_url, system_time_from_millis,
     validate_declared_size, SigningConfig, SizeError, CONTENT_TYPE, DEFAULT_URL_EXPIRES_SECONDS,
     MAX_BYTES,
@@ -19,7 +19,7 @@ fn now() -> SystemTime {
 fn config() -> SigningConfig<'static> {
     SigningConfig {
         endpoint: "https://test-account.r2.cloudflarestorage.com",
-        bucket: "coffee-log-photos",
+        bucket: "brewbook-photos",
         access_key_id: "test-access-key-id",
         secret_access_key: "test-secret-access-key",
     }
@@ -185,7 +185,7 @@ fn the_presigned_url_signs_the_content_type_and_the_content_length() {
     let (path, _) = url.split_once('?').expect("the url must have a query");
     assert_eq!(
         path,
-        format!("https://test-account.r2.cloudflarestorage.com/coffee-log-photos/{key}")
+        format!("https://test-account.r2.cloudflarestorage.com/brewbook-photos/{key}")
     );
 }
 

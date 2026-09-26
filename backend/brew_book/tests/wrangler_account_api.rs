@@ -19,7 +19,7 @@ mod support;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
-use coffee_log_core::auth::{KIND_AUTHENTICATION, KIND_REGISTRATION};
+use brew_book_core::auth::{KIND_AUTHENTICATION, KIND_REGISTRATION};
 use reqwest::blocking::Response;
 use serde_json::{json, Value};
 use support::http::{error_code, read, ApiClient};
@@ -34,7 +34,7 @@ const D21: &str = "2026-09-21";
 const B21: &str = "2026-09-21T10:00:00.000Z";
 
 /// 写真のバケット名 (wrangler.toml の R2 バインディングと同じ)。
-const PHOTO_BUCKET: &str = "coffee-log-photos";
+const PHOTO_BUCKET: &str = "brewbook-photos";
 /// 置くオブジェクトの実体。中身は API が検査しない。
 const OBJECT_BODY: &[u8] = b"\xff\xd8\xff\xe0account-delete";
 
@@ -154,7 +154,7 @@ fn data() -> &'static TestData {
 fn server() -> ServerLease {
     support::shared_server("main", || {
         support::DevServer::start_with(
-            |_| vec![(coffee_log::r2_check::VAR_NAME.to_owned(), "true".to_owned())],
+            |_| vec![(brew_book::r2_check::VAR_NAME.to_owned(), "true".to_owned())],
             &data().seed_sql,
         )
     })
@@ -261,8 +261,8 @@ fn scale_statements(user: &str) -> Vec<String> {
                 format!(
                     "('{}', '{user}', '{SCALE_PRODUCT_ID}', NULL, '{D21}', NULL, NULL, NULL, NULL, \
                      NULL, '{}', '{CREATED}', '{CREATED}', NULL)",
-                    coffee_log::r2_check::photo_purchase_id(index),
-                    coffee_log::r2_check::object_key(user, index)
+                    brew_book::r2_check::photo_purchase_id(index),
+                    brew_book::r2_check::object_key(user, index)
                 )
             })
             .collect(),
@@ -325,13 +325,13 @@ fn counts(server: &DevServer, user: &str) -> Vec<(&'static str, i64)> {
 fn put_objects(lease: &ServerLease, user: &str, kind: &str, count: usize) {
     let base_url = lease.use_server(|server| server.base_url());
     let client = ApiClient::new(&base_url, None);
-    let limit = coffee_log::r2_check::MAX_COUNT as usize;
+    let limit = brew_book::r2_check::MAX_COUNT as usize;
     let mut start = 0;
     while start < count {
         let size = (count - start).min(limit);
         let body = assert_status(
             client.post_json(
-                coffee_log::r2_check::PATH,
+                brew_book::r2_check::PATH,
                 &json!({
                     "action": "put",
                     "user_id": user,
@@ -354,7 +354,7 @@ fn count_objects(lease: &ServerLease, user: &str, kind: &str) -> (usize, usize) 
     let client = ApiClient::new(&base_url, None);
     let body = assert_status(
         client.post_json(
-            coffee_log::r2_check::PATH,
+            brew_book::r2_check::PATH,
             &json!({ "action": "count", "user_id": user, "kind": kind }),
         ),
         200,
@@ -571,13 +571,13 @@ fn wrangler_account_delete_removes_the_assumed_scale_of_the_r2_objects_by_cursor
     // ページの境目を跨ぐ鍵が消えていることを、バインディングの一覧に依らない経路でも確かめる。
     lease.use_server(|server| {
         for index in PAGE_BOUNDARIES {
-            let key = coffee_log::r2_check::object_key(&data.scale_user, index);
+            let key = brew_book::r2_check::object_key(&data.scale_user, index);
             assert_eq!(
                 server.get_r2_object(PHOTO_BUCKET, &key),
                 Ok(None),
                 "the object {key} must be deleted"
             );
-            let key = coffee_log::r2_check::pending_object_key(&data.scale_user, index);
+            let key = brew_book::r2_check::pending_object_key(&data.scale_user, index);
             assert_eq!(
                 server.get_r2_object(PHOTO_BUCKET, &key),
                 Ok(None),

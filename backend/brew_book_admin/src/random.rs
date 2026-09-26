@@ -4,8 +4,8 @@
 //! js-sys 0.3.105 は `crypto` の型を持たないため、`globalThis.crypto` と `getRandomValues` を
 //! `Reflect` で取り出して呼ぶ。`uuid`、`rand`、`getrandom` のクレートは追加しない。
 //!
-//! 利用者向けの Worker (`coffee_log::random`) と同じ実装である。両者は別のクレートで、共有すると
-//! `coffee_log_core` が `worker` に依存してしまうため、同じ実装をここに持つ。
+//! 利用者向けの Worker (`brew_book::random`) と同じ実装である。両者は別のクレートで、共有すると
+//! `brew_book_core` が `worker` に依存してしまうため、同じ実装をここに持つ。
 
 /// 16 バイトの乱数を返す。UUID v4 の組み立てに使う。Web Crypto を呼べない場合はエラーを返す。
 #[cfg(target_arch = "wasm32")]

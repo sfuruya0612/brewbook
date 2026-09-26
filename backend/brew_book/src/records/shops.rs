@@ -8,8 +8,8 @@
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 //! `updated_at` は更新、アーカイブ、アーカイブ解除で現在時刻にする (ADR-0006)。
 
-use coffee_log_core::query::{self, Archived, OrderKind, ShopValues};
-use coffee_log_core::records::{trim_optional, validate_name};
+use brew_book_core::query::{self, Archived, OrderKind, ShopValues};
+use brew_book_core::records::{trim_optional, validate_name};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Database;
 use worker::{Env, Request, Response, Result};

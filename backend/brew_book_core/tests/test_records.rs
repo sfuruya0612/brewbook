@@ -3,7 +3,7 @@
 //! 値の扱いの性質 (前後の空白の除去、空白だけの値の拒否、タグ名の正規化) は PBT
 //! (`prop_records.rs`) が担う。
 
-use coffee_log_core::records::{
+use brew_book_core::records::{
     validate_count, validate_currency, validate_day, validate_decimal, validate_rating,
     validate_timestamp, CountError, CurrencyError, DayError, DecimalError, NameError, RatingError,
     TagNameError, TimestampError,

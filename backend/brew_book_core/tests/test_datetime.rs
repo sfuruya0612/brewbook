@@ -1,6 +1,6 @@
 //! `datetime` の単体テスト。往復と単調性は PBT (`prop_datetime.rs`) が担う。
 
-use coffee_log_core::datetime::{
+use brew_book_core::datetime::{
     format_epoch_millis, is_valid_date, parse_epoch_millis, DateTimeError, MAX_EPOCH_MILLIS,
     MIN_EPOCH_MILLIS,
 };

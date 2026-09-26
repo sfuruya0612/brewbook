@@ -36,6 +36,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "brew_book-fuzz"
+version = "0.0.0"
+dependencies = [
+ "brew_book_core",
+ "libfuzzer-sys",
+ "sha2",
+]
+
+[[package]]
+name = "brew_book_core"
+version = "0.1.0"
+dependencies = [
+ "p256",
+ "serde",
+ "serde_json",
+ "sha2",
+ "shiguredo_s3",
+]
+
+[[package]]
 name = "cc"
 version = "1.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -58,26 +78,6 @@ name = "cmov"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
-
-[[package]]
-name = "coffee_log-fuzz"
-version = "0.0.0"
-dependencies = [
- "coffee_log_core",
- "libfuzzer-sys",
- "sha2",
-]
-
-[[package]]
-name = "coffee_log_core"
-version = "0.1.0"
-dependencies = [
- "p256",
- "serde",
- "serde_json",
- "sha2",
- "shiguredo_s3",
-]
 
 [[package]]
 name = "const-oid"

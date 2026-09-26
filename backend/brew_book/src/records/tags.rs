@@ -3,7 +3,7 @@
 //! 利用者の全タグの一覧を返す。並び順は名前の昇順とする。
 //! タグは商品の登録と更新が配列で置き換え、参照されなくなっても削除しない (0006 の商品の API)。
 
-use coffee_log_core::query;
+use brew_book_core::query;
 use serde::{Deserialize, Serialize};
 use worker::{Env, Response, Result};
 

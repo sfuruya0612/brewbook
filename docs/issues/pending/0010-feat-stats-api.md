@@ -64,7 +64,7 @@ ADR-0006 は、統計 (PRD の FR-18) を brews と purchases に対する集計
 - 集計と散布図の対象は、行自身がアーカイブ済みの抽出と購入を含めない。
   参照先の購入がアーカイブ済みでも、抽出自身がアーカイブ済みでなければ含める。
   為替換算は行わない (通貨コードごとに分けて返す。PRD のやらないこと)。
-- 集計の SQL は `coffee_log_core` の 1 つのモジュールで組み立て、`user_id` と `archived_at` の条件を必ず含める (ADR-0006)。
+- 集計の SQL は `brew_book_core` の 1 つのモジュールで組み立て、`user_id` と `archived_at` の条件を必ず含める (ADR-0006)。
 - 採らない案: 4 つの API を 1 つにまとめる (パラメータと粒度が異なり、クライアントの呼び分けが複雑になる)、集計を Rust 側で行う (全行を Worker のメモリに載せると想定規模の抽出 30,000 件で Worker の CPU とメモリを圧迫する)、日別と月別の区切りを Rust で行う (SQLite の日時関数で足りる)。
 
 ## 調査タスク
@@ -95,7 +95,7 @@ ADR-0006 は、統計 (PRD の FR-18) を brews と purchases に対する集計
 
 ## 想定規模での処理時間
 
-2026-09-23 に `backend/` で `cargo test -p coffee_log --test wrangler_stats_scale -- --nocapture` を実行した。
+2026-09-23 に `backend/` で `cargo test -p brew_book --test wrangler_stats_scale -- --nocapture` を実行した。
 利用者 20 人分 (店 100、商品 1,000、購入 3,000、抽出 30,000) の合計 682,000 行をローカルの D1 に入れ、`wrangler dev` とローカル D1 で HTTP の往復を計測した。各 10 回の最小、中央値、最大である。
 
 ```

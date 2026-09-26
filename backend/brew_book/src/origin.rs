@@ -10,8 +10,8 @@
 //! 写真の R2 の S3 互換エンドポイントへの PUT は Worker を経由しないため、この検証の対象外で、
 //! R2 バケットの CORS でアプリのオリジンからの PUT だけを許可する (ADR-0003)。
 
-use coffee_log_core::error::ErrorCode;
-use coffee_log_core::routes::Method;
+use brew_book_core::error::ErrorCode;
+use brew_book_core::routes::Method;
 use worker::{Request, Response, Result, Url};
 
 use crate::respond;

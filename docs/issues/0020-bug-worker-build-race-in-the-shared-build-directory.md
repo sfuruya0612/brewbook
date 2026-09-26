@@ -11,7 +11,7 @@ Model: deepseek-v4p1-flash
 [custom build] Running: worker-build --release
 [custom build] [INFO]: Checking for the Wasm target...
 [custom build] [INFO]: Compiling to Wasm...
-[custom build] Error: Failed to read /Users/user/apps/coffee/backend/coffee_log/build/.tmp/package.json
+[custom build] Error: Failed to read /Users/user/apps/coffee/backend/brew_book/build/.tmp/package.json
 [custom build]     No such file or directory (os error 2)
 [ERROR] Process exited with non-zero status (1)
 ```
@@ -21,12 +21,12 @@ Model: deepseek-v4p1-flash
 ## 再現手順
 
 1. リポジトリのルートで `mise run backend:test-integration` (または `mise run check`) を実行する。
-2. `d1_binding` の 2 テスト (`wrangler_d1_binding_inserts_and_selects_with_placeholders` と `wrangler_d1_check_is_disabled_without_its_var`) が同じテストバイナリ内で並行に走り、それぞれが `wrangler dev` を起動する。`wrangler dev` は `backend/coffee_log` で `worker-build --release` を実行するため、2 つのビルドが同じ `backend/coffee_log/build/.tmp` を使う。
+2. `d1_binding` の 2 テスト (`wrangler_d1_binding_inserts_and_selects_with_placeholders` と `wrangler_d1_check_is_disabled_without_its_var`) が同じテストバイナリ内で並行に走り、それぞれが `wrangler dev` を起動する。`wrangler dev` は `backend/brew_book` で `worker-build --release` を実行するため、2 つのビルドが同じ `backend/brew_book/build/.tmp` を使う。
 3. 片方のビルドが `build/.tmp` を作り直している間に、もう片方が `build/.tmp/package.json` を読むと、`No such file or directory` で失敗する (発生は確率的。負荷が高いときに起きやすい)。
 
 ## 原因
 
-`backend/coffee_log/tests/support/mod.rs` の `DevServer::start_with` は、テストごとに `wrangler dev` を起動し、その中で `worker-build --release` が同じ `backend/coffee_log` の `build/` ディレクトリへ出力する。同じテストバイナリの並行テスト (および同時に走る別のテストバイナリ) はこのディレクトリを共有するため、`build/.tmp` の作成と読み取りが競合する。
+`backend/brew_book/tests/support/mod.rs` の `DevServer::start_with` は、テストごとに `wrangler dev` を起動し、その中で `worker-build --release` が同じ `backend/brew_book` の `build/` ディレクトリへ出力する。同じテストバイナリの並行テスト (および同時に走る別のテストバイナリ) はこのディレクトリを共有するため、`build/.tmp` の作成と読み取りが競合する。
 `wrangler dev` は `main = "build/worker/shim.mjs"` を読む前に `[build] command = "worker-build --release"` を実行するため、ビルドの完了が起動の前提になっている。
 
 ## 完了条件

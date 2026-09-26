@@ -3,7 +3,7 @@
 /// 期間と粒度と UTC オフセットがクエリパラメータに渡ることと、応答の読み取りを確認する。
 library;
 
-import 'package:coffee_log/api/stats_api.dart';
+import 'package:brew_book/api/stats_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_api.dart';

@@ -6,7 +6,7 @@
 //! 認証は Worker 単位の Cloudflare Access が担うため、アプリ内の認証を要する経路は無い
 //! (`auth_required` は全て false。ADR-0008)。
 
-use coffee_log_core::routes::{Method, Route};
+use brew_book_core::routes::{Method, Route};
 
 /// 管理者画面と管理者 API の経路。
 ///

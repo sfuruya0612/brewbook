@@ -124,6 +124,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "brew_book"
+version = "0.1.0"
+dependencies = [
+ "brew_book_core",
+ "headless_chrome",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "worker",
+]
+
+[[package]]
+name = "brew_book_admin"
+version = "0.1.0"
+dependencies = [
+ "brew_book_core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "worker",
+]
+
+[[package]]
+name = "brew_book_core"
+version = "0.1.0"
+dependencies = [
+ "p256",
+ "serde",
+ "serde_json",
+ "sha2",
+ "shiguredo_s3",
+]
+
+[[package]]
+name = "brew_book_pbt"
+version = "0.1.0"
+dependencies = [
+ "brew_book_admin",
+ "brew_book_core",
+ "proptest",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -184,49 +227,6 @@ name = "cmov"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c9ea0ac24bc397ab3c98583a3c9ba74fa56b09a4449bbe172b9b1ddb016027a"
-
-[[package]]
-name = "coffee_log"
-version = "0.1.0"
-dependencies = [
- "coffee_log_core",
- "headless_chrome",
- "reqwest",
- "serde",
- "serde_json",
- "worker",
-]
-
-[[package]]
-name = "coffee_log_admin"
-version = "0.1.0"
-dependencies = [
- "coffee_log_core",
- "reqwest",
- "serde",
- "serde_json",
- "worker",
-]
-
-[[package]]
-name = "coffee_log_core"
-version = "0.1.0"
-dependencies = [
- "p256",
- "serde",
- "serde_json",
- "sha2",
- "shiguredo_s3",
-]
-
-[[package]]
-name = "coffee_log_pbt"
-version = "0.1.0"
-dependencies = [
- "coffee_log_admin",
- "coffee_log_core",
- "proptest",
-]
 
 [[package]]
 name = "const-oid"

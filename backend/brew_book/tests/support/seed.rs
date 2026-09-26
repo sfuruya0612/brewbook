@@ -7,7 +7,7 @@
 //! 生のトークンは D1 に保存できない (保存するのはハッシュだけ) ため、下ごしらえが生の値を返し、
 //! テストが API の入力や Cookie に使う。
 
-use coffee_log_core::auth::hash_secret;
+use brew_book_core::auth::hash_secret;
 
 /// テスト用の利用者 ID。同じ数字を並べた UUID v4 にする。
 /// 10 以上の添字は 0 で埋めて一意にする (数字の繰り返しでは 1 と 11 が衝突するため)。

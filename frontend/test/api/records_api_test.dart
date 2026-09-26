@@ -2,8 +2,8 @@
 //!
 //! 応答の形式の違反を黙って通さないことと、URL が `ApiClient` の基準に従うことを確認する。
 
-import 'package:coffee_log/api/api_client.dart';
-import 'package:coffee_log/api/records_api.dart';
+import 'package:brew_book/api/api_client.dart';
+import 'package:brew_book/api/records_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/fake_api.dart';

@@ -8,7 +8,7 @@
 //! 保存しないため、一覧を含む他の応答では再表示できない (ADR-0008)。
 //! 存在しない利用者の ID は 404 を返す。
 
-use coffee_log_core::auth;
+use brew_book_core::auth;
 use worker::d1::D1Type;
 use worker::{Env, Response, Result};
 

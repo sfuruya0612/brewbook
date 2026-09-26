@@ -4,7 +4,7 @@
 //! エスケープされていないワイルドカードがパターンに残らないことを確認する
 //! (値がワイルドカードとして扱われないことの根拠になる)。
 
-use coffee_log_core::query::{self, SuggestionItem, Value};
+use brew_book_core::query::{self, SuggestionItem, Value};
 use proptest::prelude::*;
 
 /// 検査に使う利用者 ID。

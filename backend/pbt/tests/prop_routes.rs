@@ -1,4 +1,4 @@
-use coffee_log_core::routes::pattern_matches;
+use brew_book_core::routes::pattern_matches;
 use proptest::prelude::*;
 
 fn segment() -> impl Strategy<Value = String> {

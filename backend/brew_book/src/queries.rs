@@ -5,10 +5,10 @@
 //! 取得では、取得する列が増えたときに `display_name` が応答に混ざっても検査をし抜けるため、
 //! 両方を検査する。
 //!
-//! 台帳はこのクレートの SQL の定数と、記録のクエリを組み立てる `coffee_log_core` の列の並びを
-//! 持つ。`coffee_log_core` が組み立てる SELECT は、この列の並びからしか列を選ばない。
+//! 台帳はこのクレートの SQL の定数と、記録のクエリを組み立てる `brew_book_core` の列の並びを
+//! 持つ。`brew_book_core` が組み立てる SELECT は、この列の並びからしか列を選ばない。
 
-/// このクレート (`coffee_log`) が持つ SQL の定数。
+/// このクレート (`brew_book`) が持つ SQL の定数。
 pub const STATEMENTS: &[&str] = &[
     // チャレンジ (auth/mod.rs)。
     crate::auth::INSERT_CHALLENGE,

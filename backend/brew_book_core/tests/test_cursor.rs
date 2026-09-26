@@ -1,6 +1,6 @@
 //! `cursor` の単体テスト。符号化の往復は PBT (`prop_cursor.rs`) が担う。
 
-use coffee_log_core::cursor::{
+use brew_book_core::cursor::{
     parse_page_size, CursorError, CursorKey, PageSizeError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
 };
 
@@ -93,7 +93,7 @@ fn every_page_size_and_cursor_error_maps_to_400() {
     assert_eq!(PageSizeError::TooLarge.code().status(), 400);
     assert_eq!(CursorError::Invalid.code().status(), 400);
     assert_eq!(
-        coffee_log_core::query::QueryError::CursorKindMismatch
+        brew_book_core::query::QueryError::CursorKindMismatch
             .code()
             .status(),
         400

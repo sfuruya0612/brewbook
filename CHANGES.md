@@ -36,6 +36,8 @@
   - @sfuruya0612
 - [ADD] 管理者 Worker と Cloudflare Access の保護を追加する
   - @sfuruya0612
+- [CHANGE] アプリ名と名前空間を brewbook に変更する
+  - @sfuruya0612
 
 ### misc
 

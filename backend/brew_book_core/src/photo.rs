@@ -1,7 +1,7 @@
 //! 購入の写真のオブジェクトキーと署名付き PUT URL (ADR-0003、FR-10)。
 //!
 //! キーの組み立てと検証、申告サイズの検証、`shiguredo_s3` による署名付き URL の生成を持つ。
-//! R2 の操作は Worker 側 (`coffee_log::records::photos`) がバインディングで行う。
+//! R2 の操作は Worker 側 (`brew_book::records::photos`) がバインディングで行う。
 //! `shiguredo_s3` は Sans I/O のため、ここでは HTTP 通信を行わない。
 
 use std::time::{Duration, SystemTime};
@@ -134,7 +134,7 @@ pub fn presign_put_url(
         config.secret_access_key,
         None,
         None,
-        "coffee-log",
+        "brewbook",
     );
     let client_config = Config::builder()
         .region(REGION)

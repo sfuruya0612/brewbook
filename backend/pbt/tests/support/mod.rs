@@ -1,6 +1,6 @@
 //! PBT が使うテスト用の最小の CBOR エンコーダ。
 //!
-//! PBT は生成した CBOR の構造を符号化し、`coffee_log_core` のデコーダで読み戻す。
+//! PBT は生成した CBOR の構造を符号化し、`brew_book_core` のデコーダで読み戻す。
 //! 符号化は CTAP2 canonical CBOR の最短の形だけを使う (W3C WebAuthn Level 3 の 2.4)。
 
 #![allow(dead_code)] // 補助は複数のテストクレートで共有するため、各クレートから見て未使用の項目がある

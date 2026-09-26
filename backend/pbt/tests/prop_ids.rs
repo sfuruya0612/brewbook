@@ -1,6 +1,6 @@
 //! `ids` の PBT。どんな 16 バイトからも UUID v4 の形が得られることを検証する。
 
-use coffee_log_core::ids::{uuid_bytes, uuid_v4_from_bytes};
+use brew_book_core::ids::{uuid_bytes, uuid_v4_from_bytes};
 use proptest::prelude::*;
 
 proptest! {

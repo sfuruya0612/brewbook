@@ -1,4 +1,4 @@
-use coffee_log_core::routes::{
+use brew_book_core::routes::{
     match_route, pattern_matches, test_requirements, Method, Route, TestRequirements, ROUTES,
 };
 

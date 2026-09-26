@@ -16,7 +16,7 @@ class SettingsServices {
   final FileDownload fileDownload;
 
   /// エクスポートのファイルの名前。Backend が付ける名前と同じにする (FR-14)。
-  static const String exportFileName = 'coffee-log-export.json';
+  static const String exportFileName = 'brewbook-export.json';
 
   /// 全記録のエクスポートを取得し、JSON のファイルとしてダウンロードする (FR-14)。
   Future<void> exportAll() async {

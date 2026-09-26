@@ -5,12 +5,12 @@
 //! `wrangler dev --var D1_CHECK:true` で有効にする (本番の vars には無い)。
 //!
 //! 利用者と店をプレースホルダ付きの INSERT で入れ、一覧の SQL を組み立てる共通部分
-//! (`coffee_log_core::query`) の SELECT で引き直した結果を返す。
+//! (`brew_book_core::query`) の SELECT で引き直した結果を返す。
 
-use coffee_log_core::datetime::format_epoch_millis;
-use coffee_log_core::error::{envelope, ErrorCode};
-use coffee_log_core::ids::uuid_v4_from_bytes;
-use coffee_log_core::query::{self, Archived, ShopValues};
+use brew_book_core::datetime::format_epoch_millis;
+use brew_book_core::error::{envelope, ErrorCode};
+use brew_book_core::ids::uuid_v4_from_bytes;
+use brew_book_core::query::{self, Archived, ShopValues};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Type;
 use worker::{Date, Env, Error, Method, Request, Response, Result};

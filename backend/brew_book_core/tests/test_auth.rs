@@ -1,6 +1,6 @@
 //! `auth` の単体テスト。往復と不変条件の検査は PBT (`prop_auth.rs`) が担う。
 
-use coffee_log_core::auth::{
+use brew_book_core::auth::{
     encode_secret, expired_session_cookie, expiry_from, hash_secret, is_expired, session_cookie,
     session_token, validate_passkey_name, NameError, PASSKEY_NAME_MAX_CHARS,
 };

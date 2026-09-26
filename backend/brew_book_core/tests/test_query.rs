@@ -3,8 +3,8 @@
 //!
 //! 組み立てる関数ごとの SQL は [`record_queries`]、条件の付け忘れの検出は [`conditions`] が検査する。
 
-use coffee_log_core::cursor::CursorKey;
-use coffee_log_core::query::{
+use brew_book_core::cursor::CursorKey;
+use brew_book_core::query::{
     parse_include_archived, Archived, IncludeArchivedError, QueryError, Statement, Value,
 };
 
@@ -14,7 +14,7 @@ const AT: &str = "2026-09-21T12:34:56.789Z";
 
 mod list_builders {
     use super::*;
-    use coffee_log_core::query::{list, ListQuery, OrderKind};
+    use brew_book_core::query::{list, ListQuery, OrderKind};
 
     fn shop_query(archived: Archived, cursor: Option<CursorKey>, limit: u32) -> ListQuery<'static> {
         ListQuery {
@@ -181,7 +181,7 @@ mod list_builders {
 
 mod record_queries {
     use super::*;
-    use coffee_log_core::query::{
+    use brew_book_core::query::{
         self, insert, update, InsertQuery, ProductValues, ShopValues, UpdateQuery, SHOPS_TABLE,
     };
 
@@ -459,7 +459,7 @@ mod record_queries {
 
 mod purchase_and_brew_queries {
     use super::*;
-    use coffee_log_core::query::{self, BrewValues, PurchaseValues};
+    use brew_book_core::query::{self, BrewValues, PurchaseValues};
 
     /// 購入の列の別名 (結合の SQL の期待値に使う)。
     const PURCHASE_COLUMNS: &str = "p.id AS p_id, p.user_id AS p_user_id, \
@@ -793,7 +793,7 @@ mod suggestions {
     //! 確認する。エスケープが任意の値で往復することは PBT (`prop_query.rs`) が担う。
 
     use super::*;
-    use coffee_log_core::query::{
+    use brew_book_core::query::{
         self, parse_suggestion_field, SuggestionFieldError, SuggestionItem, SUGGESTION_LIMIT,
     };
 
@@ -903,7 +903,7 @@ mod suggestions {
 
 mod export_queries {
     use super::*;
-    use coffee_log_core::query;
+    use brew_book_core::query;
 
     #[test]
     fn an_export_query_carries_every_column_of_the_table_without_the_archived_filter_and_a_limit() {
@@ -1018,7 +1018,7 @@ mod include_archived_parameter {
 
 mod conditions {
     use super::*;
-    use coffee_log_core::query::{self, BrewValues, ProductValues, PurchaseValues, ShopValues};
+    use brew_book_core::query::{self, BrewValues, ProductValues, PurchaseValues, ShopValues};
 
     /// 検査の対象にする文の種類。
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]

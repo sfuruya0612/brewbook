@@ -1,11 +1,11 @@
 {
-    "name": "coffee_log",
-    "short_name": "coffee_log",
+    "name": "brewbook",
+    "short_name": "brewbook",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "coffee-log の Frontend (ADR-0007)",
+    "description": "brewbook の Frontend (ADR-0007)",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

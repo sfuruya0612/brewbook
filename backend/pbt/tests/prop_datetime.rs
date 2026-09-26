@@ -1,6 +1,6 @@
 //! `datetime` の PBT。整形と解釈の往復、辞書順の比較と時刻順の一致を検証する。
 
-use coffee_log_core::datetime::{
+use brew_book_core::datetime::{
     format_epoch_millis, parse_epoch_millis, MAX_EPOCH_MILLIS, MIN_EPOCH_MILLIS,
 };
 use proptest::prelude::*;

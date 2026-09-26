@@ -3,7 +3,7 @@
 //! 表示名の境界値 (前後の空白、1 文字、50 文字、51 文字) は PBT
 //! (`pbt/tests/prop_admin_input.rs`) が一般的な性質として検査し、ここでは個別の値を確かめる。
 
-use coffee_log_admin::input::{
+use brew_book_admin::input::{
     form_field, registration_link, validate_display_name, DisplayNameError,
 };
 
@@ -92,8 +92,8 @@ fn validate_display_name_messages_are_english() {
 #[test]
 fn registration_link_appends_the_token_to_the_app_origin() {
     assert_eq!(
-        registration_link("https://coffee-log.example.workers.dev", "token-value"),
-        "https://coffee-log.example.workers.dev/register?token=token-value"
+        registration_link("https://brewbook.example.workers.dev", "token-value"),
+        "https://brewbook.example.workers.dev/register?token=token-value"
     );
     // オリジンの末尾の `/` は 1 つに正規化する。
     assert_eq!(

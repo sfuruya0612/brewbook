@@ -11,9 +11,9 @@ mod support;
 
 use std::sync::OnceLock;
 
-use coffee_log_core::auth::{self, hash_secret, KIND_AUTHENTICATION, KIND_REGISTRATION};
-use coffee_log_core::base64url;
-use coffee_log_core::ids::uuid_bytes;
+use brew_book_core::auth::{self, hash_secret, KIND_AUTHENTICATION, KIND_REGISTRATION};
+use brew_book_core::base64url;
+use brew_book_core::ids::uuid_bytes;
 use reqwest::blocking::Response;
 use serde_json::{json, Value};
 use support::http::{error_code, read, ApiClient};
@@ -243,7 +243,7 @@ fn wrangler_auth_register_begin_ok() {
         "the challenge must be the base64url of 32 bytes: {body}"
     );
     assert_eq!(body["rp"]["id"], "localhost");
-    assert_eq!(body["rp"]["name"], "coffee-log");
+    assert_eq!(body["rp"]["name"], "brewbook");
     assert_eq!(body["user"]["name"], data.token_user);
     assert!(
         body["user"].get("displayName").is_none(),
@@ -991,7 +991,7 @@ fn wrangler_test_page_is_disabled_without_its_var() {
     let base_url = lease.use_server(|server| server.base_url());
     // 本番の vars には TEST_PAGE が無いため、経路は台帳に無い経路と同じ 404 になる。
     // テスト専用のページを本番に残さないことを確認する。
-    let body = assert_status(anonymous(&base_url).get(coffee_log::test_page::PATH), 404);
+    let body = assert_status(anonymous(&base_url).get(brew_book::test_page::PATH), 404);
     assert_eq!(error_code(&body), Some("not_found"));
 }
 

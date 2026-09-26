@@ -2,14 +2,14 @@
 //!
 //! アップロード用 URL の発行、アップロード完了の通知、取得、削除の 4 つの経路を処理する。
 //! アカウント削除 (FR-15) が使う、利用者の全オブジェクトの削除もここに置く。
-//! 署名付き URL の生成は `coffee_log_core::photo`、R2 のオブジェクトの操作はバインディング
+//! 署名付き URL の生成は `brew_book_core::photo`、R2 のオブジェクトの操作はバインディング
 //! (`PHOTOS`) が行う。存在しない購入と他の利用者の購入は区別せず 404 を返す (FR-5)。
 //!
 //! クライアントは、アップロード用 URL の要求、PUT、完了通知の 3 回の呼び出しを行う (ADR-0003)。
 //! 写真は 1 購入につき 1 枚とし、サーバー側の変換と縮小は行わない (PRD のやらないこと)。
 
-use coffee_log_core::photo::{self, SigningConfig};
-use coffee_log_core::query;
+use brew_book_core::photo::{self, SigningConfig};
+use brew_book_core::query;
 use serde::{Deserialize, Serialize};
 use worker::{Date, Env, HttpMetadata, Request, Response, Result};
 
@@ -27,7 +27,7 @@ pub const ENDPOINT_VAR: &str = "R2_ENDPOINT";
 /// バケット名の vars の名前。
 pub const BUCKET_VAR: &str = "R2_BUCKET";
 /// バケット名の既定値 (ADR-0003)。
-pub const DEFAULT_BUCKET: &str = "coffee-log-photos";
+pub const DEFAULT_BUCKET: &str = "brewbook-photos";
 /// R2 の API トークンのアクセスキーを置く Secret の名前。
 pub const ACCESS_KEY_ID_SECRET: &str = "R2_ACCESS_KEY_ID";
 /// R2 の API トークンのシークレットを置く Secret の名前。

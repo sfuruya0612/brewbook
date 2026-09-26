@@ -1,7 +1,7 @@
-import 'package:coffee_log/router/app_router.dart';
-import 'package:coffee_log/screens/login_screen.dart';
-import 'package:coffee_log/screens/product_form_screen.dart';
-import 'package:coffee_log/screens/product_list_screen.dart';
+import 'package:brew_book/router/app_router.dart';
+import 'package:brew_book/screens/login_screen.dart';
+import 'package:brew_book/screens/product_form_screen.dart';
+import 'package:brew_book/screens/product_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

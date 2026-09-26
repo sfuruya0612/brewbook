@@ -12,8 +12,8 @@
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 //! `updated_at` は更新、アーカイブ、アーカイブ解除で現在時刻にする (ADR-0006)。
 
-use coffee_log_core::query::{self, Archived, BrewValues, OrderKind};
-use coffee_log_core::records::{
+use brew_book_core::query::{self, Archived, BrewValues, OrderKind};
+use brew_book_core::records::{
     trim_optional, validate_count, validate_decimal, validate_rating, validate_timestamp,
 };
 use serde::{Deserialize, Serialize};
@@ -60,7 +60,7 @@ pub struct BrewListResponse {
     pub next_cursor: Option<String>,
 }
 
-/// 抽出と、購入、商品、店を結合した行。項目名は `coffee_log_core::query` が付ける列の別名と同じ。
+/// 抽出と、購入、商品、店を結合した行。項目名は `brew_book_core::query` が付ける列の別名と同じ。
 #[derive(Debug, Deserialize)]
 struct BrewJoinRow {
     b_id: String,

@@ -20,7 +20,7 @@ mod support;
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use coffee_log_core::auth;
+use brew_book_core::auth;
 use reqwest::blocking::{Client, Response};
 use support::{ServerLease, Servers};
 
@@ -111,7 +111,7 @@ fn body(response: Response) -> String {
 
 /// 一覧の HTML から、その表示名の利用者の ID を読む (発行のフォームの送信先)。
 fn user_id(html: &str, display_name: &str) -> String {
-    let escaped = coffee_log_admin::html::escape(display_name);
+    let escaped = brew_book_admin::html::escape(display_name);
     let row_start = html
         .find(&escaped)
         .unwrap_or_else(|| panic!("the list must show {display_name}: {html}"));

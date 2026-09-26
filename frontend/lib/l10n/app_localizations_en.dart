@@ -10,7 +10,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'coffee-log';
+  String get appTitle => 'brewbook';
 
   @override
   String get loading => 'Loading';
@@ -68,7 +68,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get registerTokenExpired => 'This registration link has expired.';
 
   @override
-  String get homeTitle => 'coffee-log';
+  String get homeTitle => 'brewbook';
 
   @override
   String get retryButton => 'Retry';

@@ -1,6 +1,6 @@
-# coffee_log
+# brew_book
 
-coffee-log の Frontend (ADR-0007)
+brewbook の Frontend (ADR-0007)
 
 ## Getting Started
 

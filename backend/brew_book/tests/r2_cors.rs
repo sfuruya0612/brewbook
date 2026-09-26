@@ -70,7 +70,7 @@ fn cors_allows_put_from_the_app_origins() {
     let origins = strings(&allowed["origins"]);
     // ローカルの開発 (http://localhost:8787) のオリジンを含む。
     assert!(
-        origins.contains(&coffee_log::auth::DEFAULT_ORIGIN.to_owned()),
+        origins.contains(&brew_book::auth::DEFAULT_ORIGIN.to_owned()),
         "the origins must contain the local development origin: {origins:?}"
     );
     // 本番のオリジン (wrangler.toml の ORIGIN。デプロイの前に実際の値へ置き換える) を含む。

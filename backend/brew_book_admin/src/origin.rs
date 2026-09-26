@@ -5,10 +5,10 @@
 //! リクエスト自身のオリジンと一致することを必須にする。一致しないリクエストと `Origin` の
 //! 無いリクエストは 403 で拒否する (`Origin` が無い場合は検証できないため)。
 //!
-//! 利用者向けの Worker (`coffee_log::origin`) と同じ規則である。両者は別のクレートで、
-//! 共有すると `coffee_log_core` が `worker` に依存してしまうため、同じ実装をここに持つ。
+//! 利用者向けの Worker (`brew_book::origin`) と同じ規則である。両者は別のクレートで、
+//! 共有すると `brew_book_core` が `worker` に依存してしまうため、同じ実装をここに持つ。
 
-use coffee_log_core::routes::Method;
+use brew_book_core::routes::Method;
 use worker::{Request, Response, Result, Url};
 
 use crate::html_error;

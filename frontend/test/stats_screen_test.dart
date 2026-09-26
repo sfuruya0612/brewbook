@@ -4,10 +4,10 @@
 /// グラフがそれぞれの系列を持つことを確認する。
 library;
 
-import 'package:coffee_log/records/clock.dart';
-import 'package:coffee_log/router/app_router.dart';
-import 'package:coffee_log/screens/home_screen.dart';
-import 'package:coffee_log/screens/stats_screen.dart';
+import 'package:brew_book/records/clock.dart';
+import 'package:brew_book/router/app_router.dart';
+import 'package:brew_book/screens/home_screen.dart';
+import 'package:brew_book/screens/stats_screen.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';

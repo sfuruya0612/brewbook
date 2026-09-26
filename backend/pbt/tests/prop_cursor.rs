@@ -1,7 +1,7 @@
 //! `cursor` の PBT。並び順のキーの符号化と復号の往復を検証する。
 
-use coffee_log_core::cursor::CursorKey;
-use coffee_log_core::datetime::{format_epoch_millis, MAX_EPOCH_MILLIS, MIN_EPOCH_MILLIS};
+use brew_book_core::cursor::CursorKey;
+use brew_book_core::datetime::{format_epoch_millis, MAX_EPOCH_MILLIS, MIN_EPOCH_MILLIS};
 use proptest::prelude::*;
 
 /// カーソルが運ぶ日時 (ISO 8601 UTC)。

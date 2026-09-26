@@ -10,8 +10,8 @@ library;
 import 'dart:js_interop';
 import 'dart:typed_data';
 
-import 'package:coffee_log/auth/passkey_client_web.dart';
-import 'package:coffee_log/auth/passkey_error.dart';
+import 'package:brew_book/auth/passkey_client_web.dart';
+import 'package:brew_book/auth/passkey_error.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

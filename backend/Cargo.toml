@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "coffee_log",
-    "coffee_log_admin",
-    "coffee_log_core",
+    "brew_book",
+    "brew_book_admin",
+    "brew_book_core",
     "pbt",
 ]

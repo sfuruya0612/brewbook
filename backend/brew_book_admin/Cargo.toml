@@ -1,5 +1,5 @@
 [package]
-name = "coffee_log_admin"
+name = "brew_book_admin"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -8,8 +8,8 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-coffee_log_core = { path = "../coffee_log_core" }
-# 依存は利用者向けの Worker (coffee_log) と同じ組に限る (ADR-0001)。
+brew_book_core = { path = "../brew_book_core" }
+# 依存は利用者向けの Worker (brew_book) と同じ組に限る (ADR-0001)。
 serde = { version = "1", features = ["derive"] }
 worker = { version = "0.8.6", features = ["d1"] }
 

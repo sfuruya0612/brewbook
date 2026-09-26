@@ -1,7 +1,7 @@
 //! `records` の PBT。前後の空白の扱いと、Flavor Notes の正規化、日付と日時と小数の検証の
 //! 性質を検査する。
 
-use coffee_log_core::records::{
+use brew_book_core::records::{
     trim_optional, trim_text, validate_day, validate_decimal, validate_flavor_notes, validate_name,
     validate_timestamp, DayError, DecimalError, NameError, TagNameError, TimestampError,
 };

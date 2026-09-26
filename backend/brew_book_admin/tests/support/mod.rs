@@ -54,7 +54,7 @@ pub const SUITE: &[SuiteEntry] = &[
 
 /// 台帳とスイートが一致するかを検査する (PRD の成功指標の管理者 Worker の分)。
 pub fn admin_suite_covers_ledger() -> Result<(), String> {
-    covers(coffee_log_admin::routes::ROUTES, SUITE)
+    covers(brew_book_admin::routes::ROUTES, SUITE)
 }
 
 /// 経路の台帳とスイートのテスト種別が一致するかを検査する。
@@ -62,7 +62,7 @@ pub fn admin_suite_covers_ledger() -> Result<(), String> {
 /// 台帳の全経路が同じ名前のスイートの項目を持ち、スイートの種別が必要な種別 (正常系、
 /// 入力不正 400) と過不足なく一致することを確認する。
 pub fn covers(
-    routes: &[coffee_log_core::routes::Route],
+    routes: &[brew_book_core::routes::Route],
     suite: &[SuiteEntry],
 ) -> Result<(), String> {
     let mut route_names: Vec<&str> = routes.iter().map(|route| route.name).collect();
@@ -80,7 +80,7 @@ pub fn covers(
             .iter()
             .find(|entry| entry.route == route.name)
             .expect("the route names match above");
-        let requirements = coffee_log_core::routes::test_requirements(route);
+        let requirements = brew_book_core::routes::test_requirements(route);
         let mut expected: Vec<&str> = Vec::new();
         if requirements.ok {
             expected.push(KIND_OK);
@@ -118,10 +118,8 @@ impl Drop for PersistDir {
 impl Persist {
     /// 状態ディレクトリを作る。
     pub fn new() -> Result<Self, String> {
-        let path = std::env::temp_dir().join(format!(
-            "coffee-log-admin-dev-server-{}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("brewbook-admin-dev-server-{}", std::process::id()));
         std::fs::create_dir_all(&path)
             .map_err(|error| format!("failed to create {}: {error}", path.display()))?;
         Ok(Self(Arc::new(PersistDir(path))))
@@ -149,7 +147,7 @@ impl Servers {
         apply_migrations(persist.path())?;
         ensure_app_assets_dir()?;
         let app = DevServer::start(
-            &manifest_dir().join("../coffee_log"),
+            &manifest_dir().join("../brew_book"),
             persist.path(),
             "/api/__ready",
             &[],
@@ -402,7 +400,7 @@ fn capture_output<R: Read + Send + 'static>(reader: Option<R>, sink: Arc<Mutex<V
     }
 }
 
-/// このクレート (`backend/coffee_log_admin`) のディレクトリ。
+/// このクレート (`backend/brew_book_admin`) のディレクトリ。
 pub fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -419,7 +417,7 @@ pub fn ensure_app_assets_dir() -> Result<(), String> {
 /// 管理者 Worker はマイグレーションを持たないため、スキーマは利用者向けの Worker の
 /// マイグレーションだけが作る (ADR-0002)。適用は利用者向けの Worker の設定から行う。
 pub fn apply_migrations(persist_dir: &Path) -> Result<(), String> {
-    let migrations = manifest_dir().join("../coffee_log/migrations");
+    let migrations = manifest_dir().join("../brew_book/migrations");
     let mut files: Vec<PathBuf> = std::fs::read_dir(&migrations)
         .map_err(|error| format!("failed to read {}: {error}", migrations.display()))?
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
@@ -430,7 +428,7 @@ pub fn apply_migrations(persist_dir: &Path) -> Result<(), String> {
         return Err(format!("no migrations in {}", migrations.display()));
     }
     for file in files {
-        let status = d1_execute_command(&manifest_dir().join("../coffee_log"), persist_dir)
+        let status = d1_execute_command(&manifest_dir().join("../brew_book"), persist_dir)
             .arg("--file")
             .arg(&file)
             .status()

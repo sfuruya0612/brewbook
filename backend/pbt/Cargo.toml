@@ -1,10 +1,10 @@
 [package]
-name = "coffee_log_pbt"
+name = "brew_book_pbt"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
 [dev-dependencies]
-coffee_log_admin = { path = "../coffee_log_admin" }
-coffee_log_core = { path = "../coffee_log_core" }
+brew_book_admin = { path = "../brew_book_admin" }
+brew_book_core = { path = "../brew_book_core" }
 proptest = "1"

@@ -1,9 +1,9 @@
 //! `stats` の PBT。期間の端を UTC の瞬間に直す往復、日時関数の修飾子の組み立て、粒度の検証、
 //! 組み立てた SQL の不変条件を検査する。
 
-use coffee_log_core::datetime::{format_epoch_millis, parse_epoch_millis};
-use coffee_log_core::query::{Statement, Value};
-use coffee_log_core::stats::{self, Granularity, Period, StatsError};
+use brew_book_core::datetime::{format_epoch_millis, parse_epoch_millis};
+use brew_book_core::query::{Statement, Value};
+use brew_book_core::stats::{self, Granularity, Period, StatsError};
 use proptest::prelude::*;
 
 /// 検査に使う利用者 ID。

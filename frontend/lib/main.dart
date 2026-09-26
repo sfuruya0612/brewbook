@@ -14,7 +14,7 @@ void main() {
   // (not_found_handling)、登録用リンク (`/register?token=<トークン>`) を直接開いても画面が出る (ADR-0004、ADR-0005)。
   usePathUrlStrategy();
   runApp(
-    CoffeeLogApp(
+    BrewBookApp(
       apiClient: ApiClient(),
       passkeyClient: createPasskeyClient(),
     ),

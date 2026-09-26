@@ -2,7 +2,7 @@
 //!
 //! 境界値と、PBT で実現できない意図的なエラーパスを確かめる (所有者の Rust のテスト規約)。
 
-use coffee_log_core::cbor::{decode, decode_prefix, Error, Value, MAX_INPUT_LEN};
+use brew_book_core::cbor::{decode, decode_prefix, Error, Value, MAX_INPUT_LEN};
 
 #[test]
 fn a_map_with_text_keys_is_decoded_in_order() {

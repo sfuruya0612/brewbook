@@ -34,15 +34,15 @@ fn is_enabled(env: &Env) -> bool {
     matches!(env.var(VAR_NAME), Ok(var) if var.to_string() == VAR_ENABLED)
 }
 
-/// テストページの HTML。関数は `window.coffeeLogTest` から呼ぶ。
+/// テストページの HTML。関数は `window.brewBookTest` から呼ぶ。
 const PAGE: &str = r#"<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>coffee-log test page</title>
+<title>brewbook test page</title>
 </head>
 <body>
-<p>coffee-log test page</p>
+<p>brewbook test page</p>
 <script>
 "use strict";
 
@@ -218,7 +218,7 @@ function clientData(type, challenge) {
   return btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-window.coffeeLogTest = {
+window.brewBookTest = {
   call,
   registerWithToken,
   completeRegistration,

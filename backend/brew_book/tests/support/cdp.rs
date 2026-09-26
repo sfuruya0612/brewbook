@@ -1,7 +1,7 @@
 //! Chrome を CDP で起動し、仮想認証器を付けたページを操作するハーネス (ADR-0004)。
 //!
 //! `WebAuthn.enable`、`WebAuthn.addVirtualAuthenticator`、`Runtime.evaluate` を送れることは
-//! 実装の最初に確認済み (issue 0005)。テストはテストページの `window.coffeeLogTest` を呼び、
+//! 実装の最初に確認済み (issue 0005)。テストはテストページの `window.brewBookTest` を呼び、
 //! `navigator.credentials` でパスキーを作る・使う。
 //!
 //! 署名カウンタの後退の検査のため、仮想認証器のクレデンシャルを入れ替える
@@ -75,7 +75,7 @@ impl TestBrowser {
     }
 
     /// ページの式を評価し、返った値を JSON にする。式は値でも Promise でもよい。
-    /// 式は `window.coffeeLogTest` の関数を `await` で呼ぶ形にする。
+    /// 式は `window.brewBookTest` の関数を `await` で呼ぶ形にする。
     pub fn evaluate_json(&self, expression: &str) -> Result<Value, String> {
         // 式が Promise の場合は解決した値を待つ (await を付けないと Promise が JSON になる)。
         let script = format!("(async () => JSON.stringify(await ({expression})))()");
@@ -133,8 +133,8 @@ impl TestBrowser {
 fn canonical_credential_id(id: &str) -> String {
     let normalized = id.replace('+', "-").replace('/', "_");
     let trimmed = normalized.trim_end_matches('=');
-    match coffee_log_core::base64url::decode(trimmed) {
-        Ok(bytes) => coffee_log_core::base64url::encode(&bytes),
+    match brew_book_core::base64url::decode(trimmed) {
+        Ok(bytes) => brew_book_core::base64url::encode(&bytes),
         Err(_) => id.to_owned(),
     }
 }

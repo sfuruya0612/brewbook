@@ -11,9 +11,9 @@ import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
-import 'package:coffee_log/download/file_download.dart';
-import 'package:coffee_log/download/file_download_web.dart';
-import 'package:coffee_log/settings/settings_services.dart';
+import 'package:brew_book/download/file_download.dart';
+import 'package:brew_book/download/file_download_web.dart';
+import 'package:brew_book/settings/settings_services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web/web.dart' as web;
 
@@ -35,7 +35,7 @@ external JSObject get _url;
     'createObjectURL'.toJS,
     ((JSObject blob) {
       created = blob;
-      return 'blob:coffee-log-export'.toJS;
+      return 'blob:brewbook-export'.toJS;
     }).toJS,
   );
   _url.setProperty(
@@ -58,11 +58,11 @@ external JSObject get _url;
 void main() {
   test('ダウンロードのリンクは Blob の URL とファイル名を持つ', () {
     final link = BrowserFileDownload.downloadLink(
-      'blob:coffee-log-export',
-      'coffee-log-export.json',
+      'blob:brewbook-export',
+      'brewbook-export.json',
     );
-    expect(link.href, 'blob:coffee-log-export');
-    expect(link.download, 'coffee-log-export.json');
+    expect(link.href, 'blob:brewbook-export');
+    expect(link.download, 'brewbook-export.json');
   });
 
   test('JSON を Blob にしてダウンロードを開始し、オブジェクト URL を解放する', () async {
@@ -70,7 +70,7 @@ void main() {
     const body = '{"shops":[],"brews":[]}';
     await const BrowserFileDownload().save(
       DownloadedFile(
-        fileName: 'coffee-log-export.json',
+        fileName: 'brewbook-export.json',
         bytes: utf8.encode(body),
       ),
     );
@@ -81,7 +81,7 @@ void main() {
     final buffer = await blob.arrayBuffer().toDart;
     expect(utf8.decode(buffer.toDart.asUint8List()), body);
     // ダウンロードのリンクが作ったオブジェクト URL は解放する。
-    expect(hook.revoked, <String>['blob:coffee-log-export']);
+    expect(hook.revoked, <String>['blob:brewbook-export']);
   });
 
   test('エクスポートの応答の JSON がブラウザのダウンロードになる', () async {
@@ -109,6 +109,6 @@ void main() {
     expect(blob.type, 'application/json');
     final buffer = await blob.arrayBuffer().toDart;
     expect(utf8.decode(buffer.toDart.asUint8List()), jsonEncode(exportBody));
-    expect(hook.revoked, <String>['blob:coffee-log-export']);
+    expect(hook.revoked, <String>['blob:brewbook-export']);
   });
 }

@@ -27,7 +27,7 @@ const SECRET_ACCESS_KEY: &str = "test-secret-access-key";
 /// 署名付き URL の有効期限 (秒)。既定値 (300) と違う値を注入し、vars が読まれることを確かめる。
 const URL_EXPIRES_SECONDS: &str = "180";
 /// バケット名。`wrangler.toml` のバインディングと同じにする (既定値)。
-const BUCKET: &str = "coffee-log-photos";
+const BUCKET: &str = "brewbook-photos";
 /// 写真の Content-Type。
 const CONTENT_TYPE: &str = "image/jpeg";
 
@@ -285,7 +285,7 @@ mod upload_url {
             .and_then(|rest| rest.strip_suffix(".jpg"))
             .unwrap_or_else(|| panic!("the key must be a pending key of the caller: {key}"));
         assert!(
-            coffee_log_core::ids::uuid_bytes(uuid).is_some(),
+            brew_book_core::ids::uuid_bytes(uuid).is_some(),
             "the key must contain a uuid: {key}"
         );
 

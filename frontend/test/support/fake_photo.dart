@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-import 'package:coffee_log/photo/image_converter.dart';
-import 'package:coffee_log/photo/photo_picker.dart';
+import 'package:brew_book/photo/image_converter.dart';
+import 'package:brew_book/photo/photo_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
