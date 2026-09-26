@@ -242,9 +242,10 @@ struct TokenRow {
     used_at: Option<String>,
 }
 
-const SELECT_TOKEN: &str = "SELECT id, user_id, expires_at, used_at FROM registration_tokens \
+pub(crate) const SELECT_TOKEN: &str =
+    "SELECT id, user_id, expires_at, used_at FROM registration_tokens \
                             WHERE token_hash = ?";
-const MARK_TOKEN_USED: &str =
+pub(crate) const MARK_TOKEN_USED: &str =
     "UPDATE registration_tokens SET used_at = ? WHERE id = ? AND used_at IS NULL";
-const INSERT_CREDENTIAL: &str = "INSERT INTO passkey_credentials (id, user_id, credential_id, \
+pub(crate) const INSERT_CREDENTIAL: &str = "INSERT INTO passkey_credentials (id, user_id, credential_id, \
                                  public_key, sign_count, name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)";

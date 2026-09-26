@@ -9,4 +9,12 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 coffee_log_core = { path = "../coffee_log_core" }
+# 依存は利用者向けの Worker (coffee_log) と同じ組に限る (ADR-0001)。
+serde = { version = "1", features = ["derive"] }
 worker = { version = "0.8.6", features = ["d1"] }
+
+[dev-dependencies]
+# `wrangler dev` を起動する結合テストのハーネス (0001 のハーネスと同じ方式) に使う。
+# 利用者向けの Worker の結合テストと同じ組に限る (ADR-0001)。
+reqwest = { version = "0.12", features = ["blocking"] }
+serde_json = "1"

@@ -33,6 +33,7 @@ Frontend は Flutter、Backend は Rust の Cloudflare Worker、データベー�
 ## デプロイとデプロイ後の確認
 
 画面と API は 1 つの Worker (`coffee-log`) が `https://coffee-log.<アカウントのサブドメイン>.workers.dev` で配信する (ADR-0005)。
+管理者画面は別の Worker (`coffee-log-admin`) が `https://coffee-log-admin.<アカウントのサブドメイン>.workers.dev` で配信する (ADR-0008)。
 `mise run deploy` が Flutter のビルドを先に実行してから `wrangler deploy` するため、画面と API は 1 回のデプロイで更新される。
 デプロイのタスクは `mise run check` に含めない (0002 の規則)。
 
@@ -40,25 +41,76 @@ Frontend は Flutter、Backend は Rust の Cloudflare Worker、データベー�
 
 1. 初回だけ、アカウントに合わせて値を設定する。
    - `wrangler login` でアカウントにログインする。
-   - D1 のデータベースを作り、`database_id` を `backend/coffee_log/wrangler.toml` に設定する (上の「データベース (D1)」)。
+   - D1 のデータベースを作り、`database_id` を `backend/coffee_log/wrangler.toml` と
+     `backend/coffee_log_admin/wrangler.toml` に設定する (上の「データベース (D1)」)。
+     2 つの Worker は同じデータベースをバインディングで参照し、マイグレーションは利用者向けの Worker だけが持つ (ADR-0002)。
    - workers.dev のサブドメインを確認し、`backend/coffee_log/wrangler.toml` の `[vars]` の `RP_ID` と `ORIGIN` を
      `coffee-log.<サブドメイン>.workers.dev` と `https://coffee-log.<サブドメイン>.workers.dev` に置き換える。
      この 2 つはパスキーの Relying Party ID と、状態を変更する API が検証する同一オリジンになる (ADR-0004、ADR-0005)。
+   - `backend/coffee_log_admin/wrangler.toml` の `[vars]` の `APP_ORIGIN` を
+     `https://coffee-log.<サブドメイン>.workers.dev` に置き換える。
+     管理者画面が発行する登録用リンクのオリジンになる (ADR-0008)。
    - `backend/coffee_log/cors.json` の `https://coffee-log.example.workers.dev` を同じオリジンに置き換える。
      写真はブラウザから R2 へ直接 PUT するため、R2 の CORS でアプリのオリジンからの PUT だけを許可する (ADR-0003)。
    - R2 の API トークンを Secret に置く。
      名前は `R2_ENDPOINT`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` で、値はリポジトリに含めない (PRD のセキュリティ)。
    - R2 の CORS とライフサイクルを適用する: `mise run r2-setup`
      CORS のオリジンやライフサイクルを変えたときは、毎回このタスクを実行する。
+   - 管理者 Worker に Cloudflare Access の保護を設定する (下の「管理者画面と Cloudflare Access」)。
 2. スキーマ変更を含むリリースでは、デプロイの前に本番の D1 へマイグレーションを適用する: `mise run db-migrate-remote`
    本番への適用は意識して実行するため、`mise run deploy` の `depends` には含めない。
-3. デプロイする: `mise run deploy`
+3. デプロイする: `mise run deploy` (利用者向けの Worker) と `mise run deploy-admin` (管理者 Worker)
 4. デプロイ後の確認を行う。
    - `https://coffee-log.<サブドメイン>.workers.dev/` を開くと画面が表示される。
    - Flutter のルーティングのパス (`/register` など) を直接開くと `index.html` が 200 で返り、画面が表示される。
    - 登録用リンクからパスキーを登録し、ログインして抽出を保存できる。
    - 購入の画面から写真をアップロードできる (ブラウザから R2 へ直接 PUT する)。
+   - 管理者画面が Cloudflare Access で保護されていることを確認する (下の「管理者画面と Cloudflare Access」)。
    - 応答時間の p95 を集計し、成功指標を満たしていることを確認する (下の「応答時間の p95 の集計」)。
+
+## 管理者画面と Cloudflare Access
+
+管理者画面は、利用者の作成と登録用トークンの発行 (FR-17) を行う HTML のフォームである (ADR-0008)。
+`https://coffee-log-admin.<サブドメイン>.workers.dev` で配信し、機能は利用者の一覧、利用者の作成、
+登録用トークンの発行の 3 つである。アプリ内の認証は持たず、安全性は Worker 単位の Cloudflare Access の保護だけに依存する。
+Access が付ける JWT は Worker で検証しない。ローカルの開発では Access の設定 (`access.dev`) を使わない。
+
+### 使い方
+
+- 利用者の作成: 一覧の下のフォームに表示名 (前後の空白を除いて 1 文字以上 50 文字以下) を入れて作成する。
+- 登録用トークンの発行: 一覧の利用者の行の「発行」を押す。
+  発行した登録用リンク (`/register?token=<トークン>`) は発行の直後の画面に 1 回だけ出て、再表示できない (ADR-0008)。
+  リンクを控えて利用者に渡す。
+- 再発行すると、その利用者の未使用の登録用リンクは無効になる。リンクを紛失したときは再発行する。
+
+### Access の設定
+
+初回だけ、Cloudflare の管理画面で次の設定を行う。Zero Trust の Free プラン (50 ユーザーまで、契約にクレジットカードの登録が必要) を使う (ADR-0008)。
+
+1. Cloudflare ダッシュボードの Workers & Pages で `coffee-log-admin` を選び、Access のタブを開く
+   (Zero Trust の Access の Applications から `worker` 種別のセルフホスト型アプリケーションとして追加してもよい)。
+2. Worker 単位の保護を有効にする。これで、この Worker の workers.dev の URL、プレビュー URL、カスタムドメインが全て保護される。
+3. ポリシーを 1 つ追加する。Action は `Allow`、Selector は `Emails`、Value は所有者のメールアドレスにする。
+4. 認証方法に One-time PIN (メール) を選ぶ。ログインのときに、そのメールアドレスへ届くコードを入力する。
+
+### Access の確認
+
+デプロイの後に、次を確認する。どちらも 302 でなければタスクが失敗する (ADR-0008)。
+
+- 認証なしで管理者画面 (`GET /`) を取得すると、Access のログイン画面へ 302 でリダイレクトされる。
+- 状態を変更する経路 (`POST /users`) への未認証のリクエストも、同じく 302 になる (Worker には届かない)。
+
+```sh
+ADMIN_ORIGIN=https://coffee-log-admin.<サブドメイン>.workers.dev mise run verify-deploy
+```
+
+設定を誤って外すと、管理者画面と管理者 API が無認証で公開される。この確認タスクがそれを検出する。
+
+### 設定しないもの
+
+- 利用者向けの Worker (`coffee-log`) には Access を設定しない。設定すると利用者もログインできなくなる (ADR-0008)。
+- アカウント全体の Worker を既定で保護する設定は使わない。利用者向けの Worker まで保護されるためである (ADR-0008)。
+
 
 ### 応答時間の p95 の集計
 

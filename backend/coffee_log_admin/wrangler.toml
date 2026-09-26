@@ -1,0 +1,22 @@
+name = "coffee-log-admin"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-09-21"
+# workers.dev のホスト名で配信し、Worker 単位の Cloudflare Access 保護を設定する (ADR-0008)。
+# 利用者向けの Worker には Access を設定しない。
+workers_dev = true
+
+[build]
+command = "worker-build --release"
+
+# D1 のバインディング (ADR-0002)。利用者向けの Worker と同じデータベースを参照する。
+# 管理者 Worker はマイグレーションを持たず、適用は利用者向けの Worker の設定から行う (ADR-0002)。
+# 本番の database_id は `wrangler d1 create coffee-log` が返す値に差し替える。
+[[d1_databases]]
+binding = "DB"
+database_name = "coffee-log"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[vars]
+# 登録用リンクに使う、利用者向けの Worker のオリジン (ADR-0008)。
+# 本番の値はデプロイの前に実際の workers.dev のサブドメインへ置き換える (README のデプロイ手順)。
+APP_ORIGIN = "https://coffee-log.example.workers.dev"

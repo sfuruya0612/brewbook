@@ -29,7 +29,8 @@ const VAR_ENABLED: &str = "true";
 /// この経路が入れる利用者の表示名。管理者が使う表示名とは別の、検証用の固定値。
 const DISPLAY_NAME: &str = "d1 check";
 
-const INSERT_USER: &str = "INSERT INTO users (id, display_name, created_at) VALUES (?, ?, ?)";
+pub(crate) const INSERT_USER: &str =
+    "INSERT INTO users (id, display_name, created_at) VALUES (?, ?, ?)";
 
 /// 有効なら D1 の往復を実行する。無効な経路は None を返し、呼び出し側が 404 にする。
 ///

@@ -90,7 +90,8 @@ struct SessionRow {
     expires_at: String,
 }
 
-const SELECT_SESSION: &str = "SELECT id, user_id, expires_at FROM sessions WHERE token_hash = ?";
-const INSERT_SESSION: &str =
+pub(crate) const SELECT_SESSION: &str =
+    "SELECT id, user_id, expires_at FROM sessions WHERE token_hash = ?";
+pub(crate) const INSERT_SESSION: &str =
     "INSERT INTO sessions (id, user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)";
-const DELETE_SESSION: &str = "DELETE FROM sessions WHERE id = ?";
+pub(crate) const DELETE_SESSION: &str = "DELETE FROM sessions WHERE id = ?";

@@ -355,11 +355,15 @@ pub fn gone(message: &str) -> worker::Response {
     respond::error(ErrorCode::Gone, message)
 }
 
-const INSERT_CHALLENGE: &str = "INSERT INTO webauthn_challenges (id, user_id, challenge, kind, \
+pub(crate) const INSERT_CHALLENGE: &str =
+    "INSERT INTO webauthn_challenges (id, user_id, challenge, kind, \
                                 expires_at) VALUES (?, ?, ?, ?, ?)";
-const DELETE_EXPIRED_CHALLENGES: &str = "DELETE FROM webauthn_challenges WHERE expires_at <= ?";
-const DELETE_CHALLENGE: &str = "DELETE FROM webauthn_challenges WHERE id = ?";
-const SELECT_CHALLENGE_WITH_USER: &str = "SELECT id, expires_at FROM webauthn_challenges \
+pub(crate) const DELETE_EXPIRED_CHALLENGES: &str =
+    "DELETE FROM webauthn_challenges WHERE expires_at <= ?";
+pub(crate) const DELETE_CHALLENGE: &str = "DELETE FROM webauthn_challenges WHERE id = ?";
+pub(crate) const SELECT_CHALLENGE_WITH_USER: &str =
+    "SELECT id, expires_at FROM webauthn_challenges \
                                            WHERE challenge = ? AND kind = ? AND user_id = ?";
-const SELECT_CHALLENGE_WITHOUT_USER: &str = "SELECT id, expires_at FROM webauthn_challenges \
+pub(crate) const SELECT_CHALLENGE_WITHOUT_USER: &str =
+    "SELECT id, expires_at FROM webauthn_challenges \
                                               WHERE challenge = ? AND kind = ? AND user_id IS NULL";

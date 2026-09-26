@@ -237,14 +237,17 @@ pub async fn delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Re
     respond::json(&serde_json::json!({ "id": id }))
 }
 
-const SELECT_PASSKEYS: &str = "SELECT id, name, created_at, last_used_at FROM passkey_credentials \
+pub(crate) const SELECT_PASSKEYS: &str =
+    "SELECT id, name, created_at, last_used_at FROM passkey_credentials \
                                WHERE user_id = ? ORDER BY created_at, id";
-const SELECT_PASSKEY: &str = "SELECT id, name, created_at, last_used_at FROM passkey_credentials \
+pub(crate) const SELECT_PASSKEY: &str =
+    "SELECT id, name, created_at, last_used_at FROM passkey_credentials \
                               WHERE id = ? AND user_id = ?";
-const UPDATE_NAME: &str = "UPDATE passkey_credentials SET name = ? WHERE id = ? AND user_id = ?";
+pub(crate) const UPDATE_NAME: &str =
+    "UPDATE passkey_credentials SET name = ? WHERE id = ? AND user_id = ?";
 /// 利用者に他のパスキーが残っているときだけ削除する (最後の 1 つは削除できない)。
-const DELETE_PASSKEY_IF_NOT_LAST: &str = "DELETE FROM passkey_credentials WHERE id = ? AND \
+pub(crate) const DELETE_PASSKEY_IF_NOT_LAST: &str = "DELETE FROM passkey_credentials WHERE id = ? AND \
                                           user_id = ? AND (SELECT COUNT(*) FROM passkey_credentials \
                                           WHERE user_id = ?) > 1";
-const INSERT_CREDENTIAL: &str = "INSERT INTO passkey_credentials (id, user_id, credential_id, \
+pub(crate) const INSERT_CREDENTIAL: &str = "INSERT INTO passkey_credentials (id, user_id, credential_id, \
                                  public_key, sign_count, name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)";

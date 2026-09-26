@@ -210,9 +210,10 @@ struct CredentialRow {
     sign_count: i64,
 }
 
-const SELECT_CREDENTIAL: &str = "SELECT id, user_id, public_key, sign_count FROM \
+pub(crate) const SELECT_CREDENTIAL: &str = "SELECT id, user_id, public_key, sign_count FROM \
                                  passkey_credentials WHERE credential_id = ?";
-const UPDATE_LAST_USED: &str = "UPDATE passkey_credentials SET last_used_at = ? WHERE id = ?";
+pub(crate) const UPDATE_LAST_USED: &str =
+    "UPDATE passkey_credentials SET last_used_at = ? WHERE id = ?";
 /// 保存値より大きいときだけ署名カウンタを更新する (同時のログインで保存値が後退しないようにする)。
-const UPDATE_SIGN_COUNT_IF_GREATER: &str =
+pub(crate) const UPDATE_SIGN_COUNT_IF_GREATER: &str =
     "UPDATE passkey_credentials SET sign_count = ?, last_used_at = ? WHERE id = ? AND sign_count < ?";

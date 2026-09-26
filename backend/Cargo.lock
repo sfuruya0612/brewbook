@@ -202,6 +202,9 @@ name = "coffee_log_admin"
 version = "0.1.0"
 dependencies = [
  "coffee_log_core",
+ "reqwest",
+ "serde",
+ "serde_json",
  "worker",
 ]
 
@@ -220,6 +223,7 @@ dependencies = [
 name = "coffee_log_pbt"
 version = "0.1.0"
 dependencies = [
+ "coffee_log_admin",
  "coffee_log_core",
  "proptest",
 ]

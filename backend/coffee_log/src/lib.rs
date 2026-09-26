@@ -13,6 +13,7 @@ pub mod db;
 pub mod export;
 pub mod logging;
 pub mod origin;
+pub mod queries;
 pub mod r2_check;
 pub mod random;
 pub mod records;
