@@ -69,7 +69,7 @@ Frontend は Flutter で Web を先行し、Backend は Rust で Cloudflare Work
 
 初版のレビュー後、2026-09-21 に筆者が未確定論点を所有者に諮り、所有者は次を決めた。
 
-- アプリ名は coffee-log とする。
+- アプリ名は coffee-log とする (2026-09-26 に brewbook へ変更した。ADR-0010)。
 - 独自ドメインは取得せず、Cloudflare が割り当てる workers.dev のホスト名を使う。
   Frontend のビルド成果物は Backend の Worker の Static Assets として配信する (ADR-0005)。
 - iOS の配布形態は引き続き後で決める。
@@ -96,6 +96,14 @@ Frontend は Flutter で Web を先行し、Backend は Rust で Cloudflare Work
 - ツールのバージョン管理と、ビルド、デプロイ、テストなどのコマンドラインは mise で管理する (ADR-0009)。
   Flutter と Rust のバージョンは `latest` ではなく版を固定し、wrangler も mise で管理する。
   同日に所有者が `mise.toml` を書き換え、Flutter 3.47.5、Rust 1.98.1 (wasm32-unknown-unknown ターゲット付き)、wrangler 4.135.0 を固定した。
+
+2026-09-26 に所有者は次を決めた。
+
+- アプリ名を brewbook に変更する。coffee-log の log がログの名前空間と紛らわしいためである。
+  Flutter のパッケージ名は brew_book、Rust のクレートは brew_book、brew_book_admin、brew_book_core とする (ADR-0010)。
+- GitHub Actions の action の版は、タグではなくコミットハッシュで固定する (ADR-0011)。
+- 負荷試験は k6 で VU 50 とし、ローカルの認証が不要な経路だけを対象にする。CI には含めない (ADR-0012)。
+- テストは E2E、PBT、Fuzzing、形式手法、単体の 5 種を網羅する (ADR-0013)。
 
 ## 目的
 
@@ -496,7 +504,7 @@ UI の文言は日本語と英語で表示できる。
 
 受け入れ基準は次の通りとする。
 
-- 管理者画面は `coffee-log-admin.<アカウントのサブドメイン>.workers.dev` で配信し、Worker 単位の Cloudflare Access 保護 (Workers のダッシュボードの Access タブ、または `worker` 種別のセルフホスト型アプリケーション) で管理者 Worker 全体を保護する (ADR-0008)。
+- 管理者画面は `brewbook-admin.<アカウントのサブドメイン>.workers.dev` で配信し、Worker 単位の Cloudflare Access 保護 (Workers のダッシュボードの Access タブ、または `worker` 種別のセルフホスト型アプリケーション) で管理者 Worker 全体を保護する (ADR-0008)。
   Access のポリシーは所有者のメールアドレスだけを許可する。
   ポリシーの内容は自動では検証できないため、デプロイ手順のチェック項目として管理者が Access の管理画面で確認する。
 - 管理者 Worker は Access の JWT を検証しない (所有者の決定)。
@@ -592,6 +600,11 @@ API は次の 4 つとする。
 - 統計の API (FR-18) は D1 の集計クエリで実装し、p95 200 ms の対象には含めない。
   統計の API の p95 は 500 ms 以内とし (2026-09-21 に所有者が決定)、成功指標の API の応答時間と同じログで測る。
   上の想定規模で全期間の集計が Workers の CPU 時間の上限に収まることを設計時に確認する。
+- リリースの前に、ローカルの wrangler dev に対して k6 で VU 50 の負荷試験を実行する (ADR-0012)。
+  対象は認証が不要な経路 (静的アセット 3 つとログインのチャレンジ発行) とし、失敗率 1% 未満、応答時間の p95 500 ms 未満を目安にする。
+  結果 (実行日時、p95、失敗率) は記録する。
+  本番の p95 の判定は Workers Logs の集計で行い、負荷試験の結果では代用しない。
+  `mise run check` には含めない。
 
 ### 可用性
 
@@ -633,8 +646,8 @@ API は次の 4 つとする。
 
 ## 制約と前提
 
-- アプリ名は coffee-log とし、Flutter のパッケージ名は coffee_log とする。
-  Rust は 3 つのクレート (利用者向けの Worker の coffee_log、管理者 Worker の coffee_log_admin、共有ライブラリの coffee_log_core) のワークスペースとする (ADR-0001)。
+- アプリ名は brewbook とし、Flutter のパッケージ名は brew_book とする。
+  Rust は 3 つのクレート (利用者向けの Worker の brew_book、管理者 Worker の brew_book_admin、共有ライブラリの brew_book_core) のワークスペースとする (ADR-0001、ADR-0010)。
 - Frontend は Flutter で書く。
   Web を先行し、iOS ネイティブは同じコードからビルドできる状態を保つ (ADR-0007)。
   ルーティングは go_router、グラフは fl_chart を使い、状態管理のライブラリは追加せず Flutter 標準の ChangeNotifier と ValueNotifier で扱う。
@@ -647,7 +660,7 @@ API は次の 4 つとする。
 - 写真は Cloudflare R2 に保存し、アップロード用の署名付き URL は shiguredo/s3-rs (`shiguredo_s3`) で生成する (ADR-0003)。
 - 認証はパスキーだけとし、WebAuthn のサーバー側検証は外部クレートを使わず最小限を自前で実装する。
   対応アルゴリズムは ES256、attestation は none だけとする (ADR-0004)。
-- Frontend と Backend は 1 つの Worker から `coffee-log.<アカウントのサブドメイン>.workers.dev` で配信し、`/api/*` を Rust の処理に、それ以外を Static Assets に振り分ける (ADR-0005)。
+- Frontend と Backend は 1 つの Worker から `brewbook.<アカウントのサブドメイン>.workers.dev` で配信し、`/api/*` を Rust の処理に、それ以外を Static Assets に振り分ける (ADR-0005)。
   独自ドメインは取得しない。
 - 管理者画面は別の Worker で配信し、Cloudflare Access で保護する (ADR-0008)。
 - データモデルは店、商品、購入、抽出の 4 つを中心とし、抽出は購入に紐づく (ADR-0006)。
@@ -659,7 +672,11 @@ API は次の 4 つとする。
   コメントは日本語、ログとエラーメッセージは英語で書く (所有者の共通規約)。
 - テストは次の規約と前提に従う。
   - Backend は Rust のテスト規約 (単体テストは `tests/test_<module>.rs`、PBT は `pbt/tests/prop_<module>.rs`、Fuzzing) に従う (所有者の共通規約)。
+  - テストの種別は E2E、PBT、Fuzzing、形式手法、単体の 5 種とし、役割は ADR-0013 に従う。
   - WebAuthn の検証ロジックは、公開されているテストベクタを使った単体テストと、CBOR と COSE のパーサに対する PBT と Fuzzing を持つ。
+  - WebAuthn のチャレンジ、登録用トークン、セッション、パスキーの状態遷移は、TLA+ の仕様と TLC のモデル検査で検証する (FR-1、FR-2、FR-3、FR-4。ADR-0013)。
+  - Frontend も PBT を持ち、値の変換、統計の期間、API の入力と応答の対応を検証する (ADR-0013)。
+  - Fuzzing の実行は nightly を要するため手元で行い、CI では対象の型検査を行う (ADR-0013)。
   - パスキーを伴う統合テストは、Chrome DevTools Protocol の仮想認証器で行う。
   - 有効期限などの時間に依存する検証は、設定値で短縮できるようにしてテストする。
   - Frontend は Flutter のウィジェットテストと統合テストを持つ。
@@ -696,6 +713,10 @@ API は次の 4 つとする。
 - ADR-0007: Frontend を Flutter で書き、Web を先行して iOS を後にする (`docs/adr/0007-frontend-flutter-web-first.md`)
 - ADR-0008: 管理者画面を別の Worker に置き、Cloudflare Access で保護する (`docs/adr/0008-admin-worker-cloudflare-access.md`)
 - ADR-0009: ツールチェーンのバージョン管理とコマンドラインを mise で管理する (`docs/adr/0009-mise-toolchain-and-tasks.md`)
+- ADR-0010: アプリ名と名前空間を brewbook に変更する (`docs/adr/0010-app-name-and-namespace-brewbook.md`)
+- ADR-0011: GitHub Actions の action をコミットハッシュで固定する (`docs/adr/0011-github-actions-commit-hash-pinning.md`)
+- ADR-0012: 負荷試験に k6 を使い、ローカルの認証が不要な経路を VU 50 で叩く (`docs/adr/0012-load-testing-with-k6.md`)
+- ADR-0013: テストを E2E、PBT、Fuzzing、形式手法、単体の 5 種で網羅する (`docs/adr/0013-five-test-layers.md`)
 - workers-rs: https://github.com/cloudflare/workers-rs
 - shiguredo/s3-rs: https://github.com/shiguredo/s3-rs
 - Cloudflare Workers の Rust 対応: https://developers.cloudflare.com/workers/languages/rust/
