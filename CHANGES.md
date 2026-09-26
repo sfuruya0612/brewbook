@@ -49,3 +49,5 @@
   - @sfuruya0612
 - [UPDATE] PRD のディレクトリ名を docs/prd に直す
   - @sfuruya0612
+- [UPDATE] GitHub Actions の uses をコミットハッシュに固定する
+  - @sfuruya0612
