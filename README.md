@@ -18,6 +18,8 @@ Frontend は Flutter、Backend は Rust の Cloudflare Worker、データベー�
   別オリジンになり、CORS を許可しない決定と `Origin` の検証に反するためである (ADR-0005)。
 - 写真のアップロードを使うときは、R2 の値を `backend/coffee_log/.dev.vars` (git 管理外) に置く。
   必要な名前は `R2_ENDPOINT`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` である。
+- 管理者画面をローカルで確認する: `mise run dev-admin`
+  登録用リンクが指す利用者向けのオリジンは `mise run dev` の `http://localhost:8787` になる。
 
 ## データベース (D1)
 

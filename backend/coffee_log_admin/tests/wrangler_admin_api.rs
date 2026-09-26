@@ -194,7 +194,7 @@ fn register_begin(servers: &Servers, token: &str) -> Response {
 }
 
 #[test]
-fn wrangler_admin_api_lists_the_users_with_the_display_name_created_at_and_passkey_count() {
+fn wrangler_admin_users_list_ok() {
     with_servers(|servers| {
         let display_name = "一覧の利用者 <script>";
         let id = create_user(servers, display_name);
@@ -239,7 +239,7 @@ fn wrangler_admin_api_lists_the_users_with_the_display_name_created_at_and_passk
 }
 
 #[test]
-fn wrangler_admin_api_rejects_invalid_display_names_with_400() {
+fn wrangler_admin_users_create_invalid_input_400() {
     with_servers(|servers| {
         let base_url = servers.admin.base_url();
         let before = servers
@@ -285,7 +285,7 @@ fn wrangler_admin_api_rejects_invalid_display_names_with_400() {
 }
 
 #[test]
-fn wrangler_admin_api_issues_a_token_and_saves_only_the_hash() {
+fn wrangler_admin_tokens_create_ok() {
     with_servers(|servers| {
         let id = create_user(servers, "トークンの利用者");
         let response = post_form_same_origin(
@@ -365,7 +365,7 @@ fn wrangler_admin_api_issues_a_token_and_saves_only_the_hash() {
 }
 
 #[test]
-fn wrangler_admin_api_reissue_invalidates_the_old_registration_link() {
+fn wrangler_admin_tokens_create_reissue_ok() {
     with_servers(|servers| {
         let id = create_user(servers, "再発行の利用者");
 
@@ -429,7 +429,7 @@ fn wrangler_admin_api_reissue_invalidates_the_old_registration_link() {
 }
 
 #[test]
-fn wrangler_admin_api_returns_404_for_an_unknown_user() {
+fn wrangler_admin_tokens_create_unknown_user_404() {
     with_servers(|servers| {
         let response = post_form_same_origin(
             &servers.admin.base_url(),
@@ -446,7 +446,7 @@ fn wrangler_admin_api_returns_404_for_an_unknown_user() {
 }
 
 #[test]
-fn wrangler_admin_api_rejects_another_origin_and_the_missing_origin_with_403() {
+fn wrangler_admin_origin_403() {
     with_servers(|servers| {
         let base_url = servers.admin.base_url();
         let id = create_user(servers, "Origin の利用者");
@@ -511,7 +511,7 @@ fn wrangler_admin_api_rejects_another_origin_and_the_missing_origin_with_403() {
 }
 
 #[test]
-fn wrangler_admin_api_creates_a_user_with_the_trimmed_display_name() {
+fn wrangler_admin_users_create_ok() {
     with_servers(|servers| {
         let base_url = servers.admin.base_url();
         let response =

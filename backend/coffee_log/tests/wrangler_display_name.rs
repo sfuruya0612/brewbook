@@ -111,6 +111,14 @@ fn wrangler_display_name_never_appears_in_the_responses() {
                 "{} {path} ({status}) must not contain the display name: {body}",
                 route.method.as_str()
             );
+            // セッションを消す 2 経路以外は、有効なセッションで到達できることを確かめる (401 と 500 を検出する)。
+            if !matches!(route.name, "auth_logout" | "account_delete") {
+                assert!(
+                    status != 401 && status != 500,
+                    "{} {path} must be reachable with a valid session but was {status}: {body}",
+                    route.method.as_str()
+                );
+            }
             // エクスポート (FR-14) は利用者の全記録を返すため、実際に読めていることを確かめる。
             if route.name == "export_get" {
                 assert_eq!(status, 200, "the export must succeed: {body}");

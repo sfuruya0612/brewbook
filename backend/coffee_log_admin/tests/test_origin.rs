@@ -54,6 +54,23 @@ fn another_scheme_or_host_or_port_is_not_same_origin() {
 }
 
 #[test]
+fn the_default_port_is_normalized() {
+    // 既定のポート (https の 443) は、表記に含めても含めなくても同じオリジンである。
+    assert!(
+        is_same_origin_value(Some("https://example.com:443"), "https://example.com/users").unwrap()
+    );
+    assert!(
+        is_same_origin_value(Some("https://example.com"), "https://example.com:443/users").unwrap()
+    );
+    // 既定でないポートは省略できない (省略すると別のオリジンになる)。
+    assert!(!is_same_origin_value(
+        Some("https://example.com"),
+        "https://example.com:8443/users"
+    )
+    .unwrap());
+}
+
+#[test]
 fn missing_origin_is_not_same_origin() {
     // `Origin` が無いリクエストは、同じオリジンからのものかを検証できないため一致しない扱いにする。
     assert!(

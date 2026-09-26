@@ -7,6 +7,22 @@ use std::collections::BTreeSet;
 
 use coffee_log_admin::queries::{self, STATEMENTS, TABLES};
 
+/// SELECT を含む文か。
+fn has_select(sql: &str) -> bool {
+    sql.to_lowercase()
+        .split_whitespace()
+        .any(|word| word == "select")
+}
+
+/// 全ての列を選ぶ文か (`SELECT *`)。
+fn selects_every_column(sql: &str) -> bool {
+    sql.to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .windows(2)
+        .any(|pair| pair[0] == "select" && pair[1] == "*")
+}
+
 /// SQL の列からテーブル名の集合を作る。
 fn tables_in_statements() -> BTreeSet<String> {
     let mut names = BTreeSet::new();
@@ -34,6 +50,31 @@ fn sql_uses_the_three_tables_only() {
         expected,
         "the admin worker must touch only {expected:?}"
     );
+}
+
+#[test]
+fn the_selects_do_not_select_every_column() {
+    // 取得は列を明示する (`SELECT *` を使わない)。列を明示しないと、users の display_name が
+    // 応答に混ざっても気付けない (FR-17)。
+    for sql in STATEMENTS {
+        if has_select(sql) {
+            assert!(
+                !selects_every_column(sql),
+                "the statement must not select every column: {sql}"
+            );
+        }
+    }
+}
+
+#[test]
+fn selects_every_column_reads_the_star_after_select() {
+    assert!(selects_every_column("SELECT * FROM users"));
+    assert!(selects_every_column("select\n  * from users"));
+    assert!(!selects_every_column(
+        "SELECT COUNT(*) FROM passkey_credentials"
+    ));
+    assert!(!selects_every_column("SELECT id FROM users"));
+    assert!(!selects_every_column("SELECTED * FROM users"));
 }
 
 #[test]
