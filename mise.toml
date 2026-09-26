@@ -9,6 +9,8 @@ ripgrep = "15.2.0"
 chromedriver = "154.0.8037.57"
 # ローカルの負荷試験のクライアント (issue 0025、ADR-0012)。
 k6 = "2.3.0"
+# TLA+ の TLC を動かす JDK (ADR-0013)。
+java = "temurin-25.0.4+101.0.LTS"
 
 # ツールの版とコマンドラインは mise.toml に集約する (ADR-0009)。
 # タスクは標準のコマンドの組み合わせにし、ツールの版は [tools] だけが持つ。
@@ -52,7 +54,29 @@ depends = [
 
 [tasks.check]
 description = "静的検査と全ての自動テストを実行する (CI と手元の共通の入口)"
-depends = ["fmt", "lint", "frontend:build", "frontend:analyze", "test"]
+depends = ["fmt", "lint", "frontend:build", "frontend:analyze", "formal", "test"]
+
+[tasks.formal]
+description = "認証の状態遷移の TLA+ 仕様を TLC でモデル検査する"
+# tla2tools.jar は mise のレジストリに無いため、版とチェックサムを固定して取得する (ADR-0013)。
+# jar はリポジトリに含めず、formal/.cache/ に置く (.gitignore の対象)。
+# チェックサムの確認は標準のコマンド (curl、shasum) の組み合わせで行う (ADR-0009)。
+run = """
+set -e
+if ! command -v shasum > /dev/null 2>&1; then
+  echo "shasum is required to verify tla2tools.jar but was not found" >&2
+  exit 1
+fi
+mkdir -p formal/.cache
+if [ ! -f formal/.cache/tla2tools.jar ]; then
+  curl -fsSL --connect-timeout 10 --max-time 300 -o formal/.cache/tla2tools.jar https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
+fi
+printf '%s  %s\\n' 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88 formal/.cache/tla2tools.jar | shasum -a 256 -c - > /dev/null || {
+  echo "tla2tools.jar checksum mismatch: delete formal/.cache/tla2tools.jar and retry" >&2
+  exit 1
+}
+java -cp formal/.cache/tla2tools.jar tlc2.TLC -workers 1 -cleanup -metadir formal/.cache/states -config formal/auth.cfg formal/auth.tla
+"""
 
 [tasks."backend:build"]
 description = "利用者向けの Worker をビルドする"

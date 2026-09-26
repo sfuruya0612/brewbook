@@ -4,6 +4,9 @@
 # worker-build の出力
 /backend/brew_book/build/
 
+# TLA+ の TLC の jar と作業ディレクトリ (formal/README.md を参照)
+/formal/.cache/
+
 # Flutter のビルド成果物
 /frontend/build/
 /frontend/.dart_tool/

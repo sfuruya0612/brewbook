@@ -53,3 +53,5 @@
   - @sfuruya0612
 - [UPDATE] k6 の VU 50 の負荷試験を追加する
   - @sfuruya0612
+- [UPDATE] 認証の状態遷移の TLA+ の仕様と TLC の検査を追加する
+  - @sfuruya0612
