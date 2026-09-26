@@ -1,0 +1,48 @@
+# PRD のディレクトリ名を docs/prd に直す
+
+Created: 2026-09-26
+Model: deepseek-v4p1-flash
+Completed: 2026-09-26
+
+## 背景
+
+PRD は `docs/pdr/coffee-log.md` に置かれている。
+`pdr` は `prd` (Product Requirements Document) の綴りの誤りである。
+`docs/pdr` を指す箇所は `README.md` の 5 行目と `docs/adr/0001-backend-rust-on-cloudflare-workers.md` の 9 行目の 2 つである (2026-09-26 に `git grep -n 'docs/pdr'` で確認)。
+ほかに ADR-0010 の背景と対応表にも `docs/pdr/coffee-log.md` があるが、これは改名の前の記録なので変更しない。
+
+## 対応方針
+
+- `git mv docs/pdr docs/prd` で移動する。
+- `README.md` と `docs/adr/0001-backend-rust-on-cloudflare-workers.md` の参照を `docs/prd/coffee-log.md` に更新する。
+- `CHANGES.md` の `### misc` に `[UPDATE] PRD のディレクトリ名を docs/prd に直す` を追加し、担当者を `@sfuruya0612` とする。
+
+## 完了条件
+
+- `docs/prd/coffee-log.md` が存在し、`docs/pdr` が存在しない。
+- `git grep -n 'docs/pdr' -- ':!docs/issues' ':!docs/adr/0010-app-name-and-namespace-brewbook.md'` が何も出さない (issue のファイル (close 後は `docs/issues/closed/` に移る) と、ADR-0010 の改名の前の記録を除く)。
+- `README.md` と `docs/adr/0001-backend-rust-on-cloudflare-workers.md` の参照が `docs/prd/coffee-log.md` を指す。
+- `CHANGES.md` の `### misc` に `[UPDATE]` のエントリがある。
+- `mise run check` が通過する。作業の前から失敗している検査がある場合は、同じ失敗だけであることを確認して issue に記録する。
+
+## 解決方法
+
+PRD のディレクトリ名の誤り (`docs/pdr`) を `docs/prd` に直した。
+
+- `git mv docs/pdr docs/prd` で `docs/prd/coffee-log.md` に移動した。
+- `README.md` の 5 行目の参照を `docs/prd/coffee-log.md` に更新した。
+- `docs/adr/0001-backend-rust-on-cloudflare-workers.md` の 9 行目の参照を `docs/prd/coffee-log.md` に更新した (本文の内容は変更せず、PRD を指すパスだけを直した)。
+- `CHANGES.md` の `### misc` に `[UPDATE]` のエントリ (「PRD のディレクトリ名を docs/prd に直す」) を追加した。
+
+完了条件の検証:
+
+- `docs/prd/coffee-log.md` が存在し、`docs/pdr` は存在しない。
+- `git grep -n 'docs/pdr' -- ':!docs/issues' ':!docs/adr/0010-app-name-and-namespace-brewbook.md'` が何も出さない (issue のファイルと、ADR-0010 の改名の前の記録を除く)。
+- `README.md` と `docs/adr/0001-backend-rust-on-cloudflare-workers.md` の参照が `docs/prd/coffee-log.md` を指す。
+- `CHANGES.md` の `### misc` に `[UPDATE]` のエントリがある。
+- ベースライン (作業前) の `mise run check` (既定の並列実行) は通過していた (exit 0)。今回の変更に起因する新たな失敗は確認されていない。
+- `mise run check` が通過した (直列実行 `mise run --jobs 1 check` で 1249 秒)。既定の並列実行では `frontend:test-integration` が Chrome のセッション作成に失敗した (`SessionNotCreatedException (500): session not created: DevToolsActivePort file doesn't exist`)。2 回連続で失敗し、失敗した実行では Flutter の Web ビルド 2 つと Rust のテストのコンパイルが同時に走っていた。失敗したタスクは単独実行 (`mise run frontend:test-integration`) では通過し、直列実行でも通過した。本 issue の変更は `CHANGES.md`、`README.md`、ADR-0001 の参照、PRD の改名だけで、コードとテストに触れていない。失敗の原因は未特定で、新規の bug issue (0029) に記録した。
+
+方針からの乖離: 無し。
+
+補足: 改名 (`docs/pdr` → `docs/prd`) は、その後の bug issue 0029 の登録のコミット (`04f3ec1`) に混入してコミットされた (`git mv` が移動をステージ済みにしていたため)。本 issue の close のコミットには、残りの変更 (`README.md`、`docs/adr/0001-backend-rust-on-cloudflare-workers.md`、`CHANGES.md`) と本 issue の close を含める。今後はコミットの前にステージの内容を確認する。

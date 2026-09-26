@@ -2,7 +2,7 @@
 
 コーヒーの購入と抽出を記録するアプリ。
 Frontend は Flutter、Backend は Rust の Cloudflare Worker、データベースは Cloudflare D1、写真は Cloudflare R2 を使う。
-全体の要求は `docs/pdr/coffee-log.md`、設計の決定は `docs/adr/` にある。
+全体の要求は `docs/prd/coffee-log.md`、設計の決定は `docs/adr/` にある。
 
 ## 開発の前提
 

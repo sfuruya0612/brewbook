@@ -45,3 +45,5 @@
   - @sfuruya0612
 - [UPDATE] 組織名を含むハンドルと個人のパスを Git の履歴から取り除く
   - @sfuruya0612
+- [UPDATE] PRD のディレクトリ名を docs/prd に直す
+  - @sfuruya0612
