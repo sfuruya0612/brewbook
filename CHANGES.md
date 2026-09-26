@@ -51,3 +51,5 @@
   - @sfuruya0612
 - [UPDATE] GitHub Actions の uses をコミットハッシュに固定する
   - @sfuruya0612
+- [UPDATE] k6 の VU 50 の負荷試験を追加する
+  - @sfuruya0612

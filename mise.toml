@@ -7,6 +7,8 @@ ripgrep = "15.2.0"
 # Flutter の統合テスト (flutter drive) が使う。版は手元の Chrome と CI の Chrome for Testing に
 # 揃える (ブラウザ本体はリポジトリのツールチェーンに含められないため、CI はワークフローで同じ版を入れる)。
 chromedriver = "154.0.8037.57"
+# ローカルの負荷試験のクライアント (issue 0025、ADR-0012)。
+k6 = "2.3.0"
 
 # ツールの版とコマンドラインは mise.toml に集約する (ADR-0009)。
 # タスクは標準のコマンドの組み合わせにし、ツールの版は [tools] だけが持つ。
@@ -103,6 +105,11 @@ dir = "backend/brew_book_admin"
 # スキーマの適用は利用者向けの Worker のデプロイ手順で行い、Cloudflare Access の設定はデプロイの後に行う (README)。
 # デプロイのタスクは `mise run check` に含めない (0002 の規則)。
 run = "wrangler deploy"
+
+[tasks.load]
+description = "ローカルの wrangler dev に VU 50 の負荷試験をかける (mise run dev の起動が必要)"
+# 対象は認証が不要な経路だけとし、本番は対象にしない (ADR-0012)。check には含めない。
+run = "k6 run load/k6/load.js"
 
 [tasks."verify-deploy"]
 description = "デプロイ後の確認: 管理者画面が Cloudflare Access で保護されていることを確認する"

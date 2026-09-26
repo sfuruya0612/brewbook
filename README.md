@@ -20,6 +20,12 @@ Frontend は Flutter、Backend は Rust の Cloudflare Worker、データベー�
   必要な名前は `R2_ENDPOINT`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` である。
 - 管理者画面をローカルで確認する: `mise run dev-admin`
   登録用リンクが指す利用者向けのオリジンは `mise run dev` の `http://localhost:8787` になる。
+- 負荷試験を行う: `mise run db-migrate` と `mise run dev` を実行した状態で `mise run load`
+  ローカルの API と静的アセットに VU 50 で 1 分間の負荷をかける (ADR-0012)。
+  対象は認証が不要な経路 (画面、`main.dart.js`、`flutter_bootstrap.js`、ログインのチャレンジ発行) だけである。
+  閾値は失敗率 1% 未満と応答時間の p95 500 ms 未満で、満たさない場合は終了コードが 0 以外になる。
+  結果は k6 のサマリで確認し、リリースの記録として残す。
+  本番は対象にせず、`mise run check` にも含めない。
 
 ## データベース (D1)
 
