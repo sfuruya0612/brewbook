@@ -34,6 +34,8 @@
   - @sfuruya0612
 - [ADD] 画面と API を同一オリジンの 1 つの Worker から配信する
   - @sfuruya0612
+- [ADD] 管理者 Worker と Cloudflare Access の保護を追加する
+  - @sfuruya0612
 
 ### misc
 
