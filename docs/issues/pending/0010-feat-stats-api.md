@@ -112,7 +112,7 @@ Workers の CPU 時間の上限に対する余裕の確認は、利用するプ�
 
 ## pending にした理由
 
-2026-09-23 に実装と自動テストと想定規模の計測を完了し、コミット b9d1d55 に記録した。完了条件の「Workers の CPU 時間の上限に対して余裕があることの確認」は、利用するプラン (Workers Free は CPU 10 ms、Workers Paid は既定 30 秒) が PRD にも ADR にも定められておらず、所有者の決定 (プラン) と、本番の Workers Logs での CPU 時間の確認 (リリース後) が要る。所有者の指示により close せず pending に置く。
+2026-09-23 に実装と自動テストと想定規模の計測を完了し、コミット fbdff32 に記録した。完了条件の「Workers の CPU 時間の上限に対して余裕があることの確認」は、利用するプラン (Workers Free は CPU 10 ms、Workers Paid は既定 30 秒) が PRD にも ADR にも定められておらず、所有者の決定 (プラン) と、本番の Workers Logs での CPU 時間の確認 (リリース後) が要る。所有者の指示により close せず pending に置く。
 
 再開には、次が必要である。
 

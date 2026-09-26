@@ -43,3 +43,5 @@
   - @sfuruya0612
 - [UPDATE] fuzz クレートの型検査を lint に追加する
   - @sfuruya0612
+- [UPDATE] 組織名を含むハンドルと個人のパスを Git の履歴から取り除く
+  - @sfuruya0612

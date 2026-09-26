@@ -2,6 +2,7 @@
 
 Created: 2026-09-26
 Model: deepseek-v4p1-flash
+Completed: 2026-09-26
 
 ## 背景
 
@@ -74,3 +75,53 @@ closed の issue は当時の記録として変更しない。closed の issue �
 - `CHANGES.md` の `### misc` に `[UPDATE]` のエントリがある。
 - 入れた `git filter-repo` の版、`--replace-text` と `--replace-message` と `--force` を使ったこと、旧ハッシュから新ハッシュへの対応表を issue に記録する。
 - `mise run check` が通過する。作業の前から失敗している検査がある場合は、同じ失敗だけであることを確認して issue に記録する。
+
+## 解決方法
+
+全履歴のファイルの内容とコミットメッセージを `git filter-repo` 2.47.0 (`git filter-repo --version` の出力は `a40bce548d2c`) で置換した。
+実行の前に、作業ツリーがクリーンであること (`git status --porcelain` が空) と、直前のコミット数 36 を記録した。
+`git bundle create ../coffee-before-rewrite.bundle --all` でバックアップを取った。
+書き換えと検証が終わった後にバックアップを削除した (`test ! -e ../coffee-before-rewrite.bundle` が真)。
+置換の対応表は作業ディレクトリの外に置き、書き換えの後に削除した (リポジトリに含めていない)。
+
+変更の内容:
+
+- 旧い担当者のハンドル (`CHANGES.md` の `  - @` の行の値) を `@sfuruya0612` に置換した (`--replace-text`)。
+  全履歴の 19 コミット分が対象になった (`CHANGES.md` の 18 コミットと、`docs/issues/closed/0015-feat-flutter-stats-screen.md` の当該の行を変更した `90ec45c`)。
+- `docs/issues/0020-bug-worker-build-race-in-the-shared-build-directory.md` の再現ログの絶対パスを `/Users/user/apps/coffee/backend/coffee_log/build/.tmp/package.json` に置換した (`--replace-text`)。
+- コミットメッセージにも同じ置換を適用した (`--replace-message`)。該当は無かった。
+- リモートを持たないリポジトリのため `--force` を付けて実行した。
+- `.git/filter-repo/commit-map` に基づき、pending の issue のコミットハッシュ参照 7 件を更新した。
+
+| issue | 旧ハッシュ | 新ハッシュ |
+| --- | --- | --- |
+| pending/0009 | 2d1c2ee | 928d9c6 |
+| pending/0010 | b9d1d55 | fbdff32 |
+| pending/0012 | 5805484 | 1dd2bb3 |
+| pending/0017 | 6e48c94 | 4eff521 |
+| pending/0017 | 3f2f593 | 31d9550 |
+| pending/0018 | ea37b23 | edc3ac1 |
+| pending/0018 | 71ff292 | 735681a |
+
+- `CHANGES.md` の `### misc` に `[UPDATE]` のエントリ (「組織名を含むハンドルと個人のパスを Git の履歴から取り除く」) を追加した。
+- 背景が参照する `90ec45c` は書き換えで `85c145d` になった。
+  到達不能だった amend 前のコミット `5650c9fe` は掃除され、`git fsck --unreachable --no-reflogs` は何も報告しない。
+- author と committer は所有者の指定どおり変更していない (`git log --format='%an <%ae>|%cn <%ce>' | sort -u` が 1 行のまま)。
+
+完了条件の検証:
+
+- 実行前の `git status --porcelain` が空であったことと、バックアップの作成と削除を確認した。
+- `git log --all --format='%H' | wc -l` は 36 で、書き換えの直前の値と同じ (コミットは欠けていない)。
+- `git grep -h -E '^  - @' $(git rev-list --all) | sort -u` が `  - @sfuruya0612` の 1 行になり、全履歴の担当者の行が `@sfuruya0612` だけになった。
+- `git grep -c -h -E '^  - @' -- CHANGES.md` が 20 を返す (既存の 19 行と本 issue の `[UPDATE]` の 1 行)。
+- `git grep -h -o -E '/Users/[^/]+' $(git rev-list --all) -- CHANGES.md 'docs/issues/0020-*.md' 'docs/issues/closed/0020-*.md' | sort -u` が `/Users/user` の 1 行になり、0020 のパスは置換後の値になった。
+- 対応表の 2 行の左辺のそれぞれについて、全履歴に現れないことを確認した。`left=$(sed -n 'Np' <対応表> | sed 's/==>.*//'); git grep -l -F "$left" $(git rev-list --all) | wc -l` を N=1 と N=2 で実行し、両方 0 件になった (2 行目の左辺 (0020 のパスの利用者名の部分) は、完了条件の `/Users/` の検査でも重ねて確認した。対応表は既に削除した)。
+- `git log --format='%an <%ae>|%cn <%ce>' | sort -u` が 1 行で、書き換えの前後で変わっていない。
+- `git fsck --unreachable --no-reflogs` が何も報告しない。`.git/logs/HEAD` に書き換え前の identity を含む行は無い (書き換えの前に行を控えて比較した)。
+- pending の issue の 7 件のハッシュ参照を上の表のとおり更新した。
+- `mise run check` が通過した (1222 秒)。ベースラインも通過しており、新たな失敗は無い。
+
+方針からの乖離: 無し。
+方針が挙げた採らなかった案 (git filter-branch、BFG Repo-Cleaner、直近のコミットだけの書き換え、履歴を残す) は採用しなかった。
+
+補足: 背景の「2026-09-26 時点で 32 コミット」は、起票と PRD と ADR のコミットを加える前の調査時点の値である。書き換えの後の現在は、`CHANGES.md` に担当者の行があるコミットは 34 である (増えた 2 コミットは、ハンドルが `@sfuruya0612` に置換された後の `CHANGES.md` を持つ)。
