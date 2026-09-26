@@ -76,3 +76,16 @@ ADR-0008 は、利用者の作成と登録用トークンの発行 (PRD の FR-1
 
 - 0005 が登録用トークンの検証とパスキーの登録を作る。
 - 0017 が利用者向けの Worker のデプロイとオリジンの検証を作る。
+
+## 実装詳細の乖離
+
+方式は変えず、実装の詳細として次を選んだ。
+
+1. 乱数の取得 (`backend/coffee_log_admin/src/random.rs`) は 0005 の利用者向けの実装と同じものを置いた (別クレートで、共有すると `coffee_log_core` が `worker` に依存してしまうため。追加する依存は増やしていない)。
+2. 管理者 Worker の依存は `serde` と `worker` (d1)、開発依存は `reqwest` と `serde_json` とし、利用者向けの Worker と同じ組に限った (ADR-0001)。PBT は `coffee_log_admin` を開発依存として参照する。
+3. FR-17 の「表示名を読まない」「`SELECT *` を使わない」「扱うテーブルは 3 つだけ」の検査のため、`backend/coffee_log/src/queries.rs` を新設して利用者向けの SQL 文を 1 か所に列挙し、`auth/*` と `d1_check.rs` の SQL の定数を `pub(crate)` にした (文の内容は不変)。
+4. HTML の生成と入力の検証は純関数として `html.rs` と `input.rs` に置き、単体テストに加えて PBT (`backend/pbt/tests/prop_admin_html.rs`、`prop_admin_input.rs`) で性質を検査した (既存のテストの方針に合わせた)。
+5. `mise run verify-deploy` は、対象の管理者 Worker の URL を環境変数 `ADMIN_ORIGIN` で受け取る (デプロイ先はアカウントごとに異なり、リポジトリに実値を含めないため)。
+6. 経路の台帳の `POST /users/:id/tokens` は `has_input` を false にした (`:id` の経路のパラメータは入力に数えない。0017 の `suggestions_list` と同じ扱い)。
+7. `Origin` の検証は 0017 と同じ規則を管理者 Worker にも置いた (URL として正規化して比較し、`Origin` が無ければ 403。`backend/coffee_log_admin/src/origin.rs`)。
+8. 登録用リンクのオリジンは `[vars]` の `APP_ORIGIN` で持ち、ローカルの開発では既定値 (`http://localhost:8787`) を使う (本番の値はデプロイの前に置き換える)。
