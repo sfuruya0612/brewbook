@@ -2,6 +2,7 @@
 
 Created: 2026-09-26
 Model: deepseek-v4p1-flash
+Completed: 2026-09-27
 対応 ADR: ADR-0013 (docs/adr/0013-five-test-layers.md)
 関連 PRD: 制約と前提 (テスト)
 依存: 0023
@@ -50,3 +51,29 @@ Flutter の値の変換、統計の期間の組み立て、API の入力と応�
 - 反例が出たときの再現手順 (シードの指定方法) がテストのコメントに書かれている。
 - `mise run check` が通過する。作業の前から失敗している検査がある場合は、同じ失敗だけであることを確認して issue に記録する。
 - `CHANGES.md` の `### misc` に `[ADD]` のエントリがある。
+
+## 解決方法
+
+Flutter の値の変換、統計の期間の組み立て、API の入力と応答の対応に PBT を追加した (ADR-0013)。
+
+- `frontend/pubspec.yaml` の `dev_dependencies` に `kiri_check: ^1.3.1` を追加した (ADR-0013 が選んだライブラリ)。`frontend/pubspec.lock` も依存の追加に合わせて更新された。
+- `frontend/test/property/values_property_test.dart` に 5 つの性質を書いた。年 0000 から 9999、月 1 から 12、日 1 から 31 の日付について、実在する日付は `formatDay` と `parseDay` が往復し、実在しない日付 (2 月 30 日、4 月 31 日、平年の 2 月 29 日など) は null を返すこと。形式の違反 (並びの違い、区切りの違い、ゼロ埋めの無い月日、余分な接尾辞、空白だけの文字列) は null を返すこと。時 0 から 23 と分 0 から 59 の `formatTime` と `parseTime` の往復。0 以上 2^53 以下の整数の `formatNumber` と `parseCount` の往復 (一様に生成できるのは 2^32-1 までで、上位の桁は代表する定数 2^32、2^40、2^48、2^53 で確認する)。小数第 1 位までの小数の `formatNumber` と `parseDecimal` の往復 (一様に生成できるのは (2^32-1)/10 = 429496729.5 までで、上位の桁は代表する定数 10^10、10^12、10^14、10^20、10^21 の直前で確認する)。
+- `frontend/test/property/stats_period_property_test.dart` に 7 つの性質を書いた。当月 (月初から当日、日別)、3 か月、6 か月、12 か月 (年をまたぐ場合を含む)、任意の期間 (62 日以下なら日別、63 日以上なら月別)、62 日と 63 日の境界の固定値、終了日が開始日より前の任意の期間の例外、`statsDayCount` が両端を含む日数になること、`statsDayCount` が終了日より前なら正の値にならないこと。日付の加算は、タイムゾーンと夏時間の影響を受けないように日付の部品を組み立て直して行う。
+- `frontend/test/property/api_json_property_test.dart` に 4 つの性質を書いた。店、商品、購入、抽出の入力の `toJson` が作る JSON に、応答に必要な `id` と日時と入れ子のオブジェクト (購入の `product` と `shop`、抽出の `purchase` とその中の `product` と `shop`) を足し、`fromJson` で読み戻して重なる項目の値が一致することの性質。null を生成するのは、店の住所、商品の Producer、Origin、Region、Process、Variety、購入の Roast、価格、重量、購入の店の有無である (抽出の項目は非 null のみ)。
+- `CHANGES.md` の `### misc` に `[ADD]` のエントリ (「Flutter の値の変換と統計の期間と入力の形に PBT を追加する」) を追加した。
+
+完了条件の検証:
+
+- `frontend/pubspec.yaml` の `dev_dependencies` に `kiri_check` がある。
+- `mise run frontend:test` で 3 ファイルの性質が実行され、通過した (`flutter test test/property` の単独実行で 16 件 (5 + 7 + 4) が通過。全体でも通過した)。
+- `frontend/test/property/values_property_test.dart` の 5 つの性質が通過した (日付の往復と実在しない日付の拒否、形式の違反の拒否、時刻の往復、整数の往復、小数の往復)。
+- `frontend/test/property/stats_period_property_test.dart` の 7 つの性質が通過した (当月、3 か月/6 か月/12 か月、任意の期間の粒度、62 日と 63 日の固定値、任意の期間の例外、`statsDayCount` の両端を含む日数、`statsDayCount` の非正の値)。
+- `frontend/test/property/api_json_property_test.dart` の 4 つの性質が通過した (店、商品、購入、抽出の入力と応答の対応)。
+- 反例が出たときの再現手順 (失敗の出力の seed を `forAll` の `seed` に指定する) を、3 ファイルの冒頭のコメントに書いた。
+- `mise run check` が通過した (直列実行で 1995.91 秒。既定の並列実行は Chrome の起動失敗 (0029) を避けるため使わなかった)。この実行は、3 つのテストファイルを確定した後に実行した。
+- `CHANGES.md` の `### misc` に `[ADD]` のエントリがある。
+
+方針からの乖離: 無し。
+補足: 日付を年、月、日の部品から生成するのは、実在する日付と実在しない日付の両方を同じ部品の組合せから作り、`DateTime` の繰り上げの有無で判定するためである。
+補足: kiri_check の整数生成器が一様に生成できる上限は 2^32-1 である。整数と小数の性質では、その範囲の一様な生成に加えて、上位の桁を代表する定数を生成して境界を確認する。
+補足: 最後にコメントと生成する定数を整理し、`flutter analyze` と `flutter test` (168 件) を再実行して通過を確認した (check の後に変わったのはコメントと定数の並びだけである)。

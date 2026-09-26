@@ -55,3 +55,5 @@
   - @sfuruya0612
 - [UPDATE] 認証の状態遷移の TLA+ の仕様と TLC の検査を追加する
   - @sfuruya0612
+- [ADD] Flutter の値の変換と統計の期間と入力の形に PBT を追加する
+  - @sfuruya0612
