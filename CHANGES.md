@@ -57,3 +57,5 @@
   - @sfuruya0612
 - [ADD] Flutter の値の変換と統計の期間と入力の形に PBT を追加する
   - @sfuruya0612
+- [ADD] Fuzzing の対象を入力の文字列パーサに広げる
+  - @sfuruya0612

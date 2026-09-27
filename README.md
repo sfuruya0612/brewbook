@@ -27,6 +27,17 @@ Frontend は Flutter、Backend は Rust の Cloudflare Worker、データベー�
   結果は k6 のサマリで確認し、リリースの記録として残す。
   本番は対象にせず、`mise run check` にも含めない。
 
+## Fuzzing
+
+入力のパーサのパニック安全性は、cargo fuzz で手元で確認する (ADR-0013)。
+CI では実行せず、対象の型検査だけを行う。
+
+- nightly を入れる: `rustup toolchain install nightly`
+- cargo-fuzz を入れる: `cargo install cargo-fuzz`
+- リポジトリの `backend/brew_book_core` で、対象と時間の上限を指定して実行する。
+  - `cargo +nightly fuzz run parse -- -max_total_time=60` (CBOR、COSE、base64url、WebAuthn の検証)
+  - `cargo +nightly fuzz run parse_strings -- -max_total_time=60` (入力の文字列のパーサ)
+
 ## データベース (D1)
 
 - スキーマは wrangler の D1 マイグレーションで管理し、`backend/brew_book/migrations/` に置く (ADR-0002)。
