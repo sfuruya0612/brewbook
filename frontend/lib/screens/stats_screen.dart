@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../api/models.dart';
+import '../api/stats_api.dart';
 import '../l10n/app_localizations.dart';
 import '../records/record_services.dart';
 import '../records/stats_period.dart';
 import '../records/values.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
 import '../widgets/day_time_fields.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/error_message.dart';
 import '../widgets/stats_charts.dart';
+import '../widgets/wide_layout.dart';
 
 /// 統計の画面 (FR-18)。
 ///
@@ -153,12 +157,27 @@ class _StatsScreenState extends State<StatsScreen> {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.statsTitle)),
-      body: Column(
-        children: <Widget>[
-          _periodSelector(l10n),
-          if (_preset == StatsPeriodPreset.custom) _customFields(l10n),
-          Expanded(child: _body(context, l10n)),
-        ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= wideLayoutBreakpoint;
+          final content = Column(
+            children: <Widget>[
+              _periodSelector(l10n),
+              if (_preset == StatsPeriodPreset.custom) _customFields(l10n),
+              Expanded(child: _body(context, l10n, wide)),
+            ],
+          );
+          if (!wide) {
+            return content;
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              const BrewbookNavigationRail(selectedIndex: 4),
+              Expanded(child: content),
+            ],
+          );
+        },
       ),
     );
   }
@@ -167,17 +186,29 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget _periodSelector(AppLocalizations l10n) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.x4,
+        vertical: AppSpacing.x2,
+      ),
       child: Row(
         children: <Widget>[
           for (final preset in StatsPeriodPreset.values)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                key: Key('stats-period-${preset.name}'),
-                label: Text(_presetLabel(l10n, preset)),
-                selected: _preset == preset,
-                onSelected: (selected) => _selectPreset(preset),
+              padding: const EdgeInsets.only(right: AppSpacing.x2),
+              child: SizedBox(
+                height: 32,
+                child: ChoiceChip(
+                  key: Key('stats-period-${preset.name}'),
+                  label: Text(_presetLabel(l10n, preset)),
+                  labelStyle: AppTextStyle.label(
+                    color: _preset == preset
+                        ? BrewbookTheme.of(context).palette.onRoast
+                        : BrewbookTheme.of(context).palette.ink,
+                  ),
+                  selected: _preset == preset,
+                  onSelected: (selected) => _selectPreset(preset),
+                  showCheckmark: false,
+                ),
               ),
             ),
         ],
@@ -185,14 +216,58 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
+  /// 選択中の範囲と粒度の 1 行 (caption)。
+  Widget _rangeCaption(AppLocalizations l10n) {
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
+    final period = statsPeriodFor(
+      _preset,
+      widget.services.clock.now(),
+      customStart: _customStart,
+      customEnd: _customEnd,
+    );
+    final String granularity = _granularityLabel(l10n, period.granularity);
+    final TextStyle dateStyle = AppTextStyle.mono(
+      size: 12,
+      lineHeight: 16,
+      color: brewbook.palette.inkMuted,
+    );
+    final StatelessWidget caption;
+    final String? start = period.start;
+    final String? end = period.end;
+    if (start == null || end == null) {
+      caption = Text(
+        l10n.statsRangeAllTime(granularity),
+        style: AppTextStyle.caption(color: brewbook.palette.inkMuted),
+      );
+    } else {
+      caption = Text.rich(
+        TextSpan(
+          style: AppTextStyle.caption(color: brewbook.palette.inkMuted),
+          children: <InlineSpan>[
+            TextSpan(text: l10n.statsRangePrefix),
+            TextSpan(text: start, style: dateStyle),
+            TextSpan(text: l10n.statsRangeMiddle),
+            TextSpan(text: end, style: dateStyle),
+            TextSpan(text: l10n.statsRangeSuffix(granularity)),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+      child: Align(alignment: Alignment.centerLeft, child: caption),
+    );
+  }
+
   /// 任意の開始日と終了日の入力 (FR-18)。
   Widget _customFields(AppLocalizations l10n) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Expanded(
                 child: DayField(
@@ -202,7 +277,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   errorText: _startError,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.x3),
               Expanded(
                 child: DayField(
                   key: const Key('stats-end-day'),
@@ -213,41 +288,96 @@ class _StatsScreenState extends State<StatsScreen> {
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.x3),
           Align(
             alignment: Alignment.centerRight,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: FilledButton(
-                onPressed: _applyCustom,
-                child: Text(l10n.statsApplyButton),
+            child: OutlinedButton(
+              onPressed: _applyCustom,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 36),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+                textStyle: AppTextStyle.label(
+                  color: BrewbookTheme.of(context).palette.ink,
+                ),
               ),
+              child: Text(l10n.statsApplyButton),
             ),
           ),
+          if (_startError == null && _endError == null && _customStart != null && _customEnd != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.x2),
+              child: Text(
+                l10n.statsCustomGranularityNote(
+                  statsDayCount(_customStart!, _customEnd!),
+                  _granularityLabel(
+                    l10n,
+                    statsPeriodFor(
+                      StatsPeriodPreset.custom,
+                      widget.services.clock.now(),
+                      customStart: _customStart,
+                      customEnd: _customEnd,
+                    ).granularity,
+                  ),
+                ),
+                style: AppTextStyle.caption(color: BrewbookTheme.of(context).palette.inkMuted),
+              ),
+            ),
         ],
       ),
     );
   }
 
   /// 集計の結果のグラフ。読み込み中と失敗の表示も担う。
-  Widget _body(BuildContext context, AppLocalizations l10n) {
+  ///
+  /// 広い画面ではグラフを 2 列に並べる (Stats のガイドライン)。
+  Widget _body(BuildContext context, AppLocalizations l10n, bool wide) {
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: Text(l10n.loading, style: AppTextStyle.body(color: brewbook.palette.inkMuted)),
+      );
     }
     if (_errorMessage != null) {
       return Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.x6),
           child: ErrorBanner(message: _errorMessage!, onRetry: _load),
         ),
       );
     }
+    final Widget brewCharts = BrewStatsCharts(periods: _brews);
+    final Widget purchaseCharts = PurchaseStatsCharts(purchases: _purchases);
+    final Widget scatterCharts = BrewRatingScatterCharts(ratings: _ratings);
     return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.x4,
+        AppSpacing.x2,
+        AppSpacing.x4,
+        AppSpacing.x8,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          BrewStatsCharts(periods: _brews),
-          PurchaseStatsCharts(purchases: _purchases),
-          BrewRatingScatterCharts(ratings: _ratings),
+          _rangeCaption(l10n),
+          const SizedBox(height: AppSpacing.x6),
+          if (wide) ...<Widget>[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(child: brewCharts),
+                const SizedBox(width: AppSpacing.x8),
+                Expanded(child: purchaseCharts),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.x8),
+            scatterCharts,
+          ] else ...<Widget>[
+            brewCharts,
+            const SizedBox(height: AppSpacing.x6),
+            purchaseCharts,
+            const SizedBox(height: AppSpacing.x6),
+            scatterCharts,
+          ],
         ],
       ),
     );
@@ -262,6 +392,14 @@ class _StatsScreenState extends State<StatsScreen> {
       StatsPeriodPreset.twelveMonths => l10n.statsPeriodTwelveMonths,
       StatsPeriodPreset.allTime => l10n.statsPeriodAllTime,
       StatsPeriodPreset.custom => l10n.statsPeriodCustom,
+    };
+  }
+
+  /// 粒度の文言 (日別 / 月別)。
+  String _granularityLabel(AppLocalizations l10n, StatsGranularity granularity) {
+    return switch (granularity) {
+      StatsGranularity.day => l10n.statsGranularityDaily,
+      StatsGranularity.month => l10n.statsGranularityMonthly,
     };
   }
 }

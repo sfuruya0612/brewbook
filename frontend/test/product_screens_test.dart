@@ -1,3 +1,4 @@
+import 'package:brew_book/l10n/app_localizations.dart';
 import 'package:brew_book/router/app_router.dart';
 import 'package:brew_book/screens/login_screen.dart';
 import 'package:brew_book/screens/product_form_screen.dart';
@@ -59,6 +60,17 @@ void main() {
     return api;
   }
 
+  /// 破線の「タグを入力」のチップからダイアログを開き、タグを 1 つ追加する (FR-8)。
+  Future<void> addTag(WidgetTester tester, AppLocalizations l10n, String tag) async {
+    await scrollAndTap(tester, find.text(l10n.tagInputHint));
+    await tester.enterText(
+      find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField)),
+      tag,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, l10n.addButton));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('一覧に行を表示し、行から編集を開く', (tester) async {
     final l10n = await loadL10n();
     final api = await openProductList(
@@ -66,7 +78,14 @@ void main() {
       listBody: pageJson(
         key: 'products',
         items: <Map<String, Object?>>[
-          productJson(id: 'product-1', name: 'Ethiopia', producer: 'Producer A'),
+          productJson(
+            id: 'product-1',
+            name: 'Ethiopia',
+            region: 'Guji',
+            origin: 'Ethiopia',
+            process: 'Natural',
+            variety: 'Heirloom',
+          ),
         ],
       ),
     );
@@ -78,7 +97,7 @@ void main() {
     );
 
     expect(find.text('Ethiopia'), findsOneWidget);
-    expect(find.text('Producer A'), findsOneWidget);
+    expect(find.text('Guji, Ethiopia / Natural / Heirloom'), findsOneWidget);
     expect(find.widgetWithText(FloatingActionButton, l10n.newProductButton), findsOneWidget);
 
     await tester.tap(find.text('Ethiopia'));
@@ -89,7 +108,7 @@ void main() {
     expect(api.calls, contains('GET /api/products/product-1'));
   });
 
-  testWidgets('一覧の行からアーカイブとアーカイブ解除ができる', (tester) async {
+  testWidgets('編集の画面からアーカイブとアーカイブ解除ができる', (tester) async {
     final l10n = await loadL10n();
     final api = await openProductList(
       tester,
@@ -102,6 +121,13 @@ void main() {
       ),
     );
     api
+      ..on('GET', '/api/products/product-1', status: 200, body: productJson(id: 'product-1', name: 'Ethiopia'))
+      ..on(
+        'GET',
+        '/api/products/product-2',
+        status: 200,
+        body: productJson(id: 'product-2', name: 'Kenya', archivedAt: '2026-09-02T00:00:00.000Z'),
+      )
       ..on(
         'POST',
         '/api/products/product-1/archive',
@@ -115,10 +141,17 @@ void main() {
         body: productJson(id: 'product-2', name: 'Kenya'),
       );
 
+    // アーカイブは編集の画面 (詳細を兼ねる) の AppBar から行う。
+    await tester.tap(find.text('Ethiopia'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip(l10n.archiveButton));
     await tester.pumpAndSettle();
     expect(api.calls, contains('POST /api/products/product-1/archive'));
 
+    await tester.tap(find.byType(CloseButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kenya'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip(l10n.unarchiveButton));
     await tester.pumpAndSettle();
     expect(api.calls, contains('POST /api/products/product-2/unarchive'));
@@ -131,12 +164,11 @@ void main() {
 
     await scrollAndEnterText(tester, find.byType(TextField).at(0), 'New Product');
     await scrollAndEnterText(tester, find.byType(TextField).at(1), 'Producer A');
-    // Flavor Notes のタグを追加する (FR-8)。
-    await scrollAndEnterText(tester, find.byType(TextField).at(6), 'Fruity');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.addButton));
+    // Flavor Notes のタグは、破線の「タグを入力」のチップからダイアログで追加する (FR-8)。
+    await addTag(tester, l10n, 'Fruity');
     expect(find.widgetWithText(InputChip, 'Fruity'), findsOneWidget);
 
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(api.lastBody('POST', '/api/products'), <String, Object?>{
       'name': 'New Product',
@@ -167,9 +199,8 @@ void main() {
         matching: find.byTooltip(l10n.deleteButton),
       ),
     );
-    await scrollAndEnterText(tester, find.byType(TextField).at(6), 'Floral');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.addButton));
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await addTag(tester, l10n, 'Floral');
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(api.lastBody('PATCH', '/api/products/product-1'), <String, Object?>{
       'name': 'Old Product',
@@ -186,7 +217,7 @@ void main() {
     final l10n = await loadL10n();
     final api = await openProductForm(tester);
 
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.text(l10n.validationRequired), findsOneWidget);
     expect(api.calls, <String>['GET /api/passkeys', 'GET /api/brews']);
@@ -228,7 +259,7 @@ void main() {
     api.on('POST', '/api/products', status: 400, body: badRequestBody);
 
     await scrollAndEnterText(tester, find.byType(TextField).at(0), 'New Product');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.text(l10n.errorValidation), findsOneWidget);
     expect(find.byType(ProductFormScreen), findsOneWidget);
@@ -240,7 +271,7 @@ void main() {
     api.on('POST', '/api/products', status: 401, body: unauthorizedBody);
 
     await scrollAndEnterText(tester, find.byType(TextField).at(0), 'New Product');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.byType(LoginScreen), findsOneWidget);
   });

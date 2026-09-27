@@ -8,6 +8,10 @@ import '../photo/image_converter.dart';
 import '../photo/photo_picker.dart';
 import '../records/record_services.dart';
 import '../records/values.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_field.dart';
+import '../widgets/app_form.dart';
 import '../widgets/day_time_fields.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/error_message.dart';
@@ -26,13 +30,29 @@ const String defaultCurrency = 'JPY';
 /// 商品は必須で、店は省略できる。購入日は端末のタイムゾーンでの当日を既定値にする (FR-9)。
 /// 写真は選択した時点では変換だけ行い、購入を保存した後にアップロードする (FR-10、ADR-0003)。
 class PurchaseFormScreen extends StatefulWidget {
-  const PurchaseFormScreen({super.key, required this.services, this.id});
+  const PurchaseFormScreen({
+    super.key,
+    required this.services,
+    this.id,
+    this.embedded = false,
+    this.onClose,
+    this.onSaved,
+  });
 
   /// 記録の画面が使う依存 (ADR-0007)。
   final RecordServices services;
 
   /// 編集する購入の ID。新規の登録のときは null。
   final String? id;
+
+  /// 幅 840 px 以上の 2 段組の右の面に出すか。
+  final bool embedded;
+
+  /// 閉じる動き。無いときは前の画面へ戻る。
+  final VoidCallback? onClose;
+
+  /// 保存できたときの動き。無いときは前の画面へ戻る。
+  final VoidCallback? onSaved;
 
   @override
   State<PurchaseFormScreen> createState() => _PurchaseFormScreenState();
@@ -75,6 +95,9 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   String? _weightError;
   String? _errorMessage;
   String? _loadError;
+
+  /// 検証の誤りを上のバナーで示すか。
+  bool _showValidationBanner = false;
   bool _busy = false;
   bool _loading = false;
 
@@ -143,10 +166,10 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       services: widget.services,
       load: ({cursor, required includeArchived}) =>
           widget.services.records.products(cursor: cursor, includeArchived: false),
-      titleBuilder: (context, product) => Text(product.name),
-      subtitleBuilder: (context, product) {
+      titleOf: (context, product) => product.name,
+      subtitleOf: (context, product) {
         final producer = product.producer;
-        return producer == null || producer.isEmpty ? null : Text(producer);
+        return producer == null || producer.isEmpty ? null : producer;
       },
     );
     if (choice == null || !mounted) {
@@ -167,10 +190,10 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       services: widget.services,
       load: ({cursor, required includeArchived}) =>
           widget.services.records.shops(cursor: cursor, includeArchived: false),
-      titleBuilder: (context, shop) => Text(shop.name),
-      subtitleBuilder: (context, shop) {
+      titleOf: (context, shop) => shop.name,
+      subtitleOf: (context, shop) {
         final address = shop.address;
-        return address == null || address.isEmpty ? null : Text(address);
+        return address == null || address.isEmpty ? null : address;
       },
       clearLabel: l10n.shopNoneLabel,
     );
@@ -252,13 +275,14 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       _currencyError = currencyError;
       _weightError = weightError;
       _errorMessage = null;
+      _showValidationBanner = productError != null ||
+          purchasedOnError != null ||
+          roastDateError != null ||
+          priceError != null ||
+          currencyError != null ||
+          weightError != null;
     });
-    if (productError != null ||
-        purchasedOnError != null ||
-        roastDateError != null ||
-        priceError != null ||
-        currencyError != null ||
-        weightError != null) {
+    if (_showValidationBanner) {
       return;
     }
 
@@ -303,7 +327,11 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.savedMessage)),
       );
-      Navigator.of(context).pop();
+      if (widget.embedded) {
+        widget.onSaved?.call();
+      } else {
+        Navigator.of(context).pop();
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -327,152 +355,181 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
+        leading: CloseButton(
+          onPressed: widget.onClose ?? () => Navigator.of(context).maybePop(),
+        ),
         title: Text(widget.id == null ? l10n.purchaseNewTitle : l10n.purchaseEditTitle),
+        actions: <Widget>[
+          TextButton(
+            onPressed: _busy ? null : _save,
+            child: Text(l10n.saveButton),
+          ),
+          const SizedBox(width: AppSpacing.x2),
+        ],
       ),
       body: _body(context, l10n),
     );
   }
 
   Widget _body(BuildContext context, AppLocalizations l10n) {
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: Text(l10n.loading, style: AppTextStyle.body(color: brewbook.palette.inkMuted)),
+      );
     }
     final loadError = _loadError;
     if (loadError != null) {
       return Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.x6),
           child: ErrorBanner(message: loadError, onRetry: () => _load(widget.id!)),
         ),
       );
     }
     final records = widget.services.records;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          PickerTile(
-            label: l10n.productLabel,
-            value: _product?.name,
-            errorText: _productError,
-            onPressed: _busy ? null : _pickProduct,
-          ),
-          PickerTile(
-            label: l10n.shopLabel,
-            value: _shop?.name,
-            onPressed: _busy ? null : _pickShop,
-          ),
-          const SizedBox(height: 16),
-          DayField(
-            controller: _purchasedOn,
-            label: l10n.purchasedOnLabel,
-            enabled: !_busy,
-            errorText: _purchasedOnError,
-          ),
-          const SizedBox(height: 16),
-          SuggestionField(
-            records: records,
-            controller: _roast,
-            field: SuggestionFields.roast,
-            label: l10n.roast,
-            enabled: !_busy,
-          ),
-          const SizedBox(height: 16),
-          DayField(
-            controller: _roastDate,
-            label: l10n.roastDate,
-            enabled: !_busy,
-            errorText: _roastDateError,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _price,
-            enabled: !_busy,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: l10n.priceLabel,
+    return AppForm(
+      children: <Widget>[
+        if (_showValidationBanner) ErrorBanner(message: l10n.errorValidation),
+        PickerTile(
+          label: l10n.productLabel,
+          required: true,
+          value: _product?.name,
+          placeholder: l10n.selectProductTitle,
+          errorText: _productError,
+          onPressed: _busy ? null : _pickProduct,
+        ),
+        PickerTile(
+          label: l10n.shopLabel,
+          value: _shop?.name,
+          placeholder: l10n.shopNoneLabel,
+          onPressed: _busy ? null : _pickShop,
+        ),
+        DayField(
+          controller: _purchasedOn,
+          label: l10n.purchasedOnLabel,
+          enabled: !_busy,
+          errorText: _purchasedOnError,
+        ),
+        SuggestionField(
+          records: records,
+          controller: _roast,
+          field: SuggestionFields.roast,
+          label: l10n.roast,
+          enabled: !_busy,
+        ),
+        DayField(
+          controller: _roastDate,
+          label: l10n.roastDate,
+          enabled: !_busy,
+          errorText: _roastDateError,
+        ),
+        AppFormRow(
+          flex: const <int>[2, 1],
+          children: <Widget>[
+            AppTextField(
+              controller: _price,
+              label: l10n.priceLabel,
+              enabled: !_busy,
               errorText: _priceError,
+              keyboardType: TextInputType.number,
             ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _currency,
-            enabled: !_busy,
-            decoration: InputDecoration(
-              labelText: l10n.currencyLabel,
+            AppTextField(
+              controller: _currency,
+              label: l10n.currencyLabel,
+              enabled: !_busy,
               errorText: _currencyError,
             ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _weight,
-            enabled: !_busy,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: l10n.weightLabel,
-              errorText: _weightError,
-            ),
-          ),
-          const SizedBox(height: 24),
-          _photo(context, l10n),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _busy ? null : _save,
-            child: Text(l10n.saveButton),
-          ),
-          if (_busy) ...<Widget>[
-            const SizedBox(height: 16),
-            const Center(child: CircularProgressIndicator()),
           ],
-          if (_errorMessage != null) ...<Widget>[
-            const SizedBox(height: 16),
-            ErrorBanner(message: _errorMessage!),
-          ],
-        ],
-      ),
+        ),
+        AppTextField(
+          controller: _weight,
+          label: l10n.weightLabel,
+          enabled: !_busy,
+          errorText: _weightError,
+          unit: l10n.gramUnit,
+          keyboardType: TextInputType.number,
+        ),
+        _photo(context, l10n),
+        if (_errorMessage != null) ErrorBanner(message: _errorMessage!),
+      ],
     );
   }
 
   /// 写真の選択、差し替え、削除の操作 (FR-10)。
   Widget _photo(BuildContext context, AppLocalizations l10n) {
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
     final picked = _picked;
+    final converted = _converted;
     final hasUploaded = !_removePhoto && _photoKey != null;
     final hasPhoto = picked != null || hasUploaded;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(l10n.photoLabel, style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        if (picked != null)
-          Text(picked.name)
-        else if (hasUploaded)
-          Image.network(
-            widget.services.records.photoUrl(widget.id!).toString(),
-            key: const Key('purchase-photo'),
-            errorBuilder: (context, error, stackTrace) => Text(l10n.photoNoneLabel),
-          )
-        else
-          Text(l10n.photoNoneLabel),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: <Widget>[
-            FilledButton.tonalIcon(
-              onPressed: _busy ? null : _pickPhoto,
-              icon: const Icon(Icons.photo_outlined),
-              label: Text(
-                hasPhoto ? l10n.photoReplaceButton : l10n.photoSelectButton,
-              ),
+    return AppField(
+      label: l10n.photoLabel,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          ClipRRect(
+            borderRadius: AppRadius.smAll,
+            child: Container(
+              width: 88,
+              height: 88,
+              color: brewbook.palette.paperSunken,
+              alignment: Alignment.center,
+              child: picked != null && converted != null
+                  ? Image.memory(
+                      converted.bytes,
+                      key: const Key('purchase-photo'),
+                      width: 88,
+                      height: 88,
+                      fit: BoxFit.cover,
+                      // 復号できない写真でも画面は壊さない。
+                      errorBuilder: (context, error, stackTrace) =>
+                          Icon(Icons.photo_camera_outlined, size: 32, color: brewbook.inkFaint),
+                    )
+                  : hasUploaded
+                  ? Image.network(
+                      widget.services.records.photoUrl(widget.id!).toString(),
+                      key: const Key('purchase-photo'),
+                      width: 88,
+                      height: 88,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) =>
+                          Icon(Icons.photo_camera_outlined, size: 32, color: brewbook.inkFaint),
+                    )
+                  : Icon(Icons.photo_camera_outlined, size: 32, color: brewbook.inkFaint),
             ),
-            if (hasPhoto)
-              TextButton(
-                onPressed: _busy ? null : _deletePhoto,
-                child: Text(l10n.photoDeleteButton),
-              ),
-          ],
-        ),
-      ],
+          ),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                OutlinedButton(
+                  onPressed: _busy ? null : _pickPhoto,
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+                    textStyle: AppTextStyle.label(color: brewbook.palette.ink),
+                  ),
+                  child: Text(hasPhoto ? l10n.photoReplaceButton : l10n.photoSelectButton),
+                ),
+                if (hasPhoto) ...<Widget>[
+                  const SizedBox(height: AppSpacing.x1),
+                  TextButton(
+                    onPressed: _busy ? null : _deletePhoto,
+                    child: Text(l10n.photoDeleteButton),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.x2),
+                Text(
+                  l10n.photoConvertNote,
+                  style: AppTextStyle.caption(color: brewbook.palette.inkMuted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

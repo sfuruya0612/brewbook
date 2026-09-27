@@ -32,6 +32,12 @@
   - @sfuruya0612
 - [ADD] Flutter の設定の画面とパスキー管理とエクスポートとアカウント削除を追加する
   - @sfuruya0612
+- [ADD] Frontend にデザインシステム (Paper と Night のテーマと IBM Plex のフォント) を取り込む
+  - @sfuruya0612
+- [ADD] Flutter の画面と部品をデザインに合わせ、幅 840 px 以上の 2 段組を追加する
+  - @sfuruya0612
+- [UPDATE] アプリアイコンと manifest の色をデザインのものに置き換える
+  - @sfuruya0612
 - [ADD] 画面と API を同一オリジンの 1 つの Worker から配信する
   - @sfuruya0612
 - [ADD] 管理者 Worker と Cloudflare Access の保護を追加する

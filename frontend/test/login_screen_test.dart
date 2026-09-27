@@ -22,7 +22,8 @@ void main() {
     await showLogin(tester);
 
     expect(find.byType(LoginScreen), findsOneWidget);
-    expect(find.text(l10n.loginTitle), findsOneWidget);
+    // 画面の中央に名前 (wordmark) と説明を置く (Auth のガイドライン)。
+    expect(find.text(l10n.homeTitle), findsOneWidget);
     expect(find.text(l10n.loginDescription), findsOneWidget);
   });
 

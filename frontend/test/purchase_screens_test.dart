@@ -128,8 +128,10 @@ void main() {
   }
 
   /// 選択のダイアログから記録を 1 件選ぶ。
+  ///
+  /// ピッカーは枠の中の項目名 (「商品」「店」「購入」) を押すと開く。
   Future<void> pickFromDialog(WidgetTester tester, String label, String value) async {
-    await scrollAndTap(tester, find.widgetWithText(ListTile, label));
+    await scrollAndTap(tester, find.text(label));
     await tester.tap(find.text(value).last);
     await tester.pumpAndSettle();
   }
@@ -147,49 +149,77 @@ void main() {
     );
     api.on('GET', '/api/purchases/purchase-1', status: 200, body: purchaseJson(id: 'purchase-1'));
 
-    expect(find.text(l10n.purchaseRowSubtitle('9/1/2026', 'Test Product')), findsOneWidget);
+    expect(find.text('9/1/2026'), findsOneWidget);
     expect(find.widgetWithText(FloatingActionButton, l10n.newPurchaseButton), findsOneWidget);
 
-    await tester.tap(find.text(l10n.purchaseRowSubtitle('9/1/2026', 'Test Product')));
+    await tester.tap(find.text('9/1/2026'));
     await tester.pumpAndSettle();
 
     expect(find.byType(PurchaseDetailScreen), findsOneWidget);
     expect(api.calls, contains('GET /api/purchases/purchase-1'));
   });
 
-  testWidgets('行からアーカイブとアーカイブ解除ができる', (tester) async {
+  testWidgets('詳細からアーカイブとアーカイブ解除ができる', (tester) async {
     final l10n = await loadL10n();
     final api = await openPurchaseList(
       tester,
       listBody: pageJson(
         key: 'purchases',
         items: <Map<String, Object?>>[
-          purchaseJson(id: 'purchase-1'),
-          purchaseJson(id: 'purchase-2', archivedAt: '2026-09-02T00:00:00.000Z'),
+          purchaseJson(id: 'purchase-1', purchasedOn: '2026-09-01'),
         ],
       ),
     );
+    // アーカイブの状態をサーバーのように覚え、読み直しで返す。
+    var archived = false;
     api
+      ..onQuery('GET', '/api/purchases/purchase-1', (query) {
+        return (
+          status: 200,
+          body: purchaseJson(
+            id: 'purchase-1',
+            archivedAt: archived ? '2026-09-03T00:00:00.000Z' : null,
+          ),
+        );
+      })
       ..on(
-        'POST',
-        '/api/purchases/purchase-1/archive',
+        'GET',
+        '/api/purchases/purchase-1/rating-history',
         status: 200,
-        body: purchaseJson(id: 'purchase-1', archivedAt: '2026-09-03T00:00:00.000Z'),
+        body: <String, Object?>{'ratings': <Object?>[]},
       )
-      ..on(
-        'POST',
-        '/api/purchases/purchase-2/unarchive',
-        status: 200,
-        body: purchaseJson(id: 'purchase-2'),
-      );
+      ..onQuery('POST', '/api/purchases/purchase-1/archive', (query) {
+        archived = true;
+        return (
+          status: 200,
+          body: purchaseJson(id: 'purchase-1', archivedAt: '2026-09-03T00:00:00.000Z'),
+        );
+      })
+      ..onQuery('POST', '/api/purchases/purchase-1/unarchive', (query) {
+        archived = false;
+        return (status: 200, body: purchaseJson(id: 'purchase-1'));
+      });
+
+    // アーカイブは詳細の画面から行う (一覧の行には置かない)。
+    await tester.tap(find.text('9/1/2026'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PurchaseDetailScreen), findsOneWidget);
 
     await tester.tap(find.byTooltip(l10n.archiveButton));
     await tester.pumpAndSettle();
-    expect(api.calls, contains('POST /api/purchases/purchase-1/archive'));
 
+    expect(api.calls, contains('POST /api/purchases/purchase-1/archive'));
+    expect(find.text(l10n.archivedMessage), findsOneWidget);
+    // 通知が消えるまで進める (次の通知が待ち行列に残らないようにする)。
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    // アーカイブ済みの購入は、アーカイブ解除で戻せる (FR-12)。
     await tester.tap(find.byTooltip(l10n.unarchiveButton));
     await tester.pumpAndSettle();
-    expect(api.calls, contains('POST /api/purchases/purchase-2/unarchive'));
+
+    expect(api.calls, contains('POST /api/purchases/purchase-1/unarchive'));
+    expect(find.text(l10n.unarchivedMessage), findsOneWidget);
   });
 
   testWidgets('詳細で商品と店をたどり、写真と評価の推移の場所を表示する', (tester) async {
@@ -218,8 +248,9 @@ void main() {
         body: purchaseJson(id: 'purchase-1'),
       );
 
-    expect(find.text('Ethiopia'), findsOneWidget);
-    expect(find.text('Test Shop'), findsOneWidget);
+    // 商品名は題と参照先のタイルの両方に出る (Detail のガイドライン)。
+    expect(find.text('Ethiopia'), findsNWidgets(2));
+    expect(find.text('Test Shop'), findsNWidgets(2));
     expect(find.text(l10n.priceValue('1200', 'JPY')), findsOneWidget);
     expect(find.text(l10n.gramsValue('200')), findsOneWidget);
     expect(find.byKey(const Key('purchase-photo')), findsOneWidget);
@@ -227,14 +258,13 @@ void main() {
     expect(find.byKey(const Key('purchase-rating-history-chart')), findsNothing);
     expect(find.text(l10n.noRecords), findsOneWidget);
 
-    await tester.tap(find.text('Ethiopia'));
-    await tester.pumpAndSettle();
+    await scrollAndTap(tester, find.text('Ethiopia').last);
     expect(find.byType(ProductFormScreen), findsOneWidget);
 
-    await tester.pageBack();
+    // フォームは閉じる (x) で戻る (AppBar のガイドライン)。
+    await tester.tap(find.byType(CloseButton));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Test Shop'));
-    await tester.pumpAndSettle();
+    await scrollAndTap(tester, find.text('Test Shop').last);
     expect(find.byType(ShopFormScreen), findsOneWidget);
   });
 
@@ -414,7 +444,7 @@ void main() {
     await pickFromDialog(tester, l10n.shopLabel, 'Test Shop');
     await scrollAndEnterText(tester, find.byType(TextField).at(1), 'Medium');
     await scrollAndEnterText(tester, find.byType(TextField).at(3), '1200');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(api.lastBody('POST', '/api/purchases'), <String, Object?>{
       'product_id': 'product-1',
@@ -433,7 +463,7 @@ void main() {
     final l10n = await loadL10n();
     final api = await openPurchaseForm(tester);
 
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.text(l10n.validationProduct), findsOneWidget);
     expect(api.calls, <String>['GET /api/passkeys', 'GET /api/brews']);
@@ -446,7 +476,7 @@ void main() {
     await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
     await scrollAndEnterText(tester, find.byType(TextField).at(3), '1.5.2');
     await scrollAndEnterText(tester, find.byType(TextField).at(5), 'abc');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.text(l10n.validationNumber), findsNWidgets(2));
     expect(api.calls, <String>['GET /api/passkeys', 'GET /api/brews', 'GET /api/products']);
@@ -454,7 +484,7 @@ void main() {
     // 通貨コードは ISO 4217 の 3 文字の英大文字だけを受け付ける (FR-9。入力は大文字に直してから検証する)。
     await scrollAndEnterText(tester, find.byType(TextField).at(3), '1200');
     await scrollAndEnterText(tester, find.byType(TextField).at(4), 'us');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.text(l10n.validationCurrency), findsOneWidget);
 
@@ -463,7 +493,7 @@ void main() {
     await scrollAndEnterText(tester, find.byType(TextField).at(4), 'usd');
     await scrollAndEnterText(tester, find.byType(TextField).at(5), '100');
     await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.text(l10n.validationCurrency), findsNothing);
     expect(api.lastBody('POST', '/api/purchases')?['price_currency'], 'USD');
@@ -482,12 +512,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await scrollAndTap(tester, find.widgetWithText(ListTile, l10n.shopLabel));
+    await scrollAndTap(tester, find.text(l10n.shopLabel));
     await tester.pumpAndSettle();
     // 店を指定しない選択肢で参照を外す (FR-9)。
-    await tester.tap(find.text(l10n.shopNoneLabel));
+    // ピッカーの未選択の表示にも同じ文言が出るため、ダイアログの選択肢を選ぶ。
+    await tester.tap(find.text(l10n.shopNoneLabel).last);
     await tester.pumpAndSettle();
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(api.lastBody('PATCH', '/api/purchases/purchase-1'), <String, Object?>{
       'product_id': 'product-1',
@@ -539,14 +570,14 @@ void main() {
       );
 
     // 写真を選び、クライアントで JPEG へ変換する (FR-10)。
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.photoSelectButton));
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.photoSelectButton));
     expect(picker.calls, 1);
     expect(converter.calls, 1);
     expect(converter.lastInputSize, 4096);
-    expect(find.text('package.png'), findsOneWidget);
+    expect(find.byKey(const Key('purchase-photo')), findsOneWidget);
 
     await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     // 変換後のサイズを申告して URL を要求する (ADR-0003)。
     expect(api.lastBody('POST', '/api/purchases/purchase-9/photo/upload-url'), <String, Object?>{
@@ -610,8 +641,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('purchase-photo')), findsOneWidget);
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.photoReplaceButton));
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.photoReplaceButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(api.lastBody('POST', '/api/purchases/purchase-1/photo'), <String, Object?>{
       'key': 'pending/user-1/y.jpg',
@@ -648,8 +679,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.photoDeleteButton));
-    expect(find.text(l10n.photoNoneLabel), findsOneWidget);
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    expect(find.widgetWithText(OutlinedButton, l10n.photoSelectButton), findsOneWidget);
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(api.calls, contains('DELETE /api/purchases/purchase-1/photo'));
     expect(api.calls, contains('PATCH /api/purchases/purchase-1'));
@@ -676,7 +707,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.photoDeleteButton));
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
     // 1 回目の保存は購入の更新の失敗で終わる (削除は成功している)。
     expect(find.text(l10n.errorNetwork), findsOneWidget);
 
@@ -687,7 +718,7 @@ void main() {
       status: 200,
       body: purchaseJson(id: 'purchase-1'),
     );
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
     await tester.pumpAndSettle();
 
     expect(
@@ -742,8 +773,8 @@ void main() {
       );
 
     await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.photoSelectButton));
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.photoSelectButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.text(l10n.errorNetwork), findsOneWidget);
   });
@@ -769,9 +800,9 @@ void main() {
         body: <String, Object?>{'url': 'https://r2.example/upload', 'key': 'pending/user-1/x.jpg'},
       );
 
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.photoSelectButton));
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.photoSelectButton));
     await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     // R2 の PUT の失敗は、再試行を促す表示にする (ADR-0007)。
     expect(find.text(l10n.errorNetwork), findsOneWidget);
@@ -791,7 +822,7 @@ void main() {
       status: 200,
       body: purchaseJson(id: 'purchase-9', photoKey: 'users/user-1/purchases/purchase-9/x.jpg'),
     );
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(api.calls.where((call) => call == 'POST /api/purchases').length, 1);
     expect(api.calls, contains('PATCH /api/purchases/purchase-9'));
@@ -819,7 +850,7 @@ void main() {
     api.on('POST', '/api/purchases', status: 400, body: badRequestBody);
 
     await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.text(l10n.errorValidation), findsOneWidget);
     expect(find.byType(PurchaseFormScreen), findsOneWidget);
@@ -831,7 +862,7 @@ void main() {
     api.on('POST', '/api/purchases', status: 401, body: unauthorizedBody);
 
     await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.byType(LoginScreen), findsOneWidget);
   });

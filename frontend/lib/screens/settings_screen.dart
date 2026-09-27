@@ -6,8 +6,12 @@ import '../auth/passkey_name.dart';
 import '../l10n/app_localizations.dart';
 import '../records/values.dart';
 import '../settings/settings_services.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_field.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/error_message.dart';
+import '../widgets/wide_layout.dart';
 
 /// 設定の画面 (FR-3、FR-4、FR-14、FR-15)。
 ///
@@ -172,6 +176,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// 削除の API を呼ぶ。削除に成功するとログインの状態が消え、ルーターがログイン画面へ遷移させる。
   Future<void> _deleteAccount() async {
     final l10n = AppLocalizations.of(context);
+    final brewbook = BrewbookTheme.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
@@ -185,7 +190,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(l10n.deleteButton),
+            style: FilledButton.styleFrom(
+              backgroundColor: brewbook.palette.signal,
+              foregroundColor: brewbook.palette.onSignal,
+            ),
+            child: Text(l10n.deleteConfirmButton),
           ),
         ],
       ),
@@ -221,58 +230,117 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final lastUsed = lastUsedAt == null
         ? l10n.passkeyNotUsedYet
         : l10n.passkeyLastUsedAt(displayTimestamp(lastUsedAt, locale));
-    return '$created\n$lastUsed';
+    return '$created / $lastUsed';
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
+    final content = Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle)),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: <Widget>[
-          _SectionTitle(l10n.passkeysTitle),
-          Text(l10n.passkeysDescription),
-          const SizedBox(height: 8),
-          _passkeysSection(l10n),
-          const Divider(height: 32),
-          _SectionTitle(l10n.exportTitle),
-          Text(l10n.exportDescription),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: _busy ? null : _export,
-              icon: const Icon(Icons.download),
-              label: Text(l10n.exportButton),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _Section(
+              title: l10n.passkeysTitle,
+              description: l10n.passkeysDescription,
+              child: _passkeysSection(l10n),
             ),
-          ),
-          const Divider(height: 32),
-          _SectionTitle(l10n.deleteAccountTitle),
-          Text(l10n.deleteAccountDescription),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton(
-              onPressed: _busy ? null : _deleteAccount,
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error,
-                foregroundColor: Theme.of(context).colorScheme.onError,
+            _Section(
+              title: l10n.exportTitle,
+              description: l10n.exportDescription,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _secondaryButton(
+                  context,
+                  onPressed: _busy ? null : _export,
+                  icon: Icons.download_outlined,
+                  label: l10n.exportButton,
+                ),
               ),
-              child: Text(l10n.deleteAccountButton),
             ),
-          ),
-          const Divider(height: 32),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton(
-              onPressed: _busy ? null : _logout,
-              child: Text(l10n.logoutButton),
+            _Section(
+              title: l10n.deleteAccountTitle,
+              description: l10n.deleteAccountDescription,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _dangerButton(
+                  context,
+                  onPressed: _busy ? null : _deleteAccount,
+                  label: l10n.deleteAccountButton,
+                ),
+              ),
             ),
-          ),
-        ],
+            _Section(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _busy ? null : _logout,
+                  icon: const Icon(Icons.logout_outlined, size: 20),
+                  label: Text(l10n.logoutButton),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= wideLayoutBreakpoint;
+        if (!wide) {
+          return content;
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            const BrewbookNavigationRail(selectedIndex: 5),
+            Expanded(child: content),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 次点のボタン (枠だけの 36 px)。
+  Widget _secondaryButton(
+    BuildContext context, {
+    required VoidCallback? onPressed,
+    required IconData icon,
+    required String label,
+  }) {
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 20),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 36),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+        textStyle: AppTextStyle.label(color: brewbook.palette.ink),
+        iconColor: brewbook.palette.ink,
+      ),
+    );
+  }
+
+  /// 取り消せない操作の入口 (signal の枠と文字。押しただけでは何も消えない)。
+  Widget _dangerButton(
+    BuildContext context, {
+    required VoidCallback? onPressed,
+    required String label,
+  }) {
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: brewbook.palette.signal,
+        minimumSize: const Size(0, 36),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.x4),
+        textStyle: AppTextStyle.label(color: brewbook.palette.signal),
+        side: BorderSide(color: brewbook.palette.signal),
+      ),
+      child: Text(label),
     );
   }
 
@@ -287,60 +355,121 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     final passkeys = _passkeys;
     if (passkeys == null) {
-      return const Center(child: CircularProgressIndicator());
+      return Text(l10n.loading, style: AppTextStyle.body(color: BrewbookTheme.of(context).palette.inkMuted));
     }
     // パスキーが 1 つしかないときは削除できない (設計判断)。サーバーも 409 を返す。
     final canDelete = passkeys.length > 1;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        for (final passkey in passkeys)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(passkey.name),
-            subtitle: Text(_passkeySubtitle(context, passkey)),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                IconButton(
-                  tooltip: l10n.renameButton,
-                  icon: const Icon(Icons.edit_outlined),
-                  onPressed: _busy ? null : () => _renamePasskey(passkey),
-                ),
-                IconButton(
-                  tooltip: l10n.deleteButton,
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: _busy || !canDelete ? null : () => _deletePasskey(passkey),
-                ),
-              ],
-            ),
-          ),
-        const SizedBox(height: 8),
+        for (final passkey in passkeys) _passkeyRow(context, l10n, passkey, canDelete),
+        const SizedBox(height: AppSpacing.x3),
         Align(
           alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
+          child: _secondaryButton(
+            context,
             onPressed: _busy ? null : _addPasskey,
-            icon: const Icon(Icons.add),
-            label: Text(l10n.addPasskeyButton),
+            icon: Icons.add_outlined,
+            label: l10n.addPasskeyButton,
           ),
         ),
       ],
     );
   }
+
+  /// パスキーの 1 行 (鍵の印、名前、日時、変更と削除)。
+  Widget _passkeyRow(
+    BuildContext context,
+    AppLocalizations l10n,
+    Passkey passkey,
+    bool canDelete,
+  ) {
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.x3),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: brewbook.line)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.key_outlined, size: 24, color: brewbook.palette.inkMuted),
+          const SizedBox(width: AppSpacing.x3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  passkey.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyle.body(
+                    color: brewbook.palette.ink,
+                  ).copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _passkeySubtitle(context, passkey),
+                  style: AppTextStyle.mono(
+                    size: 12,
+                    lineHeight: 16,
+                    color: brewbook.palette.inkMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: l10n.renameButton,
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: _busy ? null : () => _renamePasskey(passkey),
+          ),
+          IconButton(
+            tooltip: l10n.deleteButton,
+            icon: const Icon(Icons.delete_outline),
+            onPressed: _busy || !canDelete ? null : () => _deletePasskey(passkey),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-/// 設定の画面の節の見出し。
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title);
+/// 設定の画面の節 (見出し、説明、操作)。
+class _Section extends StatelessWidget {
+  const _Section({this.title, this.description, required this.child});
 
-  /// 見出しの文言 (ARB から取る。FR-16)。
-  final String title;
+  /// 節の見出し (ARB から取る)。無いときは出さない。
+  final String? title;
+
+  /// 節の説明 (ARB から取る)。無いときは出さない。
+  final String? description;
+
+  /// 節の中身。
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
+    final String? titleText = title;
+    final String? descriptionText = description;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.x4),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: brewbook.line)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (titleText != null)
+            Text(titleText, style: AppTextStyle.heading(color: brewbook.palette.ink)),
+          if (descriptionText != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.x3),
+            Text(descriptionText, style: AppTextStyle.body(color: brewbook.palette.inkMuted)),
+          ],
+          const SizedBox(height: AppSpacing.x3),
+          child,
+        ],
+      ),
     );
   }
 }
@@ -398,15 +527,15 @@ class _PasskeyNameDialogState extends State<_PasskeyNameDialog> {
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
       title: Text(widget.title),
-      content: TextField(
+      content: AppTextField(
         controller: _name,
+        label: l10n.passkeyNameLabel,
+        enabled: true,
+        errorText: _error,
+        helperText: l10n.passkeyNameHelper,
+        hintText: l10n.passkeyNameHint,
+        mono: false,
         autofocus: true,
-        decoration: InputDecoration(
-          labelText: l10n.passkeyNameLabel,
-          hintText: l10n.passkeyNameHint,
-          helperText: l10n.passkeyNameHelper,
-          errorText: _error,
-        ),
         onSubmitted: (_) => _confirm(),
       ),
       actions: <Widget>[

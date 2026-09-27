@@ -193,8 +193,8 @@ void main() {
     final l10n = await loadL10n();
     await openStats(tester);
 
-    // 抽出の 2 つのグラフ、購入の 1 つ、散布図 4 つの区画に表示する。
-    expect(find.text(l10n.noRecords), findsNWidgets(7));
+    // 抽出の 2 つ、購入の 2 つ、散布図 4 つの区画に表示する (Charts のガイドライン)。
+    expect(find.text(l10n.noRecords), findsNWidgets(8));
   });
 
   testWidgets('期間を 3 か月、6 か月、12 か月、全期間に切り替えられる', (tester) async {
@@ -241,7 +241,7 @@ void main() {
     // 62 日以下 (2026-07-01 から 2026-08-31 までは 62 日) は日別にする。
     await enterDay(tester, 'stats-start-day', '2026-07-01');
     await enterDay(tester, 'stats-end-day', '2026-08-31');
-    await tester.tap(find.widgetWithText(FilledButton, l10n.statsApplyButton));
+    await tester.tap(find.widgetWithText(OutlinedButton, l10n.statsApplyButton));
     await tester.pumpAndSettle();
     expect(api.lastQuery('GET', '/api/stats/brews'), <String, String>{
       'granularity': 'day',
@@ -253,7 +253,7 @@ void main() {
     // 63 日以上は月別にする。
     await enterDay(tester, 'stats-start-day', '2026-07-01');
     await enterDay(tester, 'stats-end-day', '2026-09-01');
-    await tester.tap(find.widgetWithText(FilledButton, l10n.statsApplyButton));
+    await tester.tap(find.widgetWithText(OutlinedButton, l10n.statsApplyButton));
     await tester.pumpAndSettle();
     expect(api.lastQuery('GET', '/api/stats/brews')?['granularity'], 'month');
     expect(api.lastQuery('GET', '/api/stats/brews')?['start'], '2026-07-01');
@@ -269,14 +269,14 @@ void main() {
 
     // 形式の違反。
     await enterDay(tester, 'stats-start-day', '2026-9-1');
-    await tester.tap(find.widgetWithText(FilledButton, l10n.statsApplyButton));
+    await tester.tap(find.widgetWithText(OutlinedButton, l10n.statsApplyButton));
     await tester.pumpAndSettle();
     expect(find.text(l10n.validationDay), findsOneWidget);
 
     // 開始日が終了日より後。
     await enterDay(tester, 'stats-start-day', '2026-09-10');
     await enterDay(tester, 'stats-end-day', '2026-09-01');
-    await tester.tap(find.widgetWithText(FilledButton, l10n.statsApplyButton));
+    await tester.tap(find.widgetWithText(OutlinedButton, l10n.statsApplyButton));
     await tester.pumpAndSettle();
     expect(find.text(l10n.validationPeriod), findsOneWidget);
     expect(api.calls.length, callsBefore);

@@ -202,6 +202,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get includeArchivedLabel => 'アーカイブ済みを含める';
 
   @override
+  String get rowSubtitleSeparator => ' / ';
+
+  @override
   String get noRecords => '記録がありません';
 
   @override
@@ -347,14 +350,18 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String purchaseRowSubtitle(String date, String product) {
-    return '$date / $product';
-  }
-
-  @override
   String gramsValue(String value) {
     return '$value g';
   }
+
+  @override
+  String get gramUnit => 'g';
+
+  @override
+  String get celsiusUnit => '℃';
+
+  @override
+  String get secondUnit => '秒';
 
   @override
   String celsiusValue(String value) {
@@ -512,8 +519,109 @@ class AppLocalizationsJa extends AppLocalizations {
   String get deleteAccountButton => 'アカウントを削除';
 
   @override
+  String get deleteConfirmButton => '削除する';
+
+  @override
   String get deleteAccountConfirmTitle => 'アカウントを削除しますか？';
 
   @override
   String get deleteAccountConfirmMessage => 'アカウントと全記録を削除します。元に戻せません。';
+
+  @override
+  String get requiredLabel => '必須';
+
+  @override
+  String get brewsLabel => '抽出';
+
+  @override
+  String get usedBeansLabel => '使った豆';
+
+  @override
+  String get archivedBadge => 'アーカイブ済み';
+
+  @override
+  String get addressUnset => '住所は未設定';
+
+  @override
+  String get ratingNone => '未評価';
+
+  @override
+  String get homeEmptyHint => '右下の「抽出を記録」から最初の 1 杯を記録します。';
+
+  @override
+  String get purchasesEmptyHint => '右下の「購入を記録」から最初の 1 件を記録します。';
+
+  @override
+  String get productsEmptyHint => '右下の「商品を登録」から最初の 1 件を登録します。';
+
+  @override
+  String get shopsEmptyHint => '右下の「店を登録」から最初の 1 件を登録します。';
+
+  @override
+  String get purchasePickPlaceholder => '購入を選ぶ';
+
+  @override
+  String get grindSettingHint => '例: Comandante 24';
+
+  @override
+  String get photoConvertNote => 'JPEG に変換し、長辺 2048 px 以下に縮小して保存します。';
+
+  @override
+  String get uploadingLabel => 'アップロード中';
+
+  @override
+  String get loginRegisterHint => 'ログインできないときは管理者から登録用のリンクを受け取ってください。';
+
+  @override
+  String get registerTokenGuidance => '管理者に連絡して、登録用のリンクを再発行してもらってください。';
+
+  @override
+  String get statsRangePrefix => '';
+
+  @override
+  String get statsRangeMiddle => ' から ';
+
+  @override
+  String statsRangeSuffix(String granularity) {
+    return ' まで、$granularity';
+  }
+
+  @override
+  String statsRangeAllTime(String granularity) {
+    return '全期間、$granularity';
+  }
+
+  @override
+  String get statsGranularityDaily => '日別';
+
+  @override
+  String get statsGranularityMonthly => '月別';
+
+  @override
+  String statsCustomGranularityNote(int days, String granularity) {
+    return '$days 日なので$granularityで表示します (62 日以下なら日別)。';
+  }
+
+  @override
+  String statsChartUnit(String unit, String period) {
+    return '$unit / $period';
+  }
+
+  @override
+  String get statsUnitCups => '杯';
+
+  @override
+  String get statsPeriodDay => '日';
+
+  @override
+  String get statsPeriodMonth => '月';
+
+  @override
+  String get statsScatterSection => '抽出条件と評価';
+
+  @override
+  String get statsPurchaseAmountLabel => '購入金額';
+
+  @override
+  String get statsPurchaseWeightLabel => '購入重量';
 }

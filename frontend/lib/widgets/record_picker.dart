@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../records/record_services.dart';
+import '../theme/tokens.dart';
+import 'list_row.dart';
 import 'record_list_view.dart';
 
 /// 記録を 1 件選んだ結果。
@@ -30,8 +32,8 @@ Future<RecordChoice<T>?> showRecordPicker<T>({
   required String title,
   required RecordServices services,
   required RecordPageLoader<T> load,
-  required Widget Function(BuildContext context, T item) titleBuilder,
-  Widget? Function(BuildContext context, T item)? subtitleBuilder,
+  required String Function(BuildContext context, T item) titleOf,
+  String? Function(BuildContext context, T item)? subtitleOf,
   /// 参照を外す選択肢の文言。null のときは置かない。
   String? clearLabel,
 }) {
@@ -40,6 +42,7 @@ Future<RecordChoice<T>?> showRecordPicker<T>({
     context: context,
     builder: (context) => AlertDialog(
       title: Text(title),
+      contentPadding: const EdgeInsets.only(bottom: AppSpacing.x6),
       content: SizedBox(
         width: 400,
         height: 400,
@@ -47,8 +50,11 @@ Future<RecordChoice<T>?> showRecordPicker<T>({
           load: load,
           services: services,
           showArchivedToggle: false,
-          title: titleBuilder,
-          subtitle: subtitleBuilder,
+          row: (context, item, {required selected, required onTap}) => ListRow(
+            title: titleOf(context, item),
+            subtitle: subtitleOf == null ? null : Text(subtitleOf(context, item) ?? ''),
+            onTap: onTap,
+          ),
           onTap: (context, item) =>
               Navigator.of(context).pop(RecordChoice<T>.selected(item)),
         ),

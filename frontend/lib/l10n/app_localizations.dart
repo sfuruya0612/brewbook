@@ -482,6 +482,12 @@ abstract class AppLocalizations {
   /// **'アーカイブ済みを含める'**
   String get includeArchivedLabel;
 
+  /// 一覧の行の 2 行目の日付と参照先をつなぐ区切り
+  ///
+  /// In ja, this message translates to:
+  /// **' / '**
+  String get rowSubtitleSeparator;
+
   /// No description provided for @noRecords.
   ///
   /// In ja, this message translates to:
@@ -764,17 +770,29 @@ abstract class AppLocalizations {
   /// **'{date}'**
   String brewRowSubtitleNoShop(String date);
 
-  /// 購入の一覧の行の補足
-  ///
-  /// In ja, this message translates to:
-  /// **'{date} / {product}'**
-  String purchaseRowSubtitle(String date, String product);
-
   /// グラムの値の表示
   ///
   /// In ja, this message translates to:
   /// **'{value} g'**
   String gramsValue(String value);
+
+  /// グラムの単位 (FR-16)
+  ///
+  /// In ja, this message translates to:
+  /// **'g'**
+  String get gramUnit;
+
+  /// 摂氏の単位 (FR-16)
+  ///
+  /// In ja, this message translates to:
+  /// **'℃'**
+  String get celsiusUnit;
+
+  /// 秒の単位 (FR-16)
+  ///
+  /// In ja, this message translates to:
+  /// **'秒'**
+  String get secondUnit;
 
   /// 摂氏の値の表示
   ///
@@ -1052,6 +1070,12 @@ abstract class AppLocalizations {
   /// **'アカウントを削除'**
   String get deleteAccountButton;
 
+  /// 取り消せない操作の確認ダイアログの肯定のボタン (FR-15)
+  ///
+  /// In ja, this message translates to:
+  /// **'削除する'**
+  String get deleteConfirmButton;
+
   /// No description provided for @deleteAccountConfirmTitle.
   ///
   /// In ja, this message translates to:
@@ -1063,6 +1087,186 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'アカウントと全記録を削除します。元に戻せません。'**
   String get deleteAccountConfirmMessage;
+
+  /// 必須の項目の項目名の横に添える文言
+  ///
+  /// In ja, this message translates to:
+  /// **'必須'**
+  String get requiredLabel;
+
+  /// ナビゲーションレールの抽出の項目 (FR-11)
+  ///
+  /// In ja, this message translates to:
+  /// **'抽出'**
+  String get brewsLabel;
+
+  /// 抽出の詳細の参照先の節の見出し (UC-6)
+  ///
+  /// In ja, this message translates to:
+  /// **'使った豆'**
+  String get usedBeansLabel;
+
+  /// アーカイブ済みの行のバッジ (FR-12)
+  ///
+  /// In ja, this message translates to:
+  /// **'アーカイブ済み'**
+  String get archivedBadge;
+
+  /// 住所が無い店の一覧の行の補足 (FR-6)
+  ///
+  /// In ja, this message translates to:
+  /// **'住所は未設定'**
+  String get addressUnset;
+
+  /// 評価が未入力のときの表示 (FR-11)
+  ///
+  /// In ja, this message translates to:
+  /// **'未評価'**
+  String get ratingNone;
+
+  /// 抽出の記録が無いときの次の 1 歩 (FR-11)
+  ///
+  /// In ja, this message translates to:
+  /// **'右下の「抽出を記録」から最初の 1 杯を記録します。'**
+  String get homeEmptyHint;
+
+  /// 購入の記録が無いときの次の 1 歩 (FR-9)
+  ///
+  /// In ja, this message translates to:
+  /// **'右下の「購入を記録」から最初の 1 件を記録します。'**
+  String get purchasesEmptyHint;
+
+  /// 商品の記録が無いときの次の 1 歩 (FR-7)
+  ///
+  /// In ja, this message translates to:
+  /// **'右下の「商品を登録」から最初の 1 件を登録します。'**
+  String get productsEmptyHint;
+
+  /// 店の記録が無いときの次の 1 歩 (FR-6)
+  ///
+  /// In ja, this message translates to:
+  /// **'右下の「店を登録」から最初の 1 件を登録します。'**
+  String get shopsEmptyHint;
+
+  /// 抽出のフォームで購入が未選択のときの表示 (FR-11)
+  ///
+  /// In ja, this message translates to:
+  /// **'購入を選ぶ'**
+  String get purchasePickPlaceholder;
+
+  /// 挽き目の入力の例 (FR-11)
+  ///
+  /// In ja, this message translates to:
+  /// **'例: Comandante 24'**
+  String get grindSettingHint;
+
+  /// 写真の変換の注記 (FR-10)
+  ///
+  /// In ja, this message translates to:
+  /// **'JPEG に変換し、長辺 2048 px 以下に縮小して保存します。'**
+  String get photoConvertNote;
+
+  /// 写真のアップロード中の表示 (FR-10)
+  ///
+  /// In ja, this message translates to:
+  /// **'アップロード中'**
+  String get uploadingLabel;
+
+  /// ログイン画面の下端の案内 (FR-1)
+  ///
+  /// In ja, this message translates to:
+  /// **'ログインできないときは管理者から登録用のリンクを受け取ってください。'**
+  String get loginRegisterHint;
+
+  /// 登録用のリンクが無効なときの案内 (FR-1)
+  ///
+  /// In ja, this message translates to:
+  /// **'管理者に連絡して、登録用のリンクを再発行してもらってください。'**
+  String get registerTokenGuidance;
+
+  /// 統計の範囲の表示の前置き (日本語は空。FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **''**
+  String get statsRangePrefix;
+
+  /// 統計の範囲の表示の中の区切り (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **' から '**
+  String get statsRangeMiddle;
+
+  /// 統計の範囲の表示の後ろ (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **' まで、{granularity}'**
+  String statsRangeSuffix(String granularity);
+
+  /// 統計の全期間の表示 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'全期間、{granularity}'**
+  String statsRangeAllTime(String granularity);
+
+  /// 統計の日別の粒度 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'日別'**
+  String get statsGranularityDaily;
+
+  /// 統計の月別の粒度 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'月別'**
+  String get statsGranularityMonthly;
+
+  /// 任意の期間の粒度の注記 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'{days} 日なので{granularity}で表示します (62 日以下なら日別)。'**
+  String statsCustomGranularityNote(int days, String granularity);
+
+  /// 統計のグラフの右端の単位 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'{unit} / {period}'**
+  String statsChartUnit(String unit, String period);
+
+  /// 抽出回数の単位 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'杯'**
+  String get statsUnitCups;
+
+  /// 日別の単位 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'日'**
+  String get statsPeriodDay;
+
+  /// 月別の単位 (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'月'**
+  String get statsPeriodMonth;
+
+  /// 散布図の節の見出し (FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'抽出条件と評価'**
+  String get statsScatterSection;
+
+  /// 購入金額のグラフの見出し (通貨コードが無いとき。FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'購入金額'**
+  String get statsPurchaseAmountLabel;
+
+  /// 購入重量のグラフの見出し (通貨コードが無いとき。FR-18)
+  ///
+  /// In ja, this message translates to:
+  /// **'購入重量'**
+  String get statsPurchaseWeightLabel;
 }
 
 class _AppLocalizationsDelegate

@@ -15,6 +15,7 @@ import 'records/clock.dart';
 import 'records/record_services.dart';
 import 'router/app_router.dart';
 import 'settings/settings_services.dart';
+import 'theme/app_theme.dart';
 
 /// アプリのルート。
 ///
@@ -109,6 +110,9 @@ class _BrewBookAppState extends State<BrewBookApp> {
       controller: _controller,
       child: MaterialApp.router(
         onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
+        // デザインの Paper (ライト) と Night (ダーク)。端末の設定に追従させる。
+        theme: buildBrewbookTheme(Brightness.light),
+        darkTheme: buildBrewbookTheme(Brightness.dark),
         // 端末またはブラウザの言語が日本語なら日本語、それ以外は英語にする (FR-16)。
         localeResolutionCallback: resolveLocale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,

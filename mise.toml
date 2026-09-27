@@ -207,11 +207,13 @@ description = "統合テストを chromedriver で実行する"
 dir = "frontend"
 # flutter drive は chromedriver を起動しないため、同じ版の chromedriver を先に起動する (issue 0013)。
 # 版は mise.toml の [tools] が持ち、統合テストの間だけ 4444 で待ち受ける。
+# ブラウザの寸法は携帯の幅 (390x844) にする。幅 840 px 未満の 1 列の配置で、ホームから保存までの
+# 画面数の成功指標を検証するためである (デザインの WideLayout は 840 px 以上で 2 段組にする)。
 run = """
 chromedriver --port=4444 &
 chromedriver_pid=$!
 trap 'kill "$chromedriver_pid"' EXIT
-flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d web-server --browser-name=chrome --headless
+flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d web-server --browser-name=chrome --headless --browser-dimension=390x844@1
 """
 
 [tasks."frontend:test-same-origin"]

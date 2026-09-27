@@ -154,6 +154,9 @@ fn run_flutter_drive(frontend: &Path, driver_port: u16, launch_url: &str) -> Res
             "web-server",
             "--browser-name=chrome",
             "--headless",
+            // ブラウザの寸法は携帯の幅 (390x844) にする。幅 840 px 未満の 1 列の配置で
+            // 検証するためである (デザインの WideLayout は 840 px 以上で 2 段組にする)。
+            "--browser-dimension=390x844@1",
             &format!("--driver-port={driver_port}"),
             &format!("--web-launch-url={launch_url}"),
         ])

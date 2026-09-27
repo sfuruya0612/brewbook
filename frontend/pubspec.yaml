@@ -28,6 +28,9 @@ dependencies:
   # ルーティングのパスに `index.html` を 200 で返すため、登録用リンクを直接開けるようにする (issue 0017)。
   flutter_web_plugins:
     sdk: flutter
+  # デザインの 3 つの族 (IBM Plex Sans JP、IBM Plex Mono、IBM Plex Serif) を Google Fonts から
+  # 読む (ADR-0014)。フォントファイルは持たない。
+  google_fonts: ^8.2.1
 
 dev_dependencies:
   flutter_test:

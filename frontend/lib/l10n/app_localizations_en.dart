@@ -210,6 +210,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get includeArchivedLabel => 'Include archived';
 
   @override
+  String get rowSubtitleSeparator => ' / ';
+
+  @override
   String get noRecords => 'No records';
 
   @override
@@ -356,14 +359,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String purchaseRowSubtitle(String date, String product) {
-    return '$date / $product';
-  }
-
-  @override
   String gramsValue(String value) {
     return '$value g';
   }
+
+  @override
+  String get gramUnit => 'g';
+
+  @override
+  String get celsiusUnit => '°C';
+
+  @override
+  String get secondUnit => 's';
 
   @override
   String celsiusValue(String value) {
@@ -525,9 +532,117 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deleteAccountButton => 'Delete the account';
 
   @override
+  String get deleteConfirmButton => 'Delete';
+
+  @override
   String get deleteAccountConfirmTitle => 'Delete the account?';
 
   @override
   String get deleteAccountConfirmMessage =>
       'Your account and all of your records will be deleted. This cannot be undone.';
+
+  @override
+  String get requiredLabel => 'Required';
+
+  @override
+  String get brewsLabel => 'Brews';
+
+  @override
+  String get usedBeansLabel => 'Beans used';
+
+  @override
+  String get archivedBadge => 'Archived';
+
+  @override
+  String get addressUnset => 'No address';
+
+  @override
+  String get ratingNone => 'Not rated';
+
+  @override
+  String get homeEmptyHint =>
+      'Use the button at the bottom right to log your first cup.';
+
+  @override
+  String get purchasesEmptyHint =>
+      'Use the button at the bottom right to log your first purchase.';
+
+  @override
+  String get productsEmptyHint =>
+      'Use the button at the bottom right to add your first product.';
+
+  @override
+  String get shopsEmptyHint =>
+      'Use the button at the bottom right to add your first shop.';
+
+  @override
+  String get purchasePickPlaceholder => 'Choose a purchase';
+
+  @override
+  String get grindSettingHint => 'e.g. Comandante 24';
+
+  @override
+  String get photoConvertNote =>
+      'Converts to JPEG and saves at a longest side of 2048 px or less.';
+
+  @override
+  String get uploadingLabel => 'Uploading';
+
+  @override
+  String get loginRegisterHint =>
+      'If you cannot log in, ask the administrator for a registration link.';
+
+  @override
+  String get registerTokenGuidance =>
+      'Contact the administrator to have a new registration link issued.';
+
+  @override
+  String get statsRangePrefix => 'From ';
+
+  @override
+  String get statsRangeMiddle => ' to ';
+
+  @override
+  String statsRangeSuffix(String granularity) {
+    return ', $granularity';
+  }
+
+  @override
+  String statsRangeAllTime(String granularity) {
+    return 'All time, $granularity';
+  }
+
+  @override
+  String get statsGranularityDaily => 'daily';
+
+  @override
+  String get statsGranularityMonthly => 'monthly';
+
+  @override
+  String statsCustomGranularityNote(int days, String granularity) {
+    return '$days days, so showing $granularity (daily if 62 days or fewer).';
+  }
+
+  @override
+  String statsChartUnit(String unit, String period) {
+    return '$unit / $period';
+  }
+
+  @override
+  String get statsUnitCups => 'cups';
+
+  @override
+  String get statsPeriodDay => 'day';
+
+  @override
+  String get statsPeriodMonth => 'month';
+
+  @override
+  String get statsScatterSection => 'Brew conditions and rating';
+
+  @override
+  String get statsPurchaseAmountLabel => 'Purchase amount';
+
+  @override
+  String get statsPurchaseWeightLabel => 'Purchase weight';
 }

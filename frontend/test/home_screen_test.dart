@@ -38,7 +38,8 @@ void main() {
     // 抽出の一覧 (カーソル方式の最初のページ) を読む (FR-11)。
     expect(find.text('Ethiopia'), findsOneWidget);
     expect(find.widgetWithText(FloatingActionButton, l10n.newBrewButton), findsOneWidget);
-    expect(find.widgetWithText(TextButton, l10n.logoutButton), findsOneWidget);
+    // メニュー (購入、商品、店、統計、設定、ログアウト) を置く (ホームの AppBar)。
+    expect(find.byTooltip(l10n.menuTooltip), findsOneWidget);
     expect(api.calls, <String>['GET /api/passkeys', 'GET /api/brews']);
   });
 
@@ -85,7 +86,7 @@ void main() {
               brewJson(
                 id: includeArchived ? 'brew-2' : 'brew-1',
                 purchase: purchaseJson(
-                  product: productJson(name: includeArchived ? 'Archived' : 'Active'),
+                  product: productJson(name: includeArchived ? 'Archived Brew' : 'Active Brew'),
                 ),
                 archivedAt: includeArchived ? '2026-09-02T00:00:00.000Z' : null,
               ),
@@ -95,17 +96,17 @@ void main() {
       });
     await pumpApp(tester, apiClient: api.client(), passkeyClient: FakePasskeyClient());
 
-    expect(find.text('Active'), findsOneWidget);
-    expect(find.text('Archived'), findsNothing);
+    expect(find.text('Active Brew'), findsOneWidget);
+    expect(find.text('Archived Brew'), findsNothing);
 
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
 
-    expect(find.text('Archived'), findsOneWidget);
+    expect(find.text('Archived Brew'), findsOneWidget);
     expect(api.calls, <String>['GET /api/passkeys', 'GET /api/brews', 'GET /api/brews']);
   });
 
-  testWidgets('行から抽出をアーカイブすると一覧を読み直す', (tester) async {
+  testWidgets('詳細から抽出をアーカイブすると一覧を読み直す', (tester) async {
     final l10n = await loadL10n();
     // 2 回目の一覧の読み込みでは、アーカイブ済みになった状態を返す (サーバーの状態を模す)。
     var listCalls = 0;
@@ -122,6 +123,7 @@ void main() {
           ),
         );
       })
+      ..on('GET', '/api/brews/brew-1', status: 200, body: brewJson(id: 'brew-1'))
       ..on(
         'POST',
         '/api/brews/brew-1/archive',
@@ -130,19 +132,22 @@ void main() {
       );
     await pumpApp(tester, apiClient: api.client(), passkeyClient: FakePasskeyClient());
 
+    // アーカイブは詳細の画面から行う (一覧の行には置かない)。
+    await tester.tap(find.text('Test Product'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip(l10n.archiveButton));
     await tester.pumpAndSettle();
 
-    expect(api.calls, <String>[
-      'GET /api/passkeys',
-      'GET /api/brews',
-      'POST /api/brews/brew-1/archive',
-      'GET /api/brews',
-    ]);
+    expect(api.calls, contains('POST /api/brews/brew-1/archive'));
+    expect(api.calls.where((call) => call == 'GET /api/brews').length, 2);
+
+    // 一覧へ戻ると、アーカイブ済みの抽出は出ない (FR-12)。
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     expect(find.text(l10n.noRecords), findsOneWidget);
   });
 
-  testWidgets('行から抽出のアーカイブ解除ができる', (tester) async {
+  testWidgets('詳細から抽出のアーカイブ解除ができる', (tester) async {
     final l10n = await loadL10n();
     // アーカイブ解除の後は、解除済みの抽出を返す (サーバーの状態を模す)。
     var unarchived = false;
@@ -171,6 +176,18 @@ void main() {
           ),
         );
       })
+      ..onQuery('GET', '/api/brews/brew-1', (query) {
+        return (
+          status: 200,
+          body: brewJson(
+            id: 'brew-1',
+            purchase: purchaseJson(
+              product: productJson(name: unarchived ? 'Active' : 'Old'),
+            ),
+            archivedAt: unarchived ? null : '2026-09-02T00:00:00.000Z',
+          ),
+        );
+      })
       ..onQuery('POST', '/api/brews/brew-1/unarchive', (query) {
         unarchived = true;
         return (status: 200, body: brewJson(id: 'brew-1'));
@@ -180,18 +197,18 @@ void main() {
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(find.text('Old'), findsOneWidget);
-    expect(find.byTooltip(l10n.unarchiveButton), findsOneWidget);
 
+    // アーカイブ済みの抽出は、詳細からアーカイブ解除できる (FR-12)。
+    await tester.tap(find.text('Old'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip(l10n.unarchiveButton));
     await tester.pumpAndSettle();
 
-    expect(api.calls, <String>[
-      'GET /api/passkeys',
-      'GET /api/brews',
-      'GET /api/brews',
-      'POST /api/brews/brew-1/unarchive',
-      'GET /api/brews',
-    ]);
+    expect(api.calls, contains('POST /api/brews/brew-1/unarchive'));
+    expect(find.text(l10n.unarchivedMessage), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     expect(find.text('Active'), findsOneWidget);
   });
 
@@ -296,8 +313,8 @@ void main() {
       ..on('POST', '/api/auth/logout', status: 200, body: <String, Object?>{});
     await pumpApp(tester, apiClient: api.client(), passkeyClient: FakePasskeyClient());
 
-    await tester.tap(find.widgetWithText(TextButton, l10n.logoutButton));
-    await tester.pumpAndSettle();
+    // ログアウトはメニューの区切りの下に置く (ホームの AppBar)。
+    await _openMenu(tester, l10n.menuTooltip, l10n.logoutButton);
 
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(api.calls, <String>[
@@ -319,8 +336,7 @@ void main() {
     api.onNetworkError('POST', '/api/auth/logout');
     await pumpApp(tester, apiClient: api.client(), passkeyClient: FakePasskeyClient());
 
-    await tester.tap(find.widgetWithText(TextButton, l10n.logoutButton));
-    await tester.pumpAndSettle();
+    await _openMenu(tester, l10n.menuTooltip, l10n.logoutButton);
 
     expect(find.text(l10n.errorNetwork), findsOneWidget);
     expect(find.byType(HomeScreen), findsOneWidget);

@@ -380,7 +380,7 @@ void main() {
     await openSettings(tester, api: api);
 
     // 取り消しでは削除しない (FR-15)。
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.deleteAccountButton));
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.deleteAccountButton));
     await tester.pumpAndSettle();
     expect(find.text(l10n.deleteAccountConfirmMessage), findsOneWidget);
     await tester.tap(find.widgetWithText(TextButton, l10n.cancelButton));
@@ -389,7 +389,7 @@ void main() {
     expect(api.calls, isNot(contains('DELETE /api/account')));
 
     // ダイアログの外を押して閉じても削除しない (FR-15)。
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.deleteAccountButton));
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.deleteAccountButton));
     await tester.pumpAndSettle();
     await tester.tapAt(const Offset(10, 10));
     await tester.pumpAndSettle();
@@ -407,9 +407,9 @@ void main() {
     )..on('DELETE', '/api/account', status: 204, body: null);
     await openSettings(tester, api: api);
 
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.deleteAccountButton));
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.deleteAccountButton));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, l10n.deleteButton));
+    await tester.tap(find.widgetWithText(FilledButton, l10n.deleteConfirmButton));
     await tester.pumpAndSettle();
 
     expect(api.calls, contains('DELETE /api/account'));
@@ -427,7 +427,7 @@ void main() {
     )..on('POST', '/api/auth/logout', status: 200, body: <String, Object?>{});
     await openSettings(tester, api: api);
 
-    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.logoutButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.logoutButton));
     await tester.pumpAndSettle();
 
     expect(api.calls, contains('POST /api/auth/logout'));

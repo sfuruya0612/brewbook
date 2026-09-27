@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../api/models.dart';
 import '../l10n/app_localizations.dart';
 import '../records/record_services.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
+import 'brewbook_mark.dart';
 import 'error_banner.dart';
 import 'error_message.dart';
 
@@ -10,24 +13,29 @@ import 'error_message.dart';
 typedef RecordPageLoader<T> =
     Future<RecordPage<T>> Function({String? cursor, required bool includeArchived});
 
+/// 一覧の 1 行を組み立てる関数。
+///
+/// [selected] は広い画面で選択中の行か (roast-soft の地)、[onTap] は行を押したときの動き。
+typedef RecordRowBuilder<T> =
+    Widget Function(BuildContext context, T item, {required bool selected, required VoidCallback onTap});
+
 /// 末尾までの残りの高さがこの値 (px) を下回ったら、次のページを読み込む。
 const double loadMoreThreshold = 200;
 
 /// カーソル方式の一覧の共通の枠 (FR-12)。
 ///
-/// アーカイブ済みを含める切り替え、末尾までのスクロールでの追加読み込み、行ごとのアーカイブと
-/// アーカイブ解除を持つ。中身の表示は [title] と [subtitle] が決める。
+/// アーカイブ済みを含める切り替え、末尾までのスクロールでの追加読み込みを持つ。
+/// 中身の表示は [row] が決める。行ごとのアーカイブは詳細の画面から行う。
 class RecordListView<T> extends StatefulWidget {
   const RecordListView({
     super.key,
     required this.load,
     required this.services,
-    required this.title,
-    this.subtitle,
+    required this.row,
+    this.isSelected,
     this.onTap,
-    this.isArchived,
-    this.setArchived,
     this.showArchivedToggle = true,
+    this.emptyHint,
   });
 
   /// 1 ページを読む。
@@ -36,23 +44,20 @@ class RecordListView<T> extends StatefulWidget {
   /// 記録の変更の通知 (登録、更新、アーカイブ) を受け取って読み直す。
   final RecordServices services;
 
-  /// 行の主な表示。
-  final Widget Function(BuildContext context, T item) title;
+  /// 行の組み立て。
+  final RecordRowBuilder<T> row;
 
-  /// 行の補足の表示。無いときは null を返す。
-  final Widget? Function(BuildContext context, T item)? subtitle;
+  /// 広い画面で選択中の行か。
+  final bool Function(T item)? isSelected;
 
   /// 行を押したときの動き。無いときは押せない。
   final void Function(BuildContext context, T item)? onTap;
 
-  /// アーカイブ済みかを返す。アーカイブの操作を置かないときは null。
-  final bool Function(T item)? isArchived;
-
-  /// アーカイブとアーカイブ解除を行う。null のときは行にボタンを置かない。
-  final Future<void> Function(T item, bool archived)? setArchived;
-
   /// アーカイブ済みを含める切り替えを置くか (選択のダイアログでは置かない)。
   final bool showArchivedToggle;
+
+  /// 記録が無いときに、次にすることを示す 1 文 (ARB から取る)。
+  final String? emptyHint;
 
   @override
   State<RecordListView<T>> createState() => _RecordListViewState<T>();
@@ -151,84 +156,89 @@ class _RecordListViewState<T> extends State<RecordListView<T>> {
     _load(reset: false);
   }
 
-  /// 行のアーカイブとアーカイブ解除を行う (FR-12)。
-  Future<void> _toggleArchived(T item) async {
-    final archived = widget.isArchived?.call(item) ?? false;
-    final l10n = AppLocalizations.of(context);
-    try {
-      await widget.setArchived!(item, !archived);
-      widget.services.markRecordsChanged();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(messageForError(error, l10n))),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
+    final String? errorMessage = _errorMessage;
     return Column(
       children: <Widget>[
         if (widget.showArchivedToggle)
-          SwitchListTile(
-            title: Text(l10n.includeArchivedLabel),
-            value: _includeArchived,
-            onChanged: (value) {
-              setState(() => _includeArchived = value);
-              _load(reset: true);
-            },
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.x4,
+              vertical: AppSpacing.x2,
+            ),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: brewbook.line)),
+            ),
+            child: Row(
+              children: <Widget>[
+                Transform.scale(
+                  scale: 0.85,
+                  child: Switch(
+                    value: _includeArchived,
+                    onChanged: (value) {
+                      setState(() => _includeArchived = value);
+                      _load(reset: true);
+                    },
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.x2),
+                Text(
+                  l10n.includeArchivedLabel,
+                  style: AppTextStyle.label(color: brewbook.palette.inkMuted),
+                ),
+              ],
+            ),
           ),
-        if (_errorMessage != null)
+        if (errorMessage != null)
           Padding(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(AppSpacing.x4),
             child: ErrorBanner(
-              message: _errorMessage!,
+              message: errorMessage,
               onRetry: () => _load(reset: true),
             ),
           ),
-        if (_loading) const LinearProgressIndicator(),
         Expanded(
           child: _items.isEmpty
-              ? Center(child: Text(_loaded ? l10n.noRecords : l10n.loading))
+              ? (_loaded
+                    ? EmptyState(message: l10n.noRecords, hint: widget.emptyHint)
+                    : Center(
+                        child: Text(
+                          l10n.loading,
+                          style: AppTextStyle.body(color: brewbook.palette.inkMuted),
+                        ),
+                      ))
               : NotificationListener<ScrollNotification>(
                   onNotification: _onScroll,
                   child: ListView.builder(
-                    itemCount: _items.length,
-                    itemBuilder: (context, index) => _row(context, _items[index]),
+                    itemCount: _items.length + (_loading && _nextCursor != null ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index >= _items.length) {
+                        // 続きの読み込み中は最後の行の下に「読み込み中」を caption で出す。
+                        return Padding(
+                          padding: const EdgeInsets.all(AppSpacing.x4),
+                          child: Center(
+                            child: Text(
+                              l10n.loading,
+                              style: AppTextStyle.caption(color: brewbook.palette.inkMuted),
+                            ),
+                          ),
+                        );
+                      }
+                      final item = _items[index];
+                      return widget.row(
+                        context,
+                        item,
+                        selected: widget.isSelected?.call(item) ?? false,
+                        onTap: () => widget.onTap?.call(context, item),
+                      );
+                    },
                   ),
                 ),
         ),
       ],
-    );
-  }
-
-  /// 1 行を組み立てる。アーカイブの操作は行の末尾に置く。
-  Widget _row(BuildContext context, T item) {
-    final l10n = AppLocalizations.of(context);
-    final subtitle = widget.subtitle;
-    final onTap = widget.onTap;
-    final setArchived = widget.setArchived;
-    return ListTile(
-      title: widget.title(context, item),
-      subtitle: subtitle == null ? null : subtitle(context, item),
-      trailing: setArchived == null
-          ? null
-          : IconButton(
-              tooltip: (widget.isArchived?.call(item) ?? false)
-                  ? l10n.unarchiveButton
-                  : l10n.archiveButton,
-              icon: Icon(
-                (widget.isArchived?.call(item) ?? false)
-                    ? Icons.unarchive_outlined
-                    : Icons.archive_outlined,
-              ),
-              onPressed: () => _toggleArchived(item),
-            ),
-      onTap: onTap == null ? null : () => onTap(context, item),
     );
   }
 }

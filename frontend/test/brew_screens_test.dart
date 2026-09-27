@@ -109,26 +109,25 @@ void main() {
     expect(find.text(l10n.gramsValue('15')), findsOneWidget);
     expect(find.text(l10n.celsiusValue('92')), findsOneWidget);
     expect(find.text(l10n.secondsValue('150')), findsOneWidget);
-    expect(find.text(l10n.ratingValue('4')), findsOneWidget);
+    // 評価は題の横 (丸と数値) と表の行の両方に出す (Detail のガイドライン)。
+    expect(find.text(l10n.ratingValue('4')), findsNWidgets(2));
     expect(find.text('V60'), findsOneWidget);
 
     // 購入をたどる。
-    await tester.tap(find.text(displayDay('2026-08-01', locale)));
-    await tester.pumpAndSettle();
+    await scrollAndTap(tester, find.text(displayDay('2026-08-01', locale)));
     expect(find.byType(PurchaseDetailScreen), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    // 商品をたどる。
-    await tester.tap(find.text('Ethiopia'));
-    await tester.pumpAndSettle();
+    // 商品をたどる。題にも商品名が出るため、参照先のタイルを選ぶ。
+    await scrollAndTap(tester, find.text('Ethiopia').last);
     expect(find.byType(ProductFormScreen), findsOneWidget);
-    await tester.pageBack();
+    // フォームは閉じる (x) で戻る (AppBar のガイドライン)。
+    await tester.tap(find.byType(CloseButton));
     await tester.pumpAndSettle();
 
     // 店をたどる。
-    await tester.tap(find.text('Test Shop'));
-    await tester.pumpAndSettle();
+    await scrollAndTap(tester, find.text('Test Shop'));
     expect(find.byType(ShopFormScreen), findsOneWidget);
   });
 
@@ -190,7 +189,7 @@ void main() {
     expect(find.widgetWithText(TextField, formatDay(today())), findsOneWidget);
 
     // 購入を選ぶ (必須。FR-11)。
-    await scrollAndTap(tester, find.widgetWithText(ListTile, l10n.purchaseLabel));
+    await scrollAndTap(tester, find.text(l10n.purchasePickPlaceholder));
     await tester.tap(find.text('Test Product').last);
     await tester.pumpAndSettle();
 
@@ -203,7 +202,7 @@ void main() {
     await scrollAndEnterText(tester, find.byType(TextField).at(6), 'V60');
     await scrollAndEnterText(tester, find.byType(TextField).at(7), 'Medium Fine');
     await scrollAndEnterText(tester, find.byType(TextField).at(8), 'Good');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     final body = api.lastBody('POST', '/api/brews')!;
     expect(body['purchase_id'], 'purchase-1');
@@ -241,7 +240,7 @@ void main() {
     expect(find.widgetWithText(TextField, formatTime(local.hour, local.minute)), findsOneWidget);
 
     await scrollAndEnterText(tester, find.byType(TextField).at(5), '180');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     final body = api.lastBody('PATCH', '/api/brews/brew-1')!;
     expect(body['brew_time_seconds'], 180);
@@ -253,7 +252,7 @@ void main() {
     final l10n = await loadL10n();
     final api = await openBrewForm(tester);
 
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.text(l10n.validationPurchase), findsOneWidget);
     expect(api.calls, <String>['GET /api/passkeys', 'GET /api/brews']);
@@ -263,13 +262,13 @@ void main() {
     final l10n = await loadL10n();
     final api = await openBrewForm(tester);
 
-    await scrollAndTap(tester, find.widgetWithText(ListTile, l10n.purchaseLabel));
+    await scrollAndTap(tester, find.text(l10n.purchasePickPlaceholder));
     await tester.tap(find.text('Test Product').last);
     await tester.pumpAndSettle();
     await scrollAndEnterText(tester, find.byType(TextField).at(0), '2026-13-40');
     await scrollAndEnterText(tester, find.byType(TextField).at(1), '99:99');
     await scrollAndEnterText(tester, find.byType(TextField).at(2), '15.55');
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.text(l10n.validationDay), findsOneWidget);
     expect(find.text(l10n.validationTime), findsOneWidget);
@@ -315,10 +314,10 @@ void main() {
     final api = await openBrewForm(tester);
     api.on('POST', '/api/brews', status: 400, body: badRequestBody);
 
-    await scrollAndTap(tester, find.widgetWithText(ListTile, l10n.purchaseLabel));
+    await scrollAndTap(tester, find.text(l10n.purchasePickPlaceholder));
     await tester.tap(find.text('Test Product').last);
     await tester.pumpAndSettle();
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.text(l10n.errorValidation), findsOneWidget);
     expect(find.byType(BrewFormScreen), findsOneWidget);
@@ -329,10 +328,10 @@ void main() {
     final api = await openBrewForm(tester);
     api.on('POST', '/api/brews', status: 401, body: unauthorizedBody);
 
-    await scrollAndTap(tester, find.widgetWithText(ListTile, l10n.purchaseLabel));
+    await scrollAndTap(tester, find.text(l10n.purchasePickPlaceholder));
     await tester.tap(find.text('Test Product').last);
     await tester.pumpAndSettle();
-    await scrollAndTap(tester, find.widgetWithText(FilledButton, l10n.saveButton));
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.byType(LoginScreen), findsOneWidget);
   });

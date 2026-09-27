@@ -1,9 +1,15 @@
+import 'dart:ui' show PathMetric;
+
 import 'package:flutter/material.dart';
 
 import '../api/record_inputs.dart';
 import '../api/records_api.dart';
 import '../l10n/app_localizations.dart';
 import '../records/record_services.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_field.dart';
+import '../widgets/app_form.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/error_message.dart';
 import '../widgets/suggestion_field.dart';
@@ -14,13 +20,29 @@ import '../widgets/suggestion_field.dart';
 /// 入力値の候補を出す (FR-13)。Flavor Notes はタグとして追加と削除ができ、更新では入力した
 /// 配列で置き換える (FR-8)。
 class ProductFormScreen extends StatefulWidget {
-  const ProductFormScreen({super.key, required this.services, this.id});
+  const ProductFormScreen({
+    super.key,
+    required this.services,
+    this.id,
+    this.embedded = false,
+    this.onClose,
+    this.onSaved,
+  });
 
   /// 記録の画面が使う依存 (ADR-0007)。
   final RecordServices services;
 
   /// 編集する商品の ID。新規の登録のときは null。
   final String? id;
+
+  /// 幅 840 px 以上の 2 段組の右の面に出すか。
+  final bool embedded;
+
+  /// 閉じる動き。無いときは前の画面へ戻る。
+  final VoidCallback? onClose;
+
+  /// 保存できたときの動き。無いときは前の画面へ戻る。
+  final VoidCallback? onSaved;
 
   @override
   State<ProductFormScreen> createState() => _ProductFormScreenState();
@@ -33,15 +55,20 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final TextEditingController _region = TextEditingController();
   final TextEditingController _process = TextEditingController();
   final TextEditingController _variety = TextEditingController();
-  final TextEditingController _tag = TextEditingController();
 
   final List<String> _flavorNotes = <String>[];
 
   String? _nameError;
   String? _errorMessage;
   String? _loadError;
+
+  /// 検証の誤りを上のバナーで示すか。
+  bool _showValidationBanner = false;
   bool _busy = false;
   bool _loading = false;
+
+  /// アーカイブ済みか (編集のときだけ使う。FR-12)。
+  bool _archived = false;
 
   @override
   void initState() {
@@ -60,7 +87,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _region.dispose();
     _process.dispose();
     _variety.dispose();
-    _tag.dispose();
     super.dispose();
   }
 
@@ -83,6 +109,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         _region.text = product.region ?? '';
         _process.text = product.process ?? '';
         _variety.text = product.variety ?? '';
+        _archived = product.isArchived;
         _flavorNotes
           ..clear()
           ..addAll(product.flavorNotes);
@@ -100,8 +127,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   }
 
   /// タグを 1 つ足す。前後の空白を除いた名前が空のときは何もしない (FR-8)。
-  void _addTag() {
-    final tag = _tag.text.trim();
+  void _addTag(String value) {
+    final tag = value.trim();
     if (tag.isEmpty) {
       return;
     }
@@ -109,8 +136,53 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       if (!_flavorNotes.contains(tag)) {
         _flavorNotes.add(tag);
       }
-      _tag.clear();
     });
+  }
+
+  /// タグの入力をダイアログで受ける (docs/design/components/Chip)。
+  Future<void> _promptTag() async {
+    final l10n = AppLocalizations.of(context);
+    final tag = await showDialog<String>(
+      context: context,
+      builder: (context) => _TagDialog(
+        title: l10n.tagInputLabel,
+        hintText: l10n.tagInputHint,
+        confirmLabel: l10n.addButton,
+        cancelLabel: l10n.cancelButton,
+      ),
+    );
+    if (tag != null) {
+      _addTag(tag);
+    }
+  }
+
+  /// アーカイブとアーカイブ解除を行う (FR-12)。
+  Future<void> _toggleArchived() async {
+    final id = widget.id;
+    if (id == null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    try {
+      final updated = await widget.services.records.setProductArchived(id, !_archived);
+      widget.services.markRecordsChanged();
+      if (!mounted) {
+        return;
+      }
+      setState(() => _archived = updated.isArchived);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(updated.isArchived ? l10n.archivedMessage : l10n.unarchivedMessage),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(messageForError(error, l10n))),
+      );
+    }
   }
 
   /// 入力した値で登録または更新する。
@@ -120,6 +192,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final nameError = name.isEmpty ? l10n.validationRequired : null;
     setState(() {
       _nameError = nameError;
+      _showValidationBanner = nameError != null;
       _errorMessage = null;
     });
     if (nameError != null) {
@@ -149,7 +222,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.savedMessage)),
       );
-      Navigator.of(context).pop();
+      if (widget.embedded) {
+        widget.onSaved?.call();
+      } else {
+        Navigator.of(context).pop();
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -173,129 +250,269 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
+        leading: CloseButton(
+          onPressed: widget.onClose ?? () => Navigator.of(context).maybePop(),
+        ),
         title: Text(widget.id == null ? l10n.productNewTitle : l10n.productEditTitle),
+        actions: <Widget>[
+          if (widget.id != null)
+            IconButton(
+              tooltip: _archived ? l10n.unarchiveButton : l10n.archiveButton,
+              icon: Icon(_archived ? Icons.unarchive_outlined : Icons.archive_outlined),
+              onPressed: _busy ? null : _toggleArchived,
+            ),
+          TextButton(
+            onPressed: _busy ? null : _save,
+            child: Text(l10n.saveButton),
+          ),
+          const SizedBox(width: AppSpacing.x2),
+        ],
       ),
       body: _body(context, l10n),
     );
   }
 
   Widget _body(BuildContext context, AppLocalizations l10n) {
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: Text(l10n.loading, style: AppTextStyle.body(color: brewbook.palette.inkMuted)),
+      );
     }
     final loadError = _loadError;
     if (loadError != null) {
       return Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.x6),
           child: ErrorBanner(message: loadError, onRetry: () => _load(widget.id!)),
         ),
       );
     }
     final records = widget.services.records;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          TextField(
-            controller: _name,
-            enabled: !_busy,
-            decoration: InputDecoration(
-              labelText: l10n.productNameLabel,
-              errorText: _nameError,
+    return AppForm(
+      children: <Widget>[
+        if (_showValidationBanner) ErrorBanner(message: l10n.errorValidation),
+        AppTextField(
+          controller: _name,
+          label: l10n.productNameLabel,
+          required: true,
+          enabled: !_busy,
+          errorText: _nameError,
+          mono: false,
+        ),
+        SuggestionField(
+          records: records,
+          controller: _producer,
+          field: SuggestionFields.producer,
+          label: l10n.producer,
+          enabled: !_busy,
+        ),
+        AppFormRow(
+          children: <Widget>[
+            SuggestionField(
+              records: records,
+              controller: _origin,
+              field: SuggestionFields.origin,
+              label: l10n.origin,
+              enabled: !_busy,
+            ),
+            SuggestionField(
+              records: records,
+              controller: _region,
+              field: SuggestionFields.region,
+              label: l10n.region,
+              enabled: !_busy,
+            ),
+          ],
+        ),
+        AppFormRow(
+          children: <Widget>[
+            SuggestionField(
+              records: records,
+              controller: _process,
+              field: SuggestionFields.process,
+              label: l10n.process,
+              enabled: !_busy,
+            ),
+            SuggestionField(
+              records: records,
+              controller: _variety,
+              field: SuggestionFields.variety,
+              label: l10n.variety,
+              enabled: !_busy,
+            ),
+          ],
+        ),
+        _flavorNotesField(l10n),
+        if (_errorMessage != null) ErrorBanner(message: _errorMessage!),
+      ],
+    );
+  }
+
+  /// フレーバーノートのタグの入力 (FR-8)。
+  Widget _flavorNotesField(AppLocalizations l10n) {
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Text(l10n.flavorNotes, style: AppTextStyle.label(color: brewbook.palette.inkMuted)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: AppSpacing.x2,
+          runSpacing: AppSpacing.x2,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            for (final note in _flavorNotes)
+              InputChip(
+                label: Text(note),
+                labelStyle: AppTextStyle.label(color: brewbook.palette.ink),
+                backgroundColor: brewbook.cremaSoft,
+                side: BorderSide.none,
+                shape: const StadiumBorder(),
+                deleteIcon: Icon(Icons.close_outlined, size: 14, color: brewbook.palette.inkMuted),
+                deleteButtonTooltipMessage: l10n.deleteButton,
+                onDeleted: _busy ? null : () => setState(() => _flavorNotes.remove(note)),
+              ),
+            _TagInputChip(
+              label: l10n.tagInputHint,
+              enabled: !_busy,
+              onTap: _promptTag,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// 破線の枠の「タグを入力」のチップ (docs/design/components/Chip)。
+class _TagInputChip extends StatelessWidget {
+  const _TagInputChip({required this.label, required this.enabled, required this.onTap});
+
+  final String label;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: AppRadius.fullAll,
+        child: CustomPaint(
+          painter: _DashedBorderPainter(color: brewbook.lineStrong),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.x3,
+              vertical: 6,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(Icons.add_outlined, size: 14, color: brewbook.palette.inkMuted),
+                const SizedBox(width: 6),
+                Text(label, style: AppTextStyle.label(color: brewbook.palette.inkMuted)),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          SuggestionField(
-            records: records,
-            controller: _producer,
-            field: SuggestionFields.producer,
-            label: l10n.producer,
-            enabled: !_busy,
-          ),
-          const SizedBox(height: 16),
-          SuggestionField(
-            records: records,
-            controller: _origin,
-            field: SuggestionFields.origin,
-            label: l10n.origin,
-            enabled: !_busy,
-          ),
-          const SizedBox(height: 16),
-          SuggestionField(
-            records: records,
-            controller: _region,
-            field: SuggestionFields.region,
-            label: l10n.region,
-            enabled: !_busy,
-          ),
-          const SizedBox(height: 16),
-          SuggestionField(
-            records: records,
-            controller: _process,
-            field: SuggestionFields.process,
-            label: l10n.process,
-            enabled: !_busy,
-          ),
-          const SizedBox(height: 16),
-          SuggestionField(
-            records: records,
-            controller: _variety,
-            field: SuggestionFields.variety,
-            label: l10n.variety,
-            enabled: !_busy,
-          ),
-          const SizedBox(height: 24),
-          Text(l10n.flavorNotes, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: <Widget>[
-              for (final note in _flavorNotes)
-                InputChip(
-                  label: Text(note),
-                  deleteButtonTooltipMessage: l10n.deleteButton,
-                  onDeleted: _busy ? null : () => setState(() => _flavorNotes.remove(note)),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: TextField(
-                  controller: _tag,
-                  enabled: !_busy,
-                  decoration: InputDecoration(
-                    labelText: l10n.tagInputLabel,
-                    hintText: l10n.tagInputHint,
-                  ),
-                  onSubmitted: (_) => _addTag(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.tonal(
-                onPressed: _busy ? null : _addTag,
-                child: Text(l10n.addButton),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _busy ? null : _save,
-            child: Text(l10n.saveButton),
-          ),
-          if (_busy) ...<Widget>[
-            const SizedBox(height: 16),
-            const Center(child: CircularProgressIndicator()),
-          ],
-          if (_errorMessage != null) ...<Widget>[
-            const SizedBox(height: 16),
-            ErrorBanner(message: _errorMessage!),
-          ],
-        ],
+        ),
       ),
+    );
+  }
+}
+
+/// 破線の角丸の枠を描く。
+class _DashedBorderPainter extends CustomPainter {
+  const _DashedBorderPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final Path path = Path()
+      ..addRRect(RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(AppRadius.full)));
+    for (final PathMetric metric in path.computeMetrics()) {
+      double distance = 0;
+      while (distance < metric.length) {
+        final double end = distance + 4;
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance = end + 4;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) => oldDelegate.color != color;
+}
+
+/// タグの名前を入力させるダイアログ (FR-8)。
+class _TagDialog extends StatefulWidget {
+  const _TagDialog({
+    required this.title,
+    required this.hintText,
+    required this.confirmLabel,
+    required this.cancelLabel,
+  });
+
+  final String title;
+  final String hintText;
+  final String confirmLabel;
+  final String cancelLabel;
+
+  @override
+  State<_TagDialog> createState() => _TagDialogState();
+}
+
+class _TagDialogState extends State<_TagDialog> {
+  final TextEditingController _tag = TextEditingController();
+
+  @override
+  void dispose() {
+    _tag.dispose();
+    super.dispose();
+  }
+
+  /// 空白を除いたタグを返して閉じる。空のときは閉じない。
+  void _confirm() {
+    final tag = _tag.text.trim();
+    if (tag.isEmpty) {
+      return;
+    }
+    Navigator.of(context).pop(tag);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: AppTextField(
+        controller: _tag,
+        label: widget.title,
+        hintText: widget.hintText,
+        autofocus: true,
+        mono: false,
+        onSubmitted: (_) => _confirm(),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(widget.cancelLabel),
+        ),
+        FilledButton(
+          onPressed: _confirm,
+          child: Text(widget.confirmLabel),
+        ),
+      ],
     );
   }
 }

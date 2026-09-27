@@ -6,10 +6,15 @@ import '../api/records_api.dart';
 import '../l10n/app_localizations.dart';
 import '../records/record_services.dart';
 import '../records/values.dart';
+import '../theme/app_theme.dart';
+import '../theme/tokens.dart';
+import '../widgets/app_field.dart';
+import '../widgets/app_form.dart';
 import '../widgets/day_time_fields.dart';
 import '../widgets/error_banner.dart';
 import '../widgets/error_message.dart';
 import '../widgets/picker_tile.dart';
+import '../widgets/rating.dart';
 import '../widgets/record_picker.dart';
 import '../widgets/suggestion_field.dart';
 
@@ -17,14 +22,31 @@ import '../widgets/suggestion_field.dart';
 ///
 /// 購入は必須で、ダイアログから選ぶ。抽出日時は端末のローカル時刻で入力し、送信の直前に
 /// UTC の ISO 8601 へ変換する (FR-11)。抽出方法と挽き目は、入力中に過去の入力値の候補を出す (FR-13)。
+/// 保存は AppBar の右端の文字ボタン。1 画面に収める。
 class BrewFormScreen extends StatefulWidget {
-  const BrewFormScreen({super.key, required this.services, this.id});
+  const BrewFormScreen({
+    super.key,
+    required this.services,
+    this.id,
+    this.embedded = false,
+    this.onClose,
+    this.onSaved,
+  });
 
   /// 記録の画面が使う依存 (ADR-0007)。
   final RecordServices services;
 
   /// 編集する抽出の ID。新規の登録のときは null。
   final String? id;
+
+  /// 幅 840 px 以上の 2 段組の右の面に出すか。
+  final bool embedded;
+
+  /// 閉じる動き。無いときは前の画面へ戻る。
+  final VoidCallback? onClose;
+
+  /// 保存できたときの動き。無いときは前の画面へ戻る。
+  final VoidCallback? onSaved;
 
   @override
   State<BrewFormScreen> createState() => _BrewFormScreenState();
@@ -53,6 +75,9 @@ class _BrewFormScreenState extends State<BrewFormScreen> {
   String? _brewTimeError;
   String? _errorMessage;
   String? _loadError;
+
+  /// 検証の誤りを上のバナーで示すか。
+  bool _showValidationBanner = false;
   bool _busy = false;
   bool _loading = false;
 
@@ -130,10 +155,9 @@ class _BrewFormScreenState extends State<BrewFormScreen> {
       services: widget.services,
       load: ({cursor, required includeArchived}) =>
           widget.services.records.purchases(cursor: cursor, includeArchived: false),
-      titleBuilder: (context, purchase) => Text(purchase.product.name),
-      subtitleBuilder: (context, purchase) => Text(
-        displayDay(purchase.purchasedOn, Localizations.localeOf(context)),
-      ),
+      titleOf: (context, purchase) => purchase.product.name,
+      subtitleOf: (context, purchase) =>
+          displayDay(purchase.purchasedOn, Localizations.localeOf(context)),
     );
     if (choice == null || !mounted) {
       return;
@@ -142,6 +166,17 @@ class _BrewFormScreenState extends State<BrewFormScreen> {
       _purchase = choice.value;
       _purchaseError = null;
     });
+  }
+
+  /// 購入のピッカーの補足 (購入日 / 店。FR-16)。
+  String _purchaseCaption(BuildContext context, Purchase purchase) {
+    final l10n = AppLocalizations.of(context);
+    final date = displayDay(purchase.purchasedOn, Localizations.localeOf(context));
+    final shop = purchase.shop;
+    if (shop == null) {
+      return l10n.brewRowSubtitleNoShop(date);
+    }
+    return l10n.brewRowSubtitle(date, shop.name);
   }
 
   /// 入力した値で登録または更新する。
@@ -167,14 +202,15 @@ class _BrewFormScreenState extends State<BrewFormScreen> {
       _waterTempError = waterTemp.error;
       _brewTimeError = brewTime.error;
       _errorMessage = null;
+      _showValidationBanner = purchaseError != null ||
+          dateError != null ||
+          timeError != null ||
+          dose.error != null ||
+          water.error != null ||
+          waterTemp.error != null ||
+          brewTime.error != null;
     });
-    if (purchaseError != null ||
-        dateError != null ||
-        timeError != null ||
-        dose.error != null ||
-        water.error != null ||
-        waterTemp.error != null ||
-        brewTime.error != null) {
+    if (_showValidationBanner) {
       return;
     }
 
@@ -209,7 +245,11 @@ class _BrewFormScreenState extends State<BrewFormScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(l10n.savedMessage)),
       );
-      Navigator.of(context).pop();
+      if (widget.embedded) {
+        widget.onSaved?.call();
+      } else {
+        Navigator.of(context).pop();
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -257,148 +297,146 @@ class _BrewFormScreenState extends State<BrewFormScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
     return Scaffold(
       appBar: AppBar(
+        leading: CloseButton(
+          onPressed: widget.onClose ?? () => Navigator.of(context).maybePop(),
+        ),
         title: Text(widget.id == null ? l10n.brewNewTitle : l10n.brewEditTitle),
+        actions: <Widget>[
+          TextButton(
+            onPressed: _busy ? null : _save,
+            child: Text(l10n.saveButton),
+          ),
+          const SizedBox(width: AppSpacing.x2),
+        ],
       ),
-      body: _body(context, l10n),
+      body: _body(context, l10n, brewbook),
     );
   }
 
-  Widget _body(BuildContext context, AppLocalizations l10n) {
+  Widget _body(BuildContext context, AppLocalizations l10n, BrewbookTheme brewbook) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: Text(l10n.loading, style: AppTextStyle.body(color: brewbook.palette.inkMuted)),
+      );
     }
     final loadError = _loadError;
     if (loadError != null) {
       return Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.x6),
           child: ErrorBanner(message: loadError, onRetry: () => _load(widget.id!)),
         ),
       );
     }
     final records = widget.services.records;
     final purchase = _purchase;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          PickerTile(
-            label: l10n.purchaseLabel,
-            value: purchase == null
-                ? null
-                : l10n.purchaseRowSubtitle(
-                    displayDay(purchase.purchasedOn, Localizations.localeOf(context)),
-                    purchase.product.name,
-                  ),
-            errorText: _purchaseError,
-            onPressed: _busy ? null : _pickPurchase,
-          ),
-          const SizedBox(height: 16),
-          DayField(
-            controller: _date,
-            label: l10n.brewedAtLabel,
-            enabled: !_busy,
-            errorText: _dateError,
-          ),
-          const SizedBox(height: 16),
-          TimeField(
-            controller: _time,
-            label: l10n.brewedAtLabel,
-            enabled: !_busy,
-            errorText: _timeError,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _dose,
-            enabled: !_busy,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: l10n.doseLabel,
+    return AppForm(
+      children: <Widget>[
+        if (_showValidationBanner) ErrorBanner(message: l10n.errorValidation),
+        PickerTile(
+          label: l10n.purchaseLabel,
+          required: true,
+          value: purchase?.product.name,
+          placeholder: l10n.purchasePickPlaceholder,
+          caption: purchase == null ? null : _purchaseCaption(context, purchase),
+          errorText: _purchaseError,
+          onPressed: _busy ? null : _pickPurchase,
+        ),
+        AppFormRow(
+          children: <Widget>[
+            DayField(
+              controller: _date,
+              label: l10n.brewedAtLabel,
+              enabled: !_busy,
+              errorText: _dateError,
+            ),
+            TimeField(
+              controller: _time,
+              label: '',
+              enabled: !_busy,
+              errorText: _timeError,
+            ),
+          ],
+        ),
+        AppFormRow(
+          children: <Widget>[
+            AppTextField(
+              controller: _dose,
+              label: l10n.doseLabel,
+              enabled: !_busy,
               errorText: _doseError,
+              unit: l10n.gramUnit,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _water,
-            enabled: !_busy,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: l10n.waterLabel,
+            AppTextField(
+              controller: _water,
+              label: l10n.waterLabel,
+              enabled: !_busy,
               errorText: _waterError,
+              unit: l10n.gramUnit,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _waterTemp,
-            enabled: !_busy,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(
-              labelText: l10n.waterTempLabel,
+          ],
+        ),
+        AppFormRow(
+          children: <Widget>[
+            AppTextField(
+              controller: _waterTemp,
+              label: l10n.waterTempLabel,
+              enabled: !_busy,
               errorText: _waterTempError,
+              unit: l10n.celsiusUnit,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _brewTime,
-            enabled: !_busy,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              labelText: l10n.brewTimeLabel,
+            AppTextField(
+              controller: _brewTime,
+              label: l10n.brewTimeLabel,
+              enabled: !_busy,
               errorText: _brewTimeError,
+              unit: l10n.secondUnit,
+              keyboardType: TextInputType.number,
+            ),
+          ],
+        ),
+        SuggestionField(
+          records: records,
+          controller: _method,
+          field: SuggestionFields.method,
+          label: l10n.methodLabel,
+          enabled: !_busy,
+        ),
+        SuggestionField(
+          records: records,
+          controller: _grindSetting,
+          field: SuggestionFields.grindSetting,
+          label: l10n.grindSettingLabel,
+          hintText: l10n.grindSettingHint,
+          enabled: !_busy,
+        ),
+        AppField(
+          label: l10n.ratingLabel,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.x1),
+            child: RatingInput(
+              value: _rating,
+              enabled: !_busy,
+              onChanged: (value) => setState(() => _rating = value),
             ),
           ),
-          const SizedBox(height: 16),
-          SuggestionField(
-            records: records,
-            controller: _method,
-            field: SuggestionFields.method,
-            label: l10n.methodLabel,
-            enabled: !_busy,
-          ),
-          const SizedBox(height: 16),
-          SuggestionField(
-            records: records,
-            controller: _grindSetting,
-            field: SuggestionFields.grindSetting,
-            label: l10n.grindSettingLabel,
-            enabled: !_busy,
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<int?>(
-            initialValue: _rating,
-            decoration: InputDecoration(labelText: l10n.ratingLabel),
-            items: <DropdownMenuItem<int?>>[
-              DropdownMenuItem<int?>(value: null, child: Text(l10n.unsetLabel)),
-              for (int value = 1; value <= 5; value++)
-                DropdownMenuItem<int?>(value: value, child: Text(value.toString())),
-            ],
-            onChanged: _busy ? null : (value) => setState(() => _rating = value),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _notes,
-            enabled: !_busy,
-            maxLines: 3,
-            decoration: InputDecoration(labelText: l10n.notesLabel),
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _busy ? null : _save,
-            child: Text(l10n.saveButton),
-          ),
-          if (_busy) ...<Widget>[
-            const SizedBox(height: 16),
-            const Center(child: CircularProgressIndicator()),
-          ],
-          if (_errorMessage != null) ...<Widget>[
-            const SizedBox(height: 16),
-            ErrorBanner(message: _errorMessage!),
-          ],
-        ],
-      ),
+        ),
+        AppTextField(
+          controller: _notes,
+          label: l10n.notesLabel,
+          enabled: !_busy,
+          mono: false,
+          minLines: 3,
+          maxLines: null,
+        ),
+        if (_errorMessage != null) ErrorBanner(message: _errorMessage!),
+      ],
     );
   }
 }

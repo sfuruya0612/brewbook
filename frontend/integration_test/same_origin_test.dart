@@ -54,13 +54,18 @@ void main() {
     await tester.pump();
     await tester.tap(find.text(l10n.registerButton));
     // 登録が成功するとセッションが発行され、ホームへ遷移する。
-    await waitFor(tester, find.text(l10n.logoutButton));
+    await waitFor(tester, find.text(l10n.newBrewButton));
 
     // ログアウトしてから、同じパスキーでログインする (FR-2、FR-4)。
-    await tester.tap(find.text(l10n.logoutButton));
+    // ログアウトはホームのメニューの区切りの下に置く (AppBar のガイドライン)。
+    await tester.tap(find.byTooltip(l10n.menuTooltip));
+    await waitFor(tester, find.text(l10n.logoutButton));
+    // メニューの開くアニメーションが終わってから押す (途中では位置が定まらない)。
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10n.logoutButton).last);
     await waitFor(tester, find.text(l10n.loginButton));
     await tester.tap(find.text(l10n.loginButton));
-    await waitFor(tester, find.text(l10n.logoutButton));
+    await waitFor(tester, find.text(l10n.newBrewButton));
 
     // 抽出を保存する (FR-11)。購入は下ごしらえしたものを選ぶ。
     await tester.tap(find.text(l10n.newBrewButton));

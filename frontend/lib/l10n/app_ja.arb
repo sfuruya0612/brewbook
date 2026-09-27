@@ -88,6 +88,10 @@
   "selectButton": "選択",
   "addButton": "追加",
   "includeArchivedLabel": "アーカイブ済みを含める",
+  "rowSubtitleSeparator": " / ",
+  "@rowSubtitleSeparator": {
+    "description": "一覧の行の 2 行目の日付と参照先をつなぐ区切り"
+  },
   "noRecords": "記録がありません",
   "unsetLabel": "未設定",
   "savedMessage": "保存しました。",
@@ -154,18 +158,6 @@
       }
     }
   },
-  "purchaseRowSubtitle": "{date} / {product}",
-  "@purchaseRowSubtitle": {
-    "description": "購入の一覧の行の補足",
-    "placeholders": {
-      "date": {
-        "type": "String"
-      },
-      "product": {
-        "type": "String"
-      }
-    }
-  },
   "gramsValue": "{value} g",
   "@gramsValue": {
     "description": "グラムの値の表示",
@@ -174,6 +166,18 @@
         "type": "String"
       }
     }
+  },
+  "gramUnit": "g",
+  "@gramUnit": {
+    "description": "グラムの単位 (FR-16)"
+  },
+  "celsiusUnit": "℃",
+  "@celsiusUnit": {
+    "description": "摂氏の単位 (FR-16)"
+  },
+  "secondUnit": "秒",
+  "@secondUnit": {
+    "description": "秒の単位 (FR-16)"
   },
   "celsiusValue": "{value} ℃",
   "@celsiusValue": {
@@ -342,6 +346,156 @@
   "deleteAccountTitle": "アカウントの削除",
   "deleteAccountDescription": "アカウントと全記録を削除します。元に戻せません。",
   "deleteAccountButton": "アカウントを削除",
+  "deleteConfirmButton": "削除する",
+  "@deleteConfirmButton": {
+    "description": "取り消せない操作の確認ダイアログの肯定のボタン (FR-15)"
+  },
   "deleteAccountConfirmTitle": "アカウントを削除しますか？",
-  "deleteAccountConfirmMessage": "アカウントと全記録を削除します。元に戻せません。"
+  "deleteAccountConfirmMessage": "アカウントと全記録を削除します。元に戻せません。",
+  "requiredLabel": "必須",
+  "@requiredLabel": {
+    "description": "必須の項目の項目名の横に添える文言"
+  },
+  "brewsLabel": "抽出",
+  "@brewsLabel": {
+    "description": "ナビゲーションレールの抽出の項目 (FR-11)"
+  },
+  "usedBeansLabel": "使った豆",
+  "@usedBeansLabel": {
+    "description": "抽出の詳細の参照先の節の見出し (UC-6)"
+  },
+  "archivedBadge": "アーカイブ済み",
+  "@archivedBadge": {
+    "description": "アーカイブ済みの行のバッジ (FR-12)"
+  },
+  "addressUnset": "住所は未設定",
+  "@addressUnset": {
+    "description": "住所が無い店の一覧の行の補足 (FR-6)"
+  },
+  "ratingNone": "未評価",
+  "@ratingNone": {
+    "description": "評価が未入力のときの表示 (FR-11)"
+  },
+  "homeEmptyHint": "右下の「抽出を記録」から最初の 1 杯を記録します。",
+  "@homeEmptyHint": {
+    "description": "抽出の記録が無いときの次の 1 歩 (FR-11)"
+  },
+  "purchasesEmptyHint": "右下の「購入を記録」から最初の 1 件を記録します。",
+  "@purchasesEmptyHint": {
+    "description": "購入の記録が無いときの次の 1 歩 (FR-9)"
+  },
+  "productsEmptyHint": "右下の「商品を登録」から最初の 1 件を登録します。",
+  "@productsEmptyHint": {
+    "description": "商品の記録が無いときの次の 1 歩 (FR-7)"
+  },
+  "shopsEmptyHint": "右下の「店を登録」から最初の 1 件を登録します。",
+  "@shopsEmptyHint": {
+    "description": "店の記録が無いときの次の 1 歩 (FR-6)"
+  },
+  "purchasePickPlaceholder": "購入を選ぶ",
+  "@purchasePickPlaceholder": {
+    "description": "抽出のフォームで購入が未選択のときの表示 (FR-11)"
+  },
+  "grindSettingHint": "例: Comandante 24",
+  "@grindSettingHint": {
+    "description": "挽き目の入力の例 (FR-11)"
+  },
+  "photoConvertNote": "JPEG に変換し、長辺 2048 px 以下に縮小して保存します。",
+  "@photoConvertNote": {
+    "description": "写真の変換の注記 (FR-10)"
+  },
+  "uploadingLabel": "アップロード中",
+  "@uploadingLabel": {
+    "description": "写真のアップロード中の表示 (FR-10)"
+  },
+  "loginRegisterHint": "ログインできないときは管理者から登録用のリンクを受け取ってください。",
+  "@loginRegisterHint": {
+    "description": "ログイン画面の下端の案内 (FR-1)"
+  },
+  "registerTokenGuidance": "管理者に連絡して、登録用のリンクを再発行してもらってください。",
+  "@registerTokenGuidance": {
+    "description": "登録用のリンクが無効なときの案内 (FR-1)"
+  },
+  "statsRangePrefix": "",
+  "@statsRangePrefix": {
+    "description": "統計の範囲の表示の前置き (日本語は空。FR-18)"
+  },
+  "statsRangeMiddle": " から ",
+  "@statsRangeMiddle": {
+    "description": "統計の範囲の表示の中の区切り (FR-18)"
+  },
+  "statsRangeSuffix": " まで、{granularity}",
+  "@statsRangeSuffix": {
+    "description": "統計の範囲の表示の後ろ (FR-18)",
+    "placeholders": {
+      "granularity": {
+        "type": "String"
+      }
+    }
+  },
+  "statsRangeAllTime": "全期間、{granularity}",
+  "@statsRangeAllTime": {
+    "description": "統計の全期間の表示 (FR-18)",
+    "placeholders": {
+      "granularity": {
+        "type": "String"
+      }
+    }
+  },
+  "statsGranularityDaily": "日別",
+  "@statsGranularityDaily": {
+    "description": "統計の日別の粒度 (FR-18)"
+  },
+  "statsGranularityMonthly": "月別",
+  "@statsGranularityMonthly": {
+    "description": "統計の月別の粒度 (FR-18)"
+  },
+  "statsCustomGranularityNote": "{days} 日なので{granularity}で表示します (62 日以下なら日別)。",
+  "@statsCustomGranularityNote": {
+    "description": "任意の期間の粒度の注記 (FR-18)",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      },
+      "granularity": {
+        "type": "String"
+      }
+    }
+  },
+  "statsChartUnit": "{unit} / {period}",
+  "@statsChartUnit": {
+    "description": "統計のグラフの右端の単位 (FR-18)",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      },
+      "period": {
+        "type": "String"
+      }
+    }
+  },
+  "statsUnitCups": "杯",
+  "@statsUnitCups": {
+    "description": "抽出回数の単位 (FR-18)"
+  },
+  "statsPeriodDay": "日",
+  "@statsPeriodDay": {
+    "description": "日別の単位 (FR-18)"
+  },
+  "statsPeriodMonth": "月",
+  "@statsPeriodMonth": {
+    "description": "月別の単位 (FR-18)"
+  },
+  "statsScatterSection": "抽出条件と評価",
+  "@statsScatterSection": {
+    "description": "散布図の節の見出し (FR-18)"
+  },
+  "statsPurchaseAmountLabel": "購入金額",
+  "@statsPurchaseAmountLabel": {
+    "description": "購入金額のグラフの見出し (通貨コードが無いとき。FR-18)"
+  },
+  "statsPurchaseWeightLabel": "購入重量",
+  "@statsPurchaseWeightLabel": {
+    "description": "購入重量のグラフの見出し (通貨コードが無いとき。FR-18)"
+  }
 }

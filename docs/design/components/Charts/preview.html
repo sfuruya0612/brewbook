@@ -1,0 +1,228 @@
+<!-- @dsCard group="部品" width=760 height=330 subtitle="棒 (件数は roast、グラムは crema)、散布図、折れ線" -->
+<!doctype html>
+<html lang="ja">
+<head>
+<title>Charts — preview</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:wght@500&display=swap">
+<style>
+/* brewbook — 画面と部品の共通スタイル。値は全て tokens.css の変数を参照する。 */
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-sans); font-size: 15px; line-height: 22px; -webkit-font-smoothing: antialiased; }
+p, h1, h2, h3 { margin: 0; }
+a { color: var(--link); }
+
+/* 型 */
+.t-title { font-family: var(--font-sans); font-size: 20px; line-height: 28px; font-weight: 600; }
+.t-heading { font-family: var(--font-sans); font-size: 16px; line-height: 24px; font-weight: 600; }
+.t-body { font-family: var(--font-sans); font-size: 15px; line-height: 22px; font-weight: 400; }
+.t-label { font-family: var(--font-sans); font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; }
+.t-caption { font-family: var(--font-sans); font-size: 12px; line-height: 16px; font-weight: 400; }
+.t-value { font-family: var(--font-mono); font-size: 15px; line-height: 22px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.t-value-large { font-family: var(--font-mono); font-size: 28px; line-height: 32px; font-weight: 500; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.t-wordmark { font-family: var(--font-serif); font-size: 32px; line-height: 36px; font-weight: 500; letter-spacing: -0.01em; }
+.muted { color: var(--ink-muted); }
+.faint { color: var(--ink-faint); }
+
+/* カードの並び (プレビューの外枠) */
+.stage { display: flex; gap: 32px; align-items: flex-start; padding: 24px; background: var(--paper-sunken); }
+.stage.tight { gap: 16px; }
+.phone { width: 390px; flex: none; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 20px; overflow: hidden; position: relative; }
+.phone .screen { min-height: 700px; display: flex; flex-direction: column; }
+.wide { width: 1024px; flex: none; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 12px; overflow: hidden; position: relative; }
+.stage-note { font-size: 12px; line-height: 16px; color: var(--ink-muted); margin-top: 8px; }
+
+/* AppBar */
+.appbar { display: flex; align-items: center; height: 56px; padding: 0 var(--space-2) 0 var(--space-4); border-bottom: 1px solid var(--line); background: var(--paper); flex: none; }
+.appbar .ttl { flex: 1; font-size: 20px; line-height: 28px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.appbar .ttl.wordmark { font-family: var(--font-serif); font-size: 24px; font-weight: 500; letter-spacing: -0.01em; }
+.appbar .lead { width: 40px; height: 40px; margin: 0 var(--space-1) 0 calc(-1 * var(--space-2)); display: flex; align-items: center; justify-content: center; color: var(--ink); }
+.iconbtn { width: 40px; height: 40px; border-radius: var(--radius-full); display: inline-flex; align-items: center; justify-content: center; color: var(--ink); background: transparent; }
+.iconbtn svg, .lead svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.appbar .textbtn { color: var(--crema-ink); font-size: 15px; font-weight: 500; padding: 0 var(--space-3); height: 40px; display: inline-flex; align-items: center; border-radius: var(--radius-md); }
+
+/* ボタン */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: 48px; padding: 0 var(--space-6); border-radius: var(--radius-md); font-family: var(--font-sans); font-size: 15px; line-height: 22px; font-weight: 500; letter-spacing: 0.01em; border: 1px solid transparent; cursor: pointer; white-space: nowrap; }
+.btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.btn.primary { background: var(--roast); color: var(--on-roast); }
+.btn.secondary { background: transparent; color: var(--ink); border-color: var(--line-strong); }
+.btn.text { background: transparent; color: var(--crema-ink); padding: 0 var(--space-3); height: 40px; }
+.btn.danger { background: var(--signal); color: var(--on-signal); }
+.btn.danger-text { background: transparent; color: var(--signal); padding: 0 var(--space-3); height: 40px; }
+.btn.danger-outline { background: transparent; color: var(--signal); border-color: var(--signal); }
+.btn.sm { height: 36px; padding: 0 var(--space-4); font-size: 13px; }
+.btn.block { width: 100%; }
+.btn[aria-disabled="true"], .btn.disabled { background: var(--paper-sunken); color: var(--ink-faint); border-color: transparent; }
+.btn.focus { box-shadow: var(--focus-ring); }
+
+/* FAB */
+.fab { position: absolute; right: var(--space-4); bottom: var(--space-4); display: inline-flex; align-items: center; gap: var(--space-2); height: 56px; padding: 0 var(--space-5) 0 var(--space-4); border-radius: var(--radius-lg); background: var(--roast); color: var(--on-roast); font-size: 15px; font-weight: 500; box-shadow: var(--shadow-float); }
+.fab svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+/* 一覧の行 */
+.list { display: flex; flex-direction: column; }
+.row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); background: var(--paper); min-height: 64px; }
+.row .main { flex: 1; min-width: 0; }
+.row > svg { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--ink-muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.row .name { font-size: 16px; line-height: 24px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .sub { font-size: 12px; line-height: 16px; color: var(--ink-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .sub .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.row .side { flex: none; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.row .val { font-family: var(--font-mono); font-size: 15px; line-height: 22px; font-variant-numeric: tabular-nums; }
+.row.archived .name, .row.archived .sub { color: var(--ink-muted); }
+.row.selected { background: var(--roast-soft); }
+.thumb { width: 44px; height: 44px; border-radius: var(--radius-sm); background: var(--paper-sunken); flex: none; display: flex; align-items: center; justify-content: center; color: var(--ink-faint); overflow: hidden; }
+.thumb svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.badge { display: inline-flex; align-items: center; height: 20px; padding: 0 var(--space-2); border-radius: var(--radius-sm); background: var(--paper-sunken); color: var(--ink-muted); font-size: 12px; line-height: 16px; font-weight: 500; }
+.toolbar { display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink-muted); font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; }
+.switch { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--ink-muted); }
+.switch .track { width: 36px; height: 20px; border-radius: var(--radius-full); border: 1px solid var(--line-strong); position: relative; background: transparent; }
+.switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--line-strong); }
+.switch.on .track { background: var(--roast); border-color: var(--roast); }
+.switch.on .track::after { left: 19px; background: var(--on-roast); }
+.empty { padding: var(--space-12) var(--space-6); text-align: center; color: var(--ink-muted); }
+
+/* 評価 */
+.rating { display: inline-flex; gap: 4px; align-items: center; }
+.rating i { width: 10px; height: 10px; border-radius: var(--radius-full); background: var(--line); display: block; }
+.rating i.on { background: var(--crema); }
+.rating.lg i { width: 28px; height: 28px; border: 1px solid var(--line-strong); background: transparent; }
+.rating.lg i.on { background: var(--crema); border-color: var(--crema); }
+.rating .num { font-family: var(--font-mono); font-size: 12px; line-height: 16px; color: var(--ink-muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+
+/* 帳簿 (項目名と値の表) */
+.ledger { display: grid; grid-template-columns: max-content 1fr; }
+.ledger > div { padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }
+.ledger .k { color: var(--ink-muted); font-size: 13px; line-height: 22px; font-weight: 500; letter-spacing: 0.02em; padding-right: var(--space-6); }
+.ledger .v { font-family: var(--font-mono); font-size: 15px; line-height: 22px; text-align: right; font-variant-numeric: tabular-nums; }
+.ledger .v.txt { font-family: var(--font-sans); }
+.ledger .v .u { font-family: var(--font-sans); font-size: 12px; color: var(--ink-muted); margin-left: var(--space-1); }
+.ledger .v.unset { color: var(--ink-faint); font-family: var(--font-sans); }
+
+/* 参照先のタイル (購入、商品、店をたどる) */
+.tile { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--roast-soft); color: var(--ink); }
+.tile .k { font-size: 12px; line-height: 16px; color: var(--ink-muted); font-weight: 500; letter-spacing: 0.02em; }
+.tile .n { font-size: 15px; line-height: 22px; font-weight: 600; }
+.tile .main { flex: 1; min-width: 0; }
+.tile svg { width: 20px; height: 20px; fill: none; stroke: var(--ink-muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.chain { display: flex; flex-direction: column; gap: var(--space-2); }
+.chain .link { width: 2px; height: 12px; background: var(--line-strong); margin-left: 27px; }
+
+/* 入力欄 */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field .lbl { font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; color: var(--ink-muted); }
+.field .lbl .req { color: var(--ink-muted); font-weight: 400; margin-left: var(--space-1); }
+.field .box { display: flex; align-items: center; gap: var(--space-2); height: 48px; padding: 0 var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--paper-sunken); font-size: 15px; line-height: 22px; }
+.field .box.area { height: auto; min-height: 88px; align-items: flex-start; padding: var(--space-3); }
+.field .box.area .in { white-space: normal; overflow: visible; }
+.field .box .in { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.field .box .in.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.field .box .ph { color: var(--ink-faint); }
+.field .box .unit { font-size: 12px; line-height: 16px; color: var(--ink-muted); flex: none; }
+.field .box svg { width: 20px; height: 20px; fill: none; stroke: var(--ink-muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.field.focus .box { border-color: var(--crema-ink); box-shadow: var(--focus-ring); }
+.field.error .box { border-color: var(--signal); }
+.field .help { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
+.field.error .help { color: var(--signal); }
+.field.disabled .box { border-color: var(--line); color: var(--ink-faint); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3) var(--space-3); }
+.suggest { border: 1px solid var(--line-strong); border-top: 0; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--paper-raised); box-shadow: var(--shadow-float); overflow: hidden; }
+.suggest div { padding: 10px var(--space-3); font-size: 15px; line-height: 22px; border-bottom: 1px solid var(--line); }
+.suggest div:last-child { border-bottom: 0; }
+.suggest b { color: var(--crema-ink); font-weight: 600; }
+.form { padding: var(--space-4) var(--space-4) var(--space-8); display: flex; flex-direction: column; gap: var(--space-5); }
+.sec { font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; color: var(--ink-muted); padding-top: var(--space-2); }
+.picker { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--paper-sunken); }
+.picker .main { flex: 1; min-width: 0; }
+.picker .k { font-size: 12px; line-height: 16px; color: var(--ink-muted); font-weight: 500; letter-spacing: 0.02em; }
+.picker .n { font-size: 15px; line-height: 22px; font-weight: 600; }
+.picker .s { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
+.picker svg { width: 20px; height: 20px; fill: none; stroke: var(--ink-muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* チップ */
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 var(--space-3); border-radius: var(--radius-full); border: 1px solid var(--line-strong); color: var(--ink); font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; background: transparent; }
+.chip.on { background: var(--roast); border-color: var(--roast); color: var(--on-roast); }
+.chip.tag { background: var(--crema-soft); border-color: transparent; color: var(--ink); }
+.chip svg { width: 14px; height: 14px; fill: none; stroke: var(--ink-muted); stroke-width: 2; stroke-linecap: round; flex: none; }
+.chip.add { border-style: dashed; color: var(--ink-muted); }
+
+/* バナー、スナックバー、ダイアログ、メニュー */
+.banner { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--signal-soft); color: var(--signal); font-size: 15px; line-height: 22px; }
+.banner .main { flex: 1; }
+.banner .act { color: var(--signal); font-weight: 600; white-space: nowrap; }
+.snack { display: inline-flex; align-items: center; gap: var(--space-4); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--ink); color: var(--paper); font-size: 15px; line-height: 22px; box-shadow: var(--shadow-float); }
+.snack .act { color: var(--crema); font-weight: 600; }
+.scrim { position: absolute; inset: 0; background: #2b1d1366; display: flex; align-items: center; justify-content: center; padding: var(--space-6); }
+.dialog { width: 100%; max-width: 320px; background: var(--paper-raised); border-radius: var(--radius-md); padding: var(--space-6); box-shadow: var(--shadow-float); }
+.dialog h2 { font-size: 20px; line-height: 28px; font-weight: 600; margin-bottom: var(--space-3); }
+.dialog p { color: var(--ink-muted); }
+.dialog .acts { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-6); }
+.menu { position: absolute; top: 48px; right: 8px; width: 200px; background: var(--paper-raised); border-radius: var(--radius-md); box-shadow: var(--shadow-float); padding: var(--space-2) 0; border: 1px solid var(--line); }
+.menu div { padding: 10px var(--space-4); font-size: 15px; line-height: 22px; }
+.menu div.sep { border-top: 1px solid var(--line); margin-top: var(--space-2); padding-top: calc(var(--space-2) + 10px); }
+
+/* 写真 */
+.photo { border-radius: var(--radius-sm); background: var(--paper-sunken); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--ink-faint); overflow: hidden; }
+.photo svg { width: 32px; height: 32px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 統計 */
+.stat-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.stat-tile { padding: var(--space-3) var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper-raised); }
+.stat-tile .k { font-size: 12px; line-height: 16px; color: var(--ink-muted); font-weight: 500; letter-spacing: 0.02em; }
+.stat-tile .v { font-family: var(--font-mono); font-size: 28px; line-height: 32px; font-weight: 500; letter-spacing: -0.01em; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.stat-tile .v .u { font-family: var(--font-sans); font-size: 12px; color: var(--ink-muted); margin-left: 4px; font-weight: 400; letter-spacing: 0; }
+.chart { border-bottom: 1px solid var(--line); padding-bottom: var(--space-4); }
+.chart.nb { border-bottom: 0; padding-bottom: 0; }
+.chart .h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-2); }
+.chart .h .t { font-size: 16px; line-height: 24px; font-weight: 600; }
+.chart .h .s { font-size: 12px; line-height: 16px; color: var(--ink-muted); font-family: var(--font-mono); }
+.chart svg { display: block; width: 100%; height: auto; }
+.chart svg text { font-family: var(--font-mono); font-size: 11px; fill: var(--ink-muted); }
+.chart svg .axis { stroke: var(--line-strong); stroke-width: 1; }
+.chart svg .grid { stroke: var(--line); stroke-width: 1; }
+.chart svg .count { fill: var(--chart-count); }
+.chart svg .grams { fill: var(--chart-grams); }
+.chart svg .dot { fill: var(--chart-grams); }
+.chart svg .line { fill: none; stroke: var(--chart-grams); stroke-width: 2; stroke-linejoin: round; }
+.chart svg .pt { fill: var(--paper-raised); stroke: var(--chart-grams); stroke-width: 2; }
+
+/* 設定 */
+.section { padding: var(--space-4); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--space-3); }
+.section h2 { font-size: 16px; line-height: 24px; font-weight: 600; }
+.section p { color: var(--ink-muted); }
+.section .acts { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.pk { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }
+.pk:last-of-type { border-bottom: 0; }
+.pk .main { flex: 1; min-width: 0; }
+.pk .n { font-size: 15px; line-height: 22px; font-weight: 600; }
+.pk .m { font-size: 12px; line-height: 16px; color: var(--ink-muted); font-family: var(--font-mono); }
+.pk .m span { font-family: var(--font-sans); }
+
+/* 広い画面 */
+.rail { width: 88px; flex: none; border-right: 1px solid var(--line); padding: var(--space-3) 0; display: flex; flex-direction: column; align-items: center; gap: var(--space-1); background: var(--paper); }
+.rail .item { width: 72px; padding: var(--space-2) 0; border-radius: var(--radius-md); display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--ink-muted); font-size: 12px; line-height: 16px; font-weight: 500; }
+.rail .item svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.rail .item.on { color: var(--ink); background: var(--roast-soft); }
+.rail .mark { width: 40px; height: 40px; margin-bottom: var(--space-2); }
+</style>
+<style>
+
+</style>
+</head>
+<body>
+
+<div style="padding:24px;display:grid;grid-template-columns:1fr 1fr;gap:24px 40px">
+  <div class="chart"><div class="h"><span class="t">抽出回数</span><span class="s">杯 / 日</span></div><svg viewBox="0 0 340 120"><line class="grid" x1="28" y1="8" x2="340" y2="8"/><line class="grid" x1="28" y1="50" x2="340" y2="50"/><line class="axis" x1="28" y1="92" x2="340" y2="92"/><text x="0" y="12">2</text><text x="0" y="54">1</text><text x="0" y="96">0</text><rect class="count" x="29.5" y="50.0" width="19.0" height="42.0" rx="1"/><rect class="count" x="51.5" y="8.0" width="19.0" height="84.0" rx="1"/><rect class="count" x="73.5" y="50.0" width="19.0" height="42.0" rx="1"/><rect class="count" x="95.5" y="50.0" width="19.0" height="42.0" rx="1"/><rect class="count" x="117.5" y="8.0" width="19.0" height="84.0" rx="1"/><rect class="count" x="139.5" y="92.0" width="19.0" height="0.0" rx="1"/><rect class="count" x="161.5" y="50.0" width="19.0" height="42.0" rx="1"/><rect class="count" x="183.5" y="50.0" width="19.0" height="42.0" rx="1"/><rect class="count" x="205.5" y="50.0" width="19.0" height="42.0" rx="1"/><rect class="count" x="227.5" y="8.0" width="19.0" height="84.0" rx="1"/><rect class="count" x="249.5" y="50.0" width="19.0" height="42.0" rx="1"/><rect class="count" x="271.5" y="50.0" width="19.0" height="42.0" rx="1"/><rect class="count" x="293.5" y="92.0" width="19.0" height="0.0" rx="1"/><rect class="count" x="315.5" y="50.0" width="19.0" height="42.0" rx="1"/><text x="28" y="116">09-01</text><text x="168" y="116">09-07</text><text x="340" y="116" text-anchor="end">09-14</text></svg></div>
+  <div class="chart"><div class="h"><span class="t">豆の消費量</span><span class="s">g / 日</span></div><svg viewBox="0 0 340 120"><line class="grid" x1="28" y1="8" x2="340" y2="8"/><line class="grid" x1="28" y1="50" x2="340" y2="50"/><line class="axis" x1="28" y1="92" x2="340" y2="92"/><text x="0" y="12">32</text><text x="0" y="54">16</text><text x="0" y="96">0</text><rect class="grams" x="29.5" y="52.6" width="19.0" height="39.4" rx="1"/><rect class="grams" x="51.5" y="13.2" width="19.0" height="78.8" rx="1"/><rect class="grams" x="73.5" y="52.6" width="19.0" height="39.4" rx="1"/><rect class="grams" x="95.5" y="52.6" width="19.0" height="39.4" rx="1"/><rect class="grams" x="117.5" y="13.2" width="19.0" height="78.8" rx="1"/><rect class="grams" x="139.5" y="92.0" width="19.0" height="0.0" rx="1"/><rect class="grams" x="161.5" y="52.6" width="19.0" height="39.4" rx="1"/><rect class="grams" x="183.5" y="50.0" width="19.0" height="42.0" rx="1"/><rect class="grams" x="205.5" y="52.6" width="19.0" height="39.4" rx="1"/><rect class="grams" x="227.5" y="8.0" width="19.0" height="84.0" rx="1"/><rect class="grams" x="249.5" y="52.6" width="19.0" height="39.4" rx="1"/><rect class="grams" x="271.5" y="52.6" width="19.0" height="39.4" rx="1"/><rect class="grams" x="293.5" y="92.0" width="19.0" height="0.0" rx="1"/><rect class="grams" x="315.5" y="52.6" width="19.0" height="39.4" rx="1"/><text x="28" y="116">09-01</text><text x="168" y="116">09-07</text><text x="340" y="116" text-anchor="end">09-14</text></svg></div>
+  <div class="chart nb"><div class="t-label muted" style="margin-bottom:4px">豆の量と評価</div><svg viewBox="0 0 340 120"><line class="grid" x1="22" y1="8" x2="340" y2="8"/><line class="axis" x1="22" y1="92" x2="340" y2="92"/><line class="axis" x1="22" y1="8" x2="22" y2="92"/><text x="0" y="12">5</text><text x="0" y="96">1</text><circle class="dot" cx="58.6" cy="50.0" r="3.5" opacity=".85"/><circle class="dot" cx="104.5" cy="29.0" r="3.5" opacity=".85"/><circle class="dot" cx="119.8" cy="29.0" r="3.5" opacity=".85"/><circle class="dot" cx="150.4" cy="8.0" r="3.5" opacity=".85"/><circle class="dot" cx="165.7" cy="29.0" r="3.5" opacity=".85"/><circle class="dot" cx="181.0" cy="8.0" r="3.5" opacity=".85"/><circle class="dot" cx="196.3" cy="50.0" r="3.5" opacity=".85"/><circle class="dot" cx="242.2" cy="71.0" r="3.5" opacity=".85"/><circle class="dot" cx="272.8" cy="71.0" r="3.5" opacity=".85"/><circle class="dot" cx="135.1" cy="29.0" r="3.5" opacity=".85"/><circle class="dot" cx="211.6" cy="29.0" r="3.5" opacity=".85"/><circle class="dot" cx="89.2" cy="50.0" r="3.5" opacity=".85"/><text x="22" y="118">12 g</text><text x="340" y="118" text-anchor="end">20 g</text></svg></div>
+  <div class="chart" style="border-bottom:0"><div class="h"><span class="t">評価の推移</span><span class="s">6 杯</span></div>
+    <svg viewBox="0 0 340 120"><line class="grid" x1="28" y1="10" x2="340" y2="10"/><line class="grid" x1="28" y1="50" x2="340" y2="50"/><line class="axis" x1="28" y1="90" x2="340" y2="90"/><text x="0" y="14">5</text><text x="0" y="54">3</text><text x="0" y="94">1</text><polyline class="line" points="44,50 100,30 156,50 212,70 268,30 320,30"/><circle class="pt" cx="44" cy="50" r="4"/><circle class="pt" cx="100" cy="30" r="4"/><circle class="pt" cx="156" cy="50" r="4"/><circle class="pt" cx="212" cy="70" r="4"/><circle class="pt" cx="268" cy="30" r="4"/><circle class="pt" cx="320" cy="30" r="4"/><text x="30" y="112">09-15</text><text x="300" y="112">09-26</text></svg>
+  </div>
+</div>
+</body>
+</html>

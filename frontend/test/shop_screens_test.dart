@@ -117,6 +117,14 @@ void main() {
           ),
         );
       })
+      // 編集の画面 (詳細を兼ねる) が読む API (FR-6)。
+      ..on('GET', '/api/shops/shop-1', status: 200, body: shopJson(id: 'shop-1', name: 'Active Shop'))
+      ..on(
+        'GET',
+        '/api/shops/shop-2',
+        status: 200,
+        body: shopJson(id: 'shop-2', name: 'Old Shop', archivedAt: '2026-09-02T00:00:00.000Z'),
+      )
       ..on(
         'POST',
         '/api/shops/shop-1/archive',
@@ -135,17 +143,24 @@ void main() {
     // 既定ではアーカイブ済みを返さない (API の既定)。
     expect(find.text('Active Shop'), findsOneWidget);
     expect(find.text('Old Shop'), findsNothing);
-    expect(find.byTooltip(l10n.unarchiveButton), findsNothing);
 
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(find.text('Old Shop'), findsOneWidget);
-    expect(find.byTooltip(l10n.unarchiveButton), findsOneWidget);
+    // アーカイブ済みの行はバッジで区別する (ListRow のガイドライン)。
+    expect(find.text(l10n.archivedBadge), findsOneWidget);
 
+    // アーカイブは編集の画面 (詳細を兼ねる) の AppBar から行う。
+    await tester.tap(find.text('Active Shop'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip(l10n.archiveButton));
     await tester.pumpAndSettle();
     expect(api.calls, contains('POST /api/shops/shop-1/archive'));
 
+    await tester.tap(find.byType(CloseButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Old Shop'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip(l10n.unarchiveButton));
     await tester.pumpAndSettle();
     expect(api.calls, contains('POST /api/shops/shop-2/unarchive'));
@@ -158,7 +173,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField).at(0), 'New Shop');
     await tester.enterText(find.byType(TextField).at(1), 'New Address');
-    await tester.tap(find.widgetWithText(FilledButton, l10n.saveButton));
+    await tester.tap(find.widgetWithText(TextButton, l10n.saveButton));
     await tester.pumpAndSettle();
 
     expect(api.lastBody('POST', '/api/shops'), <String, Object?>{
@@ -175,7 +190,7 @@ void main() {
     final api = await openShopForm(tester);
 
     await tester.enterText(find.byType(TextField).at(0), '   ');
-    await tester.tap(find.widgetWithText(FilledButton, l10n.saveButton));
+    await tester.tap(find.widgetWithText(TextButton, l10n.saveButton));
     await tester.pumpAndSettle();
 
     expect(find.text(l10n.validationRequired), findsOneWidget);
@@ -189,7 +204,7 @@ void main() {
 
     await tester.enterText(find.byType(TextField).at(0), 'Renamed');
     await tester.enterText(find.byType(TextField).at(1), '');
-    await tester.tap(find.widgetWithText(FilledButton, l10n.saveButton));
+    await tester.tap(find.widgetWithText(TextButton, l10n.saveButton));
     await tester.pumpAndSettle();
 
     expect(api.lastBody('PATCH', '/api/shops/shop-1'), <String, Object?>{
@@ -205,7 +220,7 @@ void main() {
     api.on('POST', '/api/shops', status: 400, body: badRequestBody);
 
     await tester.enterText(find.byType(TextField).at(0), 'New Shop');
-    await tester.tap(find.widgetWithText(FilledButton, l10n.saveButton));
+    await tester.tap(find.widgetWithText(TextButton, l10n.saveButton));
     await tester.pumpAndSettle();
 
     expect(find.text(l10n.errorValidation), findsOneWidget);
@@ -218,7 +233,7 @@ void main() {
     api.on('POST', '/api/shops', status: 401, body: unauthorizedBody);
 
     await tester.enterText(find.byType(TextField).at(0), 'New Shop');
-    await tester.tap(find.widgetWithText(FilledButton, l10n.saveButton));
+    await tester.tap(find.widgetWithText(TextButton, l10n.saveButton));
     await tester.pumpAndSettle();
 
     expect(find.byType(LoginScreen), findsOneWidget);

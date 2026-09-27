@@ -1,0 +1,54 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>brewbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600&family=IBM+Plex+Serif:wght@500&display=swap">
+<style>
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-sans); overflow: hidden; }
+  .cover { position: relative; width: 960px; height: 288px; overflow: hidden; }
+  /* 構図: 960 幅のうち x = 480 から右の箱。名前の帯には何も掛けない */
+  .art { position: absolute; top: 0; left: 480px; width: 480px; height: 288px; overflow: hidden; }
+  .art svg { display: block; width: 480px; height: 288px; }
+  .roast { fill: var(--roast); }
+  .crema { fill: var(--crema); }
+  .tint { fill: var(--crema-soft); }
+  .soft { fill: var(--roast-soft); }
+  .blk { rx: var(--radius-md); }
+  .rule { stroke: var(--paper); stroke-width: 2; }
+  .words { position: absolute; left: var(--space-6); bottom: var(--space-6); max-width: 440px; }
+  .name { margin: 0; font-family: var(--font-serif); font-size: 92px; line-height: .95; font-weight: 500; letter-spacing: -0.01em; color: var(--ink); }
+  .tag { margin: var(--space-2) 0 0 2px; font-size: 14px; line-height: 20px; color: var(--ink-muted); }
+</style>
+</head>
+<body>
+<div class="cover">
+<div class="art" aria-hidden="true">
+<svg viewBox="0 0 480 288" width="480" height="288">
+<!--
+  blocks      roast 176×248 上端に食い込む (ブランドの濃いコーヒー色、最大) · crema 128×152 (琥珀のアクセント) · crema-soft 136×192 右端に食い込む (薄い地) · roast-soft 64×32 (薄い地、小さく。両テーマで地から浮く) — 960×288 の約 35%
+  arrangement 1 本の背の高い roast の板に、crema と crema-soft を右へ階段状に。下端は space-6 の高さで揃え、間隔は space-4
+  pattern     罫線。README の「紙は重ねず罫線で区切る」と、アイコンの記録の行から。space-8 の間隔で 4 本、paper 色で板から切り出す (地の上では消え、板の上でだけ見える)
+  scales      辺は space-2 の倍数、間隔 space-4、罫線の間隔 space-8、角は radius-md
+-->
+<rect class="roast blk" x="24" y="-16" width="176" height="248" rx="8"/>
+<rect class="crema blk" x="216" y="80" width="128" height="152" rx="8"/>
+<rect class="tint blk" x="360" y="40" width="136" height="192" rx="8"/>
+<rect class="soft blk" x="24" y="248" width="64" height="32" rx="8"/>
+<line class="rule" x1="8" y1="104" x2="480" y2="104"/>
+<line class="rule" x1="8" y1="136" x2="480" y2="136"/>
+<line class="rule" x1="8" y1="168" x2="480" y2="168"/>
+<line class="rule" x1="8" y1="200" x2="480" y2="200"/>
+</svg>
+</div>
+<div class="words">
+<h1 class="name">brewbook</h1>
+<p class="tag">自宅で淹れたコーヒーの記録帳。豆と店と一杯を、静かに残す。</p>
+</div>
+</div>
+</body>
+</html>

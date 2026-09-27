@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../records/values.dart';
+import 'app_field.dart';
 
 /// 日付 (`YYYY-MM-DD`) の入力欄 (FR-9)。
 ///
@@ -24,19 +25,17 @@ class DayField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return TextField(
+    return AppTextField(
       controller: controller,
+      label: label,
       enabled: enabled,
+      errorText: errorText,
+      hintText: l10n.dayFormatHint,
       keyboardType: TextInputType.datetime,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: l10n.dayFormatHint,
-        errorText: errorText,
-        suffixIcon: IconButton(
-          tooltip: l10n.selectButton,
-          icon: const Icon(Icons.calendar_today_outlined),
-          onPressed: enabled ? () => _pick(context) : null,
-        ),
+      suffixIcon: IconButton(
+        tooltip: l10n.selectButton,
+        icon: const Icon(Icons.calendar_today_outlined, size: 20),
+        onPressed: enabled ? () => _pick(context) : null,
       ),
     );
   }
@@ -86,19 +85,17 @@ class TimeField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return TextField(
+    return AppTextField(
       controller: controller,
+      label: label,
       enabled: enabled,
+      errorText: errorText,
+      hintText: l10n.timeFormatHint,
       keyboardType: TextInputType.datetime,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: l10n.timeFormatHint,
-        errorText: errorText,
-        suffixIcon: IconButton(
-          tooltip: l10n.selectButton,
-          icon: const Icon(Icons.schedule_outlined),
-          onPressed: enabled ? () => _pick(context) : null,
-        ),
+      suffixIcon: IconButton(
+        tooltip: l10n.selectButton,
+        icon: const Icon(Icons.schedule_outlined, size: 20),
+        onPressed: enabled ? () => _pick(context) : null,
       ),
     );
   }

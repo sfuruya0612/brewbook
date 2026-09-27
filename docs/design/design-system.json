@@ -1,0 +1,150 @@
+{
+  "v": 3,
+  "layout": "files",
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-09-27T02:51:53Z"
+  },
+  "title": "brewbook",
+  "namespace": "BrewBook",
+  "libraries": [],
+  "sections": {},
+  "groups": [
+    "AppIcon",
+    "Marks"
+  ],
+  "assetGroups": {
+    "AppIcon": {
+      "name": "AppIcon",
+      "tile": "l",
+      "order": [
+        "icon.svg",
+        "icon-maskable.svg",
+        "icon-dark.svg",
+        "Icon-512.png",
+        "Icon-192.png",
+        "Icon-maskable-512.png",
+        "Icon-maskable-192.png",
+        "apple-touch-icon-180.png",
+        "favicon-48.png",
+        "favicon-32.png",
+        "Icon-dark-512.png"
+      ],
+      "files": {
+        "icon.svg": {
+          "name": "icon.svg",
+          "blob": "9017f75023fcea0c209e7639a97d0683",
+          "size": 651,
+          "type": "image/svg+xml"
+        },
+        "icon-maskable.svg": {
+          "name": "icon-maskable.svg",
+          "blob": "801667ad53e4d4e4ca4e5a3b69d4cea5",
+          "size": 718,
+          "type": "image/svg+xml"
+        },
+        "icon-dark.svg": {
+          "name": "icon-dark.svg",
+          "blob": "443c9c38a7627983e3d77f8e2652c78b",
+          "size": 651,
+          "type": "image/svg+xml"
+        },
+        "Icon-512.png": {
+          "name": "Icon-512.png",
+          "blob": "46d9d46796817027dc51854f627e417e",
+          "size": 13401,
+          "type": "image/png"
+        },
+        "Icon-192.png": {
+          "name": "Icon-192.png",
+          "blob": "05a04056ecc6c4e3f484acb3bbd412eb",
+          "size": 4766,
+          "type": "image/png"
+        },
+        "Icon-maskable-512.png": {
+          "name": "Icon-maskable-512.png",
+          "blob": "b694e788f956577931394a0781e1a2cf",
+          "size": 7842,
+          "type": "image/png"
+        },
+        "Icon-maskable-192.png": {
+          "name": "Icon-maskable-192.png",
+          "blob": "c5efd0cb11ef26a6c1fccb80a0d4d045",
+          "size": 2673,
+          "type": "image/png"
+        },
+        "apple-touch-icon-180.png": {
+          "name": "apple-touch-icon-180.png",
+          "blob": "d246a430b404d1947051d7011b2229c5",
+          "size": 2461,
+          "type": "image/png"
+        },
+        "favicon-48.png": {
+          "name": "favicon-48.png",
+          "blob": "afd86ec91341529e5dccf405a15be971",
+          "size": 1153,
+          "type": "image/png"
+        },
+        "favicon-32.png": {
+          "name": "favicon-32.png",
+          "blob": "5b4c4c486d2ba736e56db17f7e92761c",
+          "size": 753,
+          "type": "image/png"
+        },
+        "Icon-dark-512.png": {
+          "name": "Icon-dark-512.png",
+          "blob": "c29edbe0170a272a07b6d9dc0c1853e5",
+          "size": 13345,
+          "type": "image/png"
+        }
+      }
+    },
+    "Marks": {
+      "name": "Marks",
+      "tile": "m",
+      "order": [
+        "mark.svg",
+        "mark-night.svg",
+        "wordmark.svg",
+        "wordmark-night.svg"
+      ],
+      "files": {
+        "mark.svg": {
+          "name": "mark.svg",
+          "blob": "169277d74381abb3592dba71aad5c4a0",
+          "size": 578,
+          "type": "image/svg+xml"
+        },
+        "mark-night.svg": {
+          "name": "mark-night.svg",
+          "blob": "a7baa238ba67a89762463fc3e4571d07",
+          "size": 578,
+          "type": "image/svg+xml"
+        },
+        "wordmark.svg": {
+          "name": "wordmark.svg",
+          "blob": "e04d7970e6b14397a2f298778e51d3d3",
+          "size": 4508,
+          "type": "image/svg+xml"
+        },
+        "wordmark-night.svg": {
+          "name": "wordmark-night.svg",
+          "blob": "48017729c241c078225f7536a8680da5",
+          "size": 4508,
+          "type": "image/svg+xml"
+        }
+      }
+    }
+  },
+  "blobs": {},
+  "docs": {
+    "readme": "project/README.md",
+    "sections": []
+  },
+  "lastChange": {
+    "by": "Shoichi",
+    "via": "Claude (Cowork)",
+    "at": "2026-09-27T02:51:53Z",
+    "note": "brewbook の視覚言語、アプリアイコン、画面デザインを作成"
+  }
+}
