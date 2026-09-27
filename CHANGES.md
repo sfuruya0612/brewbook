@@ -38,6 +38,10 @@
   - @sfuruya0612
 - [UPDATE] アプリアイコンと manifest の色をデザインのものに置き換える
   - @sfuruya0612
+- [ADD] 環境をローカルと staging と production に分け、環境ごとに Worker と D1 と R2 を作成・デプロイできるようにする
+  - @sfuruya0612
+- [UPDATE] Workers Logs (保存と呼び出しログ) と Workers Traces を利用者向けと管理者の Worker の設定で有効にする
+  - @sfuruya0612
 - [ADD] 画面と API を同一オリジンの 1 つの Worker から配信する
   - @sfuruya0612
 - [ADD] 管理者 Worker と Cloudflare Access の保護を追加する

@@ -1,4 +1,10 @@
-name = "brewbook-admin"
+# 環境は 3 つに分ける (ADR-0015)。
+# - トップレベル: ローカル開発。`wrangler dev` はここだけを使い、リモートのリソースを参照しない。
+# - [env.staging]: 検証用の環境 (develop)。Worker は brewbook-admin-staging。
+# - [env.production]: 本番。Worker は brewbook-admin。
+# リモートに触れるコマンドは必ず `--env` を付ける (mise の deploy-admin-* タスクが持つ)。
+# 既定 (トップレベル) の `wrangler deploy` が本番を更新しないよう、名前は brewbook-admin-local にする。
+name = "brewbook-admin-local"
 main = "build/worker/shim.mjs"
 compatibility_date = "2026-09-21"
 # workers.dev のホスト名で配信し、Worker 単位の Cloudflare Access 保護を設定する (ADR-0008)。
@@ -8,15 +14,57 @@ workers_dev = true
 [build]
 command = "worker-build --release"
 
+# Workers Logs を有効にする。管理者の操作 (利用者の作成と登録用トークンの発行) のログを残す。
+[observability]
+enabled = true
+
+# ログの保存と呼び出しログ (invocation logs) を明示的に有効にする。
+# 呼び出しログは既定でも有効である (ADR-0015 の環境にもトップレベルの設定として継承される)。
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+# Workers Traces (自動の計装) を有効にする。D1 の呼び出しと fetch の所要時間を
+# ダッシュボードのウォーターフォールで確認できる。2026-10-01 から Workers Logs と同じ枠で
+# 課金される (Free は 1 日 20 万イベント、3 日の保持)。
+[observability.traces]
+enabled = true
+
 # D1 のバインディング (ADR-0002)。利用者向けの Worker と同じデータベースを参照する。
 # 管理者 Worker はマイグレーションを持たず、適用は利用者向けの Worker の設定から行う (ADR-0002)。
-# 本番の database_id は `wrangler d1 create brewbook` が返す値に差し替える。
+# ローカルでは miniflare の D1 を使い、`dev-admin` タスクが利用者向けと同じ --persist-to を指定して
+# 同じデータベースを参照する。
 [[d1_databases]]
 binding = "DB"
-database_name = "brewbook"
+database_name = "brewbook-local"
 database_id = "00000000-0000-0000-0000-000000000000"
 
 [vars]
 # 登録用リンクに使う、利用者向けの Worker のオリジン (ADR-0008)。
-# 本番の値はデプロイの前に実際の workers.dev のサブドメインへ置き換える (README のデプロイ手順)。
-APP_ORIGIN = "https://brewbook.example.workers.dev"
+APP_ORIGIN = "http://localhost:8787"
+
+# 検証用の環境 (staging)。Worker は brewbook-admin-staging。
+# database_id は `wrangler d1 create brewbook-staging` が返す値を利用者向けの設定と同じ値に置き換える
+# (同じデータベースを参照する。README のデプロイ手順)。
+[env.staging]
+name = "brewbook-admin-staging"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "brewbook-staging"
+database_id = "2270033b-4db7-4a49-84b2-d15cdd1f2f82"
+
+[env.staging.vars]
+APP_ORIGIN = "https://brewbook-staging.phack.workers.dev"
+
+# 本番の環境。Worker は brewbook-admin。既存のデータベースをそのまま使う。
+[env.production]
+name = "brewbook-admin"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "brewbook"
+database_id = "000b5de5-4c5a-486a-a067-8d9625a5709b"
+
+[env.production.vars]
+APP_ORIGIN = "https://brewbook.phack.workers.dev"

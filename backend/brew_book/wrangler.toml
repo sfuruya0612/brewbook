@@ -1,4 +1,10 @@
-name = "brewbook"
+# 環境は 3 つに分ける (ADR-0015)。
+# - トップレベル: ローカル開発。`wrangler dev` はここだけを使い、リモートのリソースを参照しない。
+# - [env.staging]: 検証用の環境 (develop)。Worker は brewbook-staging。
+# - [env.production]: 本番。Worker は brewbook。
+# リモートに触れるコマンドは必ず `--env` を付ける (mise の deploy-* と db-migrate-* タスクが持つ)。
+# 既定 (トップレベル) の `wrangler deploy` が本番を更新しないよう、名前は brewbook-local にする。
+name = "brewbook-local"
 main = "build/worker/shim.mjs"
 compatibility_date = "2026-09-21"
 # workers.dev のホスト名で配信する (ADR-0005)。独自ドメインは取得しない。
@@ -9,6 +15,8 @@ workers_dev = true
 # `/api/*` は Rust の処理に渡し (run_worker_first)、一致する静的ファイルの無いパスには
 # `index.html` を 200 で返して Flutter のルーティングを扱う (not_found_handling)。
 # 除外パターンは置かない。iOS 向けの `/.well-known/*` は iOS 対応時に Static Assets から返す。
+# assets、build、observability はトップレベルの設定を全ての環境が継承する。vars とバインディング
+# (D1、R2) は継承されないため、環境ごとに定義する。
 [assets]
 directory = "../../frontend/build/web"
 run_worker_first = ["/api/*"]
@@ -22,32 +30,83 @@ command = "worker-build --release"
 [observability]
 enabled = true
 
-# D1 のバインディング (ADR-0002)。データベースは 1 つとし、管理者 Worker (0018) も同じ
-# database_id を参照する。管理者 Worker はマイグレーションを持たず、適用はこの設定から行う。
+# ログの保存と呼び出しログ (invocation logs) を明示的に有効にする。
+# 呼び出しログは既定でも有効である (ADR-0015 の環境にもトップレベルの設定として継承される)。
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+# Workers Traces (自動の計装) を有効にする。D1 と R2 の呼び出しと fetch の所要時間を
+# ダッシュボードのウォーターフォールで確認できる。2026-10-01 から Workers Logs と同じ枠で
+# 課金される (Free は 1 日 20 万イベント、3 日の保持)。負荷が高くなったら
+# head_sampling_rate を下げる。
+[observability.traces]
+enabled = true
+
+# D1 のバインディング (ADR-0002)。ローカルでは miniflare の D1 を使うため、database_id は
+# プレースホルダでよい。ローカルの wrangler dev と `--local` のマイグレーションはこの値を参照しない。
 [[d1_databases]]
 binding = "DB"
-database_name = "brewbook"
+database_name = "brewbook-local"
 migrations_dir = "migrations"
-# 本番の database_id は `wrangler d1 create brewbook` が返す値に差し替える。
-# ローカルの wrangler dev と `--local` のマイグレーションはこの値を参照しない。
 database_id = "00000000-0000-0000-0000-000000000000"
 
-# 写真の R2 バケットのバインディング (ADR-0003)。Worker はこのバインディングで
-# `pending/` の確認と移動と削除を行い、署名付き URL の生成だけ shiguredo_s3 を使う。
-# CORS とライフサイクルは `cors.json` と `lifecycle.json` を `mise run r2-setup` で適用する。
+# 写真の R2 バケットのバインディング (ADR-0003)。ローカルでは miniflare の R2 を使うため、
+# bucket_name はローカルの置き場の名前でしかない (リモートのバケットには触れない)。
 [[r2_buckets]]
 binding = "PHOTOS"
 bucket_name = "brewbook-photos"
 
 [vars]
-# 写真のバケット名 (ADR-0003)。バインディングの `bucket_name` と同じ値にする。
+# ローカルの署名付き URL のバケット名。ローカルで写真を試すときは、`.dev.vars` (git 管理外) で
+# `R2_BUCKET=brewbook-photos-staging` に上書きし、ステージングの資格情報を使う
+# (本番の資格情報をローカルに置かない。README のローカル開発)。
 R2_BUCKET = "brewbook-photos"
 # パスキーの Relying Party ID と、アプリの Origin (ADR-0004、ADR-0005)。
-# workers.dev のサブドメインはアカウントに 1 つで、デプロイするアカウントによって変わるため、
-# 本番の値はデプロイの前に実際のサブドメインへ置き換える (README のデプロイ手順)。
-# ローカルの開発は `mise run dev` が ADR-0004 の既定値 (`localhost`) で上書きする。
-RP_ID = "brewbook.example.workers.dev"
-ORIGIN = "https://brewbook.example.workers.dev"
+RP_ID = "localhost"
+ORIGIN = "http://localhost:8787"
+
+# 検証用の環境 (staging)。Worker は brewbook-staging。
+# 初回だけ、次の値を作成の結果に置き換える (README のデプロイ手順)。
+# - database_id: `wrangler d1 create brewbook-staging` が返す値
+# - R2 バケット: `wrangler r2 bucket create brewbook-photos-staging` で作る
+[env.staging]
+name = "brewbook-staging"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "brewbook-staging"
+migrations_dir = "migrations"
+database_id = "2270033b-4db7-4a49-84b2-d15cdd1f2f82"
+
+[[env.staging.r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "brewbook-photos-staging"
+
+[env.staging.vars]
+R2_BUCKET = "brewbook-photos-staging"
+RP_ID = "brewbook-staging.phack.workers.dev"
+ORIGIN = "https://brewbook-staging.phack.workers.dev"
+
+# 本番の環境。Worker は brewbook。既存のリソース (D1 と R2) をそのまま使う。
+[env.production]
+name = "brewbook"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "brewbook"
+migrations_dir = "migrations"
+database_id = "000b5de5-4c5a-486a-a067-8d9625a5709b"
+
+[[env.production.r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "brewbook-photos"
+
+[env.production.vars]
+R2_BUCKET = "brewbook-photos"
+RP_ID = "brewbook.phack.workers.dev"
+ORIGIN = "https://brewbook.phack.workers.dev"
+
 # S3 互換エンドポイント (R2_ENDPOINT) と API トークン (R2_ACCESS_KEY_ID、
 # R2_SECRET_ACCESS_KEY) は環境ごとに違うため、開発では `.dev.vars` (git 管理外)、
-# 本番ではデプロイ時に設定し、リポジトリに実値を含めない (PRD のセキュリティ)。
+# 各環境ではデプロイ時に Secret として設定し、リポジトリに実値を含めない (PRD のセキュリティ)。

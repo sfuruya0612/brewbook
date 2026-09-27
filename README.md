@@ -9,15 +9,30 @@ Frontend は Flutter、Backend は Rust の Cloudflare Worker、データベー�
 - mise を入れ、リポジトリのルートで `mise install` を実行して `mise.toml` のツール (Flutter、Rust、wrangler、worker-build) を入れる。
 - コマンドラインは `mise.toml` のタスクに集約する (ADR-0009)。静的検査と全ての自動テストは `mise run check` で実行する。
 
+## 環境
+
+環境はローカル、検証用 (staging)、本番 (production) の 3 つに分ける (ADR-0015)。
+`wrangler.toml` のトップレベルがローカルの設定で、`[env.staging]` と `[env.production]` がリモートの環境である。
+リモートのリソース (Worker、D1、R2) は環境ごとに分け、本番のリソースをローカルや検証用から参照しない。
+リモートに触れるコマンドは必ず `--env` を付け、mise のタスク (`deploy-staging`、`deploy-production` など) がそれを持つ。
+
+| 環境 | Worker (利用者向け / 管理者) | D1 | R2 | デプロイ |
+| --- | --- | --- | --- | --- |
+| ローカル | miniflare (`wrangler dev`) | ローカル | ローカル | `mise run dev` |
+| staging | `brewbook-staging` / `brewbook-admin-staging` | `brewbook-staging` | `brewbook-photos-staging` | `mise run deploy-staging` |
+| production | `brewbook` / `brewbook-admin` | `brewbook` | `brewbook-photos` | `mise run deploy-production` |
+
 ## ローカル開発
 
 - ローカルの D1 にマイグレーションを適用する: `mise run db-migrate`
 - 画面と API を同じオリジンから配信する: `mise run dev`
   タスクは `flutter build web` を実行してから `wrangler dev` を起動する。表示された `http://localhost:8787/` を開く。
+  ローカルは `wrangler.toml` のトップレベルを使い、`RP_ID` と `ORIGIN` は `localhost` の既定値である (ADR-0004)。
 - Flutter の開発サーバー (ホットリロード) は使わない。
   別オリジンになり、CORS を許可しない決定と `Origin` の検証に反するためである (ADR-0005)。
-- 写真のアップロードを使うときは、R2 の値を `backend/brew_book/.dev.vars` (git 管理外) に置く。
-  必要な名前は `R2_ENDPOINT`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` である。
+- 写真のアップロードを使うときは、ステージングの R2 の値を `backend/brew_book/.dev.vars` (git 管理外) に置く。
+  必要な名前は `R2_ENDPOINT`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_BUCKET` (`brewbook-photos-staging`) である。
+  本番の資格情報はローカルに置かない (ADR-0015)。`.dev.vars` の値は `wrangler.toml` の `[vars]` を上書きする。
 - 管理者画面をローカルで確認する: `mise run dev-admin`
   管理者画面は `http://localhost:8788/` で配信する。ローカルの D1 は `mise run dev` の利用者向けと共有する (ADR-0002)。
   登録用リンクが指す利用者向けのオリジンは `mise run dev` の `http://localhost:8787` になる。
@@ -42,45 +57,72 @@ CI では実行せず、対象の型検査だけを行う。
 ## データベース (D1)
 
 - スキーマは wrangler の D1 マイグレーションで管理し、`backend/brew_book/migrations/` に置く (ADR-0002)。
-  利用者向けの Worker と管理者 Worker は 1 つのデータベースをバインディングで共有する。
-- ローカルの D1 にマイグレーションを適用する: `mise run db-migrate`
-- 本番の D1 にマイグレーションを適用する: `mise run db-migrate-remote`
-  本番への適用はデプロイ手順の中でのみ実行する (`mise run check` には含めない)。
-- 本番の `database_id` は、データベースを作るときに
-  `wrangler d1 create brewbook --config backend/brew_book/wrangler.toml` が返す値へ
-  `backend/brew_book/wrangler.toml` を書き換えて設定する。
+  利用者向けの Worker と管理者 Worker は、同じ環境の 1 つのデータベースをバインディングで共有する (ADR-0015)。
+- マイグレーションの適用は環境で分ける。
+  - ローカル: `mise run db-migrate`
+  - staging: `mise run db-migrate-staging` (デプロイ手順の中でだけ実行する)
+  - production: `mise run db-migrate-production` (デプロイ手順の中でだけ実行する)
+  リモートへの適用は意識して実行するため、`mise run check` には含めない。
+- データベースの作成は環境ごとに 1 回行い、返る ID を `wrangler.toml` に設定する。
+  - staging: `mise run d1-create-staging` (`wrangler d1 create brewbook-staging`)
+    出力の `database_id` を `backend/brew_book/wrangler.toml` の `[env.staging]` と
+    `backend/brew_book_admin/wrangler.toml` の `[env.staging]` に設定する。
+  - production: 作成済み。`mise run d1-create-production` (`wrangler d1 create brewbook`) は
+    作り直すときだけ実行する。`backend/brew_book/wrangler.toml` の `[env.production]` と
+    `backend/brew_book_admin/wrangler.toml` の `[env.production]` の `database_id` が本番の値である。
 
 ## デプロイとデプロイ後の確認
 
-画面と API は 1 つの Worker (`brewbook`) が `https://brewbook.<アカウントのサブドメイン>.workers.dev` で配信する (ADR-0005)。
-管理者画面は別の Worker (`brewbook-admin`) が `https://brewbook-admin.<アカウントのサブドメイン>.workers.dev` で配信する (ADR-0008)。
-`mise run deploy` が Flutter のビルドを先に実行してから `wrangler deploy` するため、画面と API は 1 回のデプロイで更新される。
+画面と API は環境ごとに 1 つの Worker が workers.dev で配信する (ADR-0005)。
+
+- staging: `https://brewbook-staging.<サブドメイン>.workers.dev`
+- production: `https://brewbook.<サブドメイン>.workers.dev`
+
+管理者画面は別の Worker (staging: `brewbook-admin-staging`、production: `brewbook-admin`) が配信する (ADR-0008)。
+`mise run deploy-staging` と `mise run deploy-production` は、利用者向け (`deploy-app-*`) と
+管理者 (`deploy-admin-*`) のデプロイのタスクをまとめて実行する。
+利用者向けだけをデプロイするときは `mise run deploy-app-staging` / `mise run deploy-app-production`、
+管理者だけのときは `mise run deploy-admin-staging` / `mise run deploy-admin-production` を使う。
+利用者向けのデプロイは Flutter のビルドを先に実行する。
 デプロイのタスクは `mise run check` に含めない (0002 の規則)。
 
-デプロイは次の順で行う。
+### staging の初回の設定
 
-1. 初回だけ、アカウントに合わせて値を設定する。
+1. アカウントに合わせて値を設定する。
    - `wrangler login` でアカウントにログインする。
-   - D1 のデータベースを作り、`database_id` を `backend/brew_book/wrangler.toml` と
-     `backend/brew_book_admin/wrangler.toml` に設定する (上の「データベース (D1)」)。
-     2 つの Worker は同じデータベースをバインディングで参照し、マイグレーションは利用者向けの Worker だけが持つ (ADR-0002)。
-   - workers.dev のサブドメインを確認し、`backend/brew_book/wrangler.toml` の `[vars]` の `RP_ID` と `ORIGIN` を
-     `brewbook.<サブドメイン>.workers.dev` と `https://brewbook.<サブドメイン>.workers.dev` に置き換える。
-     この 2 つはパスキーの Relying Party ID と、状態を変更する API が検証する同一オリジンになる (ADR-0004、ADR-0005)。
-   - `backend/brew_book_admin/wrangler.toml` の `[vars]` の `APP_ORIGIN` を
-     `https://brewbook.<サブドメイン>.workers.dev` に置き換える。
-     管理者画面が発行する登録用リンクのオリジンになる (ADR-0008)。
-   - `backend/brew_book/cors.json` の `https://brewbook.example.workers.dev` を同じオリジンに置き換える。
-     写真はブラウザから R2 へ直接 PUT するため、R2 の CORS でアプリのオリジンからの PUT だけを許可する (ADR-0003)。
-   - R2 の API トークンを Secret に置く。
-     名前は `R2_ENDPOINT`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` で、値はリポジトリに含めない (PRD のセキュリティ)。
-   - R2 の CORS とライフサイクルを適用する: `mise run r2-setup`
-     CORS のオリジンやライフサイクルを変えたときは、毎回このタスクを実行する。
+   - D1 のデータベースを作り、出力の `database_id` を利用者向けと管理者の `[env.staging]` に設定する
+     (上の「データベース (D1)」): `mise run d1-create-staging`
+   - R2 のバケットを作る: `mise run r2-create-staging`
+   - 利用者向けと管理者の `wrangler.toml` の `[env.staging.vars]` の `RP_ID`、`ORIGIN`、`APP_ORIGIN` が
+     実際の workers.dev のサブドメインになっていることを確認する (値はリポジトリにある)。
+   - `backend/brew_book/cors.staging.json` のオリジンが、ローカルの開発と staging のオリジンに
+     なっていることを確認する (ADR-0015)。
+   - R2 の API トークンを Secret に置く。staging 用のトークンを作り、本番のトークンと分ける。
+     `cd backend/brew_book && wrangler secret put R2_ENDPOINT --env staging` のように、
+     `R2_ENDPOINT`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` を環境ごとに設定する。
+     値はリポジトリに含めない (PRD のセキュリティ)。
+   - R2 の CORS とライフサイクルを適用する: `mise run r2-setup-staging`
+     オリジンやライフサイクルを変えたときは、毎回このタスクを実行する。
    - 管理者 Worker に Cloudflare Access の保護を設定する (下の「管理者画面と Cloudflare Access」)。
-2. スキーマ変更を含むリリースでは、デプロイの前に本番の D1 へマイグレーションを適用する: `mise run db-migrate-remote`
-   本番への適用は意識して実行するため、`mise run deploy` の `depends` には含めない。
-3. デプロイする: `mise run deploy` (利用者向けの Worker) と `mise run deploy-admin` (管理者 Worker)
+     利用者向けの Worker には設定しない。
+2. スキーマを適用する: `mise run db-migrate-staging`
+3. デプロイする: `mise run deploy-staging` (利用者向けと管理者の Worker)
 4. デプロイ後の確認を行う。
+   - `https://brewbook-staging.<サブドメイン>.workers.dev/` を開くと画面が表示される。
+   - 登録用リンクからパスキーを登録し、ログインして抽出を保存できる。
+   - 購入の画面から写真をアップロードできる (ブラウザから R2 へ直接 PUT する)。
+   - 管理者画面が Cloudflare Access で保護されていることを確認する (下の「管理者画面と Cloudflare Access」)。
+
+### production のデプロイ
+
+production の初回の設定 (D1、R2、Secrets、Access) は済んでいる。以降のリリースは次の順で行う。
+
+1. スキーマ変更を含むリリースでは、デプロイの前に本番の D1 へマイグレーションを適用する:
+   `mise run db-migrate-production`
+   本番への適用は意識して実行するため、デプロイのタスクの `depends` には含めない。
+   R2 の CORS とライフサイクルを変えたときは `mise run r2-setup-production` も実行する。
+2. デプロイする: `mise run deploy-production` (利用者向けと管理者の Worker)
+3. デプロイ後の確認を行う。
    - `https://brewbook.<サブドメイン>.workers.dev/` を開くと画面が表示される。
    - Flutter のルーティングのパス (`/register` など) を直接開くと `index.html` が 200 で返り、画面が表示される。
    - 登録用リンクからパスキーを登録し、ログインして抽出を保存できる。
@@ -88,10 +130,16 @@ CI では実行せず、対象の型検査だけを行う。
    - 管理者画面が Cloudflare Access で保護されていることを確認する (下の「管理者画面と Cloudflare Access」)。
    - 応答時間の p95 を集計し、成功指標を満たしていることを確認する (下の「応答時間の p95 の集計」)。
 
+D1 と R2 を作り直すときは `mise run d1-create-production` と `mise run r2-create-production` を実行し、
+出力の `database_id` を `[env.production]` に設定して、`mise run db-migrate-production` と
+`mise run r2-setup-production` を実行する。D1 の作り直しでは、Time Travel のブックマークからの復元
+(下の「D1 の復旧 (Time Travel)」) を先に検討する。
+
 ## 管理者画面と Cloudflare Access
 
 管理者画面は、利用者の作成と登録用トークンの発行 (FR-17) を行う HTML のフォームである (ADR-0008)。
-`https://brewbook-admin.<サブドメイン>.workers.dev` で配信し、機能は利用者の一覧、利用者の作成、
+Worker ごとに配信し (staging: `https://brewbook-admin-staging.<サブドメイン>.workers.dev`、
+production: `https://brewbook-admin.<サブドメイン>.workers.dev`)、機能は利用者の一覧、利用者の作成、
 登録用トークンの発行の 3 つである。アプリ内の認証は持たず、安全性は Worker 単位の Cloudflare Access の保護だけに依存する。
 Access が付ける JWT は Worker で検証しない。ローカルの開発では Access の設定 (`access.dev`) を使わない。
 
@@ -105,9 +153,12 @@ Access が付ける JWT は Worker で検証しない。ローカルの開発で
 
 ### Access の設定
 
-初回だけ、Cloudflare の管理画面で次の設定を行う。Zero Trust の Free プラン (50 ユーザーまで、契約にクレジットカードの登録が必要) を使う (ADR-0008)。
+初回だけ、環境ごとの管理者 Worker に Cloudflare の管理画面で次の設定を行う
+(staging と production の両方。ADR-0008、ADR-0015)。
+Zero Trust の Free プラン (50 ユーザーまで、契約にクレジットカードの登録が必要) を使う (ADR-0008)。
 
-1. Cloudflare ダッシュボードの Workers & Pages で `brewbook-admin` を選び、Access のタブを開く
+1. Cloudflare ダッシュボードの Workers & Pages で対象の Worker (`brewbook-admin-staging` または `brewbook-admin`) を選び、
+   Access のタブを開く
    (Zero Trust の Access の Applications から `worker` 種別のセルフホスト型アプリケーションとして追加してもよい)。
 2. Worker 単位の保護を有効にする。これで、この Worker の workers.dev の URL、プレビュー URL、カスタムドメインが全て保護される。
 3. ポリシーを 1 つ追加する。Action は `Allow`、Selector は `Emails`、Value は所有者のメールアドレスにする。
@@ -115,27 +166,31 @@ Access が付ける JWT は Worker で検証しない。ローカルの開発で
 
 ### Access の確認
 
-デプロイの後に、次を確認する。どちらも 302 でなければタスクが失敗する (ADR-0008)。
+デプロイの後に、環境ごとに次を確認する。どちらも 302 でなければタスクが失敗する (ADR-0008)。
 
 - 認証なしで管理者画面 (`GET /`) を取得すると、Access のログイン画面へ 302 でリダイレクトされる。
 - 状態を変更する経路 (`POST /users`) への未認証のリクエストも、同じく 302 になる (Worker には届かない)。
 
 ```sh
+# production
 ADMIN_ORIGIN=https://brewbook-admin.<サブドメイン>.workers.dev mise run verify-deploy
+# staging
+ADMIN_ORIGIN=https://brewbook-admin-staging.<サブドメイン>.workers.dev mise run verify-deploy
 ```
 
 設定を誤って外すと、管理者画面と管理者 API が無認証で公開される。この確認タスクがそれを検出する。
 
 ### 設定しないもの
 
-- 利用者向けの Worker (`brewbook`) には Access を設定しない。設定すると利用者もログインできなくなる (ADR-0008)。
+- 利用者向けの Worker (`brewbook`、`brewbook-staging`) には Access を設定しない。設定すると利用者もログインできなくなる (ADR-0008)。
 - アカウント全体の Worker を既定で保護する設定は使わない。利用者向けの Worker まで保護されるためである (ADR-0008)。
 
 
 ### 応答時間の p95 の集計
 
 リリース後に、Workers Logs の保持期間の全量で応答時間の p95 を集計し、次の成功指標を満たすことを確認する (PRD の性能)。
-集計はリリースごとに所有者が行う。保持期間は Workers Free プランで 3 日、Workers Paid プランで 7 日である
+集計はリリースごとに所有者が行い、環境ごとの Worker (`brewbook` または `brewbook-staging`) を対象にする。
+保持期間は Workers Free プランで 3 日、Workers Paid プランで 7 日である
 (2026-09-21 に Cloudflare のドキュメントで確認)。
 
 | 対象 | p95 |
@@ -146,7 +201,7 @@ ADMIN_ORIGIN=https://brewbook-admin.<サブドメイン>.workers.dev mise run ve
 Worker はリクエスト 1 件ごとに、経路名と処理時間を JSON の行で Workers Logs に出す (`backend/brew_book/src/logging.rs`)。
 ダッシュボードの Query Builder で集計する。
 
-1. Cloudflare ダッシュボードの Workers & Pages で `brewbook` を選ぶ。
+1. Cloudflare ダッシュボードの Workers & Pages で対象の Worker (`brewbook` または `brewbook-staging`) を選ぶ。
 2. Observability の Overview の Query Builder を開く。
 3. Visualization で `P95` を選び、フィールドに `duration_ms` を指定する。
 4. Filter で `event` が `request` の行に絞り、Group By に `route` を指定する。
@@ -169,7 +224,7 @@ Worker はリクエスト 1 件ごとに、経路名と処理時間を JSON の�
 復旧のときに使うブックマークを取得する。コマンドは本番のデータベースだけを対象にする。
 
 ```sh
-wrangler d1 time-travel info brewbook --config backend/brew_book/wrangler.toml
+wrangler d1 time-travel info brewbook --config backend/brew_book/wrangler.toml --env production
 ```
 
 - 出力のブックマークを控える。`--json` を付けると JSON で出力する。
@@ -179,7 +234,7 @@ wrangler d1 time-travel info brewbook --config backend/brew_book/wrangler.toml
 ### 復元
 
 ```sh
-wrangler d1 time-travel restore brewbook --bookmark <ブックマーク> --config backend/brew_book/wrangler.toml
+wrangler d1 time-travel restore brewbook --bookmark <ブックマーク> --config backend/brew_book/wrangler.toml --env production
 ```
 
 - `--bookmark` の代わりに `--timestamp` でも時点を指定できる。

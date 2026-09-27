@@ -103,35 +103,66 @@ depends = ["frontend:build"]
 dir = "backend/brew_book"
 # Flutter の開発サーバーは使わない (別オリジンになり、CORS を許可しない決定と Origin の検証に反する)。
 # 画面は wrangler dev の Static Assets から返し、http://localhost:8787/ で開く (ADR-0005)。
-# `[vars]` の RP_ID と ORIGIN は本番 (workers.dev) の値のため、ローカルの開発では ADR-0004 の
-# 既定値 (`localhost` と `http://localhost:8787`) で上書きする。本番の値へ置き換えた後も同じタスクで開発できる。
-run = "wrangler dev --var RP_ID:localhost --var ORIGIN:http://localhost:8787"
+# RP_ID と ORIGIN はトップレベル (ローカル) の [vars] の値 (ADR-0004 の既定値) をそのまま使う (ADR-0015)。
+run = "wrangler dev"
 
-[tasks.deploy]
-description = "Flutter をビルドしてから、画面と API を 1 つの Worker にデプロイする"
+[tasks."deploy-app-staging"]
+description = "利用者向けの Worker だけを検証用の環境 (brewbook-staging) にデプロイする"
 depends = ["frontend:build"]
 dir = "backend/brew_book"
-# スキーマ変更を含むリリースでは、先に `mise run db-migrate-remote` を実行する (README のデプロイ手順)。
+# スキーマ変更を含むリリースでは、先に `mise run db-migrate-staging` を実行する (README のデプロイ手順)。
+# 通常は利用者向けと管理者をまとめてデプロイする `mise run deploy-staging` を使う。
 # デプロイのタスクは `mise run check` に含めない (0002 の規則)。
-run = "wrangler deploy"
+run = "wrangler deploy --env staging"
+
+[tasks."deploy-app-production"]
+description = "利用者向けの Worker だけを本番の環境 (brewbook) にデプロイする"
+depends = ["frontend:build"]
+dir = "backend/brew_book"
+# スキーマ変更を含むリリースでは、先に `mise run db-migrate-production` を実行する (README のデプロイ手順)。
+# 通常は利用者向けと管理者をまとめてデプロイする `mise run deploy-production` を使う。
+# デプロイのタスクは `mise run check` に含めない (0002 の規則)。
+run = "wrangler deploy --env production"
+
+[tasks."deploy-staging"]
+description = "利用者向けと管理者の Worker を検証用の環境にデプロイする (deploy-app-staging と deploy-admin-staging)"
+# 個別のデプロイのタスクを順に実行するだけの集約。run は持たない。
+depends = ["deploy-app-staging", "deploy-admin-staging"]
+
+[tasks."deploy-production"]
+description = "利用者向けと管理者の Worker を本番の環境にデプロイする (deploy-app-production と deploy-admin-production)"
+# 個別のデプロイのタスクを順に実行するだけの集約。run は持たない。
+depends = ["deploy-app-production", "deploy-admin-production"]
 
 [tasks."dev-admin"]
 description = "管理者 Worker をローカルで起動する"
 dir = "backend/brew_book_admin"
-# 登録用リンクの利用者向けのオリジンは `[vars]` の `APP_ORIGIN` (本番の値) のため、
-# ローカルでは利用者向けの `mise run dev` のオリジンで上書きする (ADR-0008)。
+# APP_ORIGIN はトップレベル (ローカル) の [vars] の値 (http://localhost:8787) をそのまま使う (ADR-0008、0015)。
 # wrangler のローカル D1 は設定ファイルのあるディレクトリの .wrangler/state に作るため、
 # 利用者向けの Worker と同じデータベースを参照するように --persist-to を揃える (ADR-0002、0031)。
 # ポートは、既定の 8787 を使う利用者向けの Worker と分けて固定する。
-run = "wrangler dev --port 8788 --persist-to ../brew_book/.wrangler/state --var APP_ORIGIN:http://localhost:8787"
+# `--port` と `--persist-to` はこのタスクが持つ。mise は渡した引数をコマンドの末尾に足すため、
+# `mise run dev-admin --port ... --persist-to ...` のように渡すと同じオプションが 2 回になり、
+# wrangler が `expects a single value` で失敗する。起動は `mise run dev-admin` だけで行う。
+run = "wrangler dev --port 8788 --persist-to ../brew_book/.wrangler/state"
 
-[tasks."deploy-admin"]
-description = "管理者 Worker をデプロイする"
+[tasks."deploy-admin-staging"]
+description = "管理者 Worker だけを検証用の環境 (brewbook-admin-staging) にデプロイする"
 dir = "backend/brew_book_admin"
 # 管理者 Worker は利用者向けの Worker と同じ D1 をバインディングで参照し、マイグレーションを持たない (ADR-0002)。
 # スキーマの適用は利用者向けの Worker のデプロイ手順で行い、Cloudflare Access の設定はデプロイの後に行う (README)。
+# 通常は `mise run deploy-staging` が両方をデプロイする。単体でデプロイするときだけこのタスクを使う。
 # デプロイのタスクは `mise run check` に含めない (0002 の規則)。
-run = "wrangler deploy"
+run = "wrangler deploy --env staging"
+
+[tasks."deploy-admin-production"]
+description = "管理者 Worker だけを本番の環境 (brewbook-admin) にデプロイする"
+dir = "backend/brew_book_admin"
+# 管理者 Worker は利用者向けの Worker と同じ D1 をバインディングで参照し、マイグレーションを持たない (ADR-0002)。
+# スキーマの適用は利用者向けの Worker のデプロイ手順で行い、Cloudflare Access の設定はデプロイの後に行う (README)。
+# 通常は `mise run deploy-production` が両方をデプロイする。単体でデプロイするときだけこのタスクを使う。
+# デプロイのタスクは `mise run check` に含めない (0002 の規則)。
+run = "wrangler deploy --env production"
 
 [tasks.load]
 description = "ローカルの wrangler dev に VU 50 の負荷試験をかける (mise run dev の起動が必要)"
@@ -224,21 +255,60 @@ dir = "backend"
 # Static Assets として配信して、実際の画面を chrome で操作する (0017)。
 run = "cargo test -p brew_book --test wrangler_same_origin_e2e"
 
-[tasks."r2-setup"]
-description = "R2 バケットの CORS とライフサイクルを適用する (本番環境に触るため check には含めない)"
+[tasks."r2-create-staging"]
+description = "検証用の R2 バケット (brewbook-photos-staging) を作成する (初回だけ)"
 dir = "backend/brew_book"
-# デプロイ手順に含めて実行する。cors.json のオリジンは 0017 が確定させて置き換える。
+# 作成の後、`mise run r2-setup-staging` で CORS とライフサイクルを適用する (README のデプロイ手順)。
+run = "wrangler r2 bucket create brewbook-photos-staging"
+
+[tasks."r2-create-production"]
+description = "本番の R2 バケット (brewbook-photos) を作成する (初回だけ。作り直すときのみ実行する)"
+dir = "backend/brew_book"
+# 既に作成済みのため通常は実行しない。作り直すときは `mise run r2-setup-production` も実行する (README)。
+run = "wrangler r2 bucket create brewbook-photos"
+
+[tasks."r2-setup-staging"]
+description = "検証用の R2 バケットの CORS とライフサイクルを適用する (クラウドに触るため check には含めない)"
+dir = "backend/brew_book"
+# デプロイ手順に含めて実行する。CORS はローカルの開発のオリジンと検証用のオリジンだけを許可する (ADR-0015)。
+run = [
+  "wrangler r2 bucket cors set brewbook-photos-staging --file cors.staging.json",
+  "wrangler r2 bucket lifecycle set brewbook-photos-staging --file lifecycle.json",
+]
+
+[tasks."r2-setup-production"]
+description = "本番の R2 バケットの CORS とライフサイクルを適用する (クラウドに触るため check には含めない)"
+dir = "backend/brew_book"
+# デプロイ手順に含めて実行する。CORS は本番のオリジンだけを許可する (ADR-0015)。
 run = [
   "wrangler r2 bucket cors set brewbook-photos --file cors.json",
   "wrangler r2 bucket lifecycle set brewbook-photos --file lifecycle.json",
 ]
+
+[tasks."d1-create-staging"]
+description = "検証用の D1 データベース (brewbook-staging) を作成する (初回だけ)"
+dir = "backend/brew_book"
+# 出力の database_id を、利用者向けと管理者の wrangler.toml の [env.staging] に設定する (README のデプロイ手順)。
+# 自動書き換えはしない (ADR-0009: タスクに独自のロジックを書かない)。
+run = "wrangler d1 create brewbook-staging"
+
+[tasks."d1-create-production"]
+description = "本番の D1 データベース (brewbook) を作成する (初回だけ。作り直すときのみ実行する)"
+dir = "backend/brew_book"
+# 既に作成済みのため通常は実行しない。作り直すときは `mise run db-migrate-production` でスキーマを適用する (README)。
+run = "wrangler d1 create brewbook"
 
 [tasks."db-migrate"]
 description = "ローカルの D1 にマイグレーションを適用する"
 dir = "backend/brew_book"
 run = "wrangler d1 migrations apply DB --local"
 
-[tasks."db-migrate-remote"]
+[tasks."db-migrate-staging"]
+description = "検証用の D1 にマイグレーションを適用する (デプロイ手順の中でだけ実行する)"
+dir = "backend/brew_book"
+run = "wrangler d1 migrations apply DB --env staging --remote"
+
+[tasks."db-migrate-production"]
 description = "本番の D1 にマイグレーションを適用する (デプロイ手順の中でだけ実行する)"
 dir = "backend/brew_book"
-run = "wrangler d1 migrations apply DB --remote"
+run = "wrangler d1 migrations apply DB --env production --remote"

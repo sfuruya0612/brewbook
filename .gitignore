@@ -11,6 +11,6 @@
 /frontend/build/
 /frontend/.dart_tool/
 
-# wrangler のローカル状態と、開発用の環境変数
+# wrangler のローカル状態と、開発用の環境変数 (環境ごとの .dev.vars.<名前> も含める)
 .wrangler/
-.dev.vars
+.dev.vars*

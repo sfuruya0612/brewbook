@@ -3,7 +3,8 @@
     {
       "allowed": {
         "origins": [
-          "https://brewbook.phack.workers.dev"
+          "http://localhost:8787",
+          "https://brewbook-staging.phack.workers.dev"
         ],
         "methods": ["PUT"],
         "headers": ["Content-Type"]
