@@ -19,6 +19,7 @@ Frontend は Flutter、Backend は Rust の Cloudflare Worker、データベー�
 - 写真のアップロードを使うときは、R2 の値を `backend/brew_book/.dev.vars` (git 管理外) に置く。
   必要な名前は `R2_ENDPOINT`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` である。
 - 管理者画面をローカルで確認する: `mise run dev-admin`
+  管理者画面は `http://localhost:8788/` で配信する。ローカルの D1 は `mise run dev` の利用者向けと共有する (ADR-0002)。
   登録用リンクが指す利用者向けのオリジンは `mise run dev` の `http://localhost:8787` になる。
 - 負荷試験を行う: `mise run db-migrate` と `mise run dev` を実行した状態で `mise run load`
   ローカルの API と静的アセットに VU 50 で 1 分間の負荷をかける (ADR-0012)。

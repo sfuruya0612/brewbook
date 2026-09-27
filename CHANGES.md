@@ -59,3 +59,5 @@
   - @sfuruya0612
 - [ADD] Fuzzing の対象を入力の文字列パーサに広げる
   - @sfuruya0612
+- [FIX] mise run dev-admin が利用者向けの Worker と同じローカル D1 を使い、ポート 8788 で起動するようにする
+  - @sfuruya0612

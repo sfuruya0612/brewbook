@@ -120,7 +120,10 @@ description = "管理者 Worker をローカルで起動する"
 dir = "backend/brew_book_admin"
 # 登録用リンクの利用者向けのオリジンは `[vars]` の `APP_ORIGIN` (本番の値) のため、
 # ローカルでは利用者向けの `mise run dev` のオリジンで上書きする (ADR-0008)。
-run = "wrangler dev --var APP_ORIGIN:http://localhost:8787"
+# wrangler のローカル D1 は設定ファイルのあるディレクトリの .wrangler/state に作るため、
+# 利用者向けの Worker と同じデータベースを参照するように --persist-to を揃える (ADR-0002、0031)。
+# ポートは、既定の 8787 を使う利用者向けの Worker と分けて固定する。
+run = "wrangler dev --port 8788 --persist-to ../brew_book/.wrangler/state --var APP_ORIGIN:http://localhost:8787"
 
 [tasks."deploy-admin"]
 description = "管理者 Worker をデプロイする"
