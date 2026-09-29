@@ -71,3 +71,5 @@
   - @sfuruya0612
 - [FIX] mise run dev-admin が利用者向けの Worker と同じローカル D1 を使い、ポート 8788 で起動するようにする
   - @sfuruya0612
+- [FIX] CI の Rust ツールチェーンに clippy と rustfmt を入れ、Flutter の初回のビルドを並列の前に直列で済ませる
+  - @sfuruya0612

@@ -1,6 +1,12 @@
 [tools]
 flutter = { version = "3.47.5", checksum_expr = '"sha256:" + filter(fromJSON(body).releases, { #.archive endsWith filename })[0].sha256', platforms = { linux-x64 = { checksum_url = "https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json", url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_{{ version }}-stable.tar.xz" }, macos-arm64 = { checksum_url = "https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json", url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_{{ version }}-stable.zip" }, macos-x64 = { checksum_url = "https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json", url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_{{ version }}-stable.zip" }, windows-x64 = { checksum_url = "https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json", url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_{{ version }}-stable.zip" } }, version_expr = 'fromJSON(body).releases | filter({ #.channel == "stable" }) | map({ replace(#.version, "-stable", "") }) | sortVersions()', version_list_url = "https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json" }
-rust = { version = "1.98.1", targets = ["wasm32-unknown-unknown"] }
+# GitHub Actions の runner image の rustup は minimal プロファイルで入り、clippy と rustfmt は
+# stable ツールチェーンにだけ追加される (images/ubuntu/scripts/build/install-rust.sh)。
+# profile を書かないと mise は runner の rustup のプロファイルを引き継ぐため、mise が入れる
+# 1.98.1 に clippy と rustfmt が入らず、CI の lint が 'cargo-clippy' is not installed で失敗する
+# (2026-09-27 の CI、issue 0032)。profile と components を明示して、手元と CI の差をなくす (ADR-0009)。
+# https://mise.jdx.dev/lang/rust.html
+rust = { version = "1.98.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["wasm32-unknown-unknown"] }
 "cargo:worker-build" = "0.8.6"
 wrangler = { version = "4.135.0", allow_builds = ["esbuild", "sharp", "workerd"] }
 ripgrep = "15.2.0"
@@ -200,12 +206,19 @@ verify POST /users
 """
 
 [tasks."frontend:setup"]
-description = "Frontend の依存を取得する"
+description = "Frontend の依存を取得する (Flutter のツールの初回ビルドもここで済ませる)"
 dir = "frontend"
+# Flutter のコマンドは、初回の起動時に起動ランチャー (bin/internal/shared.sh) が startup lock を取り、
+# Dart SDK の取得とツールのビルドを行う。並列で起動すると 1 つがロックを持ち、他はロックを待つ。
+# 2026-09-27 の CI では lint の失敗でロックを持つプロセスが SIGTERM を受けた後に待ちが解けず、
+# mise が 1 時間終了しなかった (issue 0032)。Flutter を使うタスクはこのタスクに依存させて、
+# 初回のビルドを並列の前に直列で済ませる。
 run = "flutter pub get"
 
 [tasks."frontend:build"]
 description = "Frontend を Web 向けにビルドする (CanvasKit)"
+# 初回の Flutter のツールのビルドを先に済ませる (frontend:setup、issue 0032)。
+depends = ["frontend:setup"]
 dir = "frontend"
 # Flutter 3.47.5 の CLI にレンダラの指定は無く、JavaScript のビルドは CanvasKit を使う
 # (skwasm は --wasm のときだけ使う)。よって指定は付けない (ADR-0007)。
@@ -213,6 +226,7 @@ run = "flutter build web"
 
 [tasks."frontend:build-e2e"]
 description = "実バックエンドの統合テスト (0017) が配信する、テストコード入りの Web ビルドを作る"
+depends = ["frontend:setup"]
 dir = "frontend"
 # テストのブラウザは Worker の Static Assets から画面を読むため、テストの本体を
 # ビルドに含める必要がある。check が作る配布用のビルド (build/web) とは混ぜない。
@@ -220,21 +234,25 @@ run = 'flutter build web -t integration_test/same_origin_test.dart -o "$PWD/buil
 
 [tasks."frontend:analyze"]
 description = "Frontend の静的検査を実行する"
+depends = ["frontend:setup"]
 dir = "frontend"
 run = "flutter analyze"
 
 [tasks."frontend:test"]
 description = "Widget テストを実行する (VM)"
+depends = ["frontend:setup"]
 dir = "frontend"
 run = "flutter test"
 
 [tasks."frontend:test-web"]
 description = "ブラウザで動かすテストを実行する (Canvas を使うテストを含む)"
+depends = ["frontend:setup"]
 dir = "frontend"
 run = "flutter test --platform chrome"
 
 [tasks."frontend:test-integration"]
 description = "統合テストを chromedriver で実行する"
+depends = ["frontend:setup"]
 dir = "frontend"
 # flutter drive は chromedriver を起動しないため、同じ版の chromedriver を先に起動する (issue 0013)。
 # 版は mise.toml の [tools] が持ち、統合テストの間だけ 4444 で待ち受ける。
