@@ -58,7 +58,8 @@ The job has exceeded the maximum execution time of 1h0m0s
 - 再現確認 (2026-09-29、macOS、Docker の ubuntu 24.04): 修正前は mise 2026.9.15 を `setsid` で起動すると、兄弟タスクの失敗後もロック保持と待ちが残り、mise が終了しなかった。`mise.toml` の修正後は、手元の `mise run check` が通過した。
 - 完了条件の確認:
   - `mise run check` が終了コード 0 で通過した (1881 秒、2026-09-29)。`mise run -n check` で、Flutter を使うタスクが `frontend:setup` の後に並ぶことを確認した。
-  - CI の check が clippy の不在で失敗しないこと、失敗時に 1 時間のタイムアウトまで戻らないことは、main への push 後に所有者が確認する (2026-09-29 時点では未確認)。
+  - CI (2026-09-29 の run 36560608583): lint が clippy の不在で失敗しないことと、`frontend:test-integration` の失敗でタスクが止まっても 1 時間のタイムアウトまで戻らないこと (ジョブは 9 分 54 秒で終了) を確認した。この run 自体は別のバグ (0033、chromedriver と Chrome の版の不一致) で失敗した。
+  - 修正後の CI は run 36565577421 (2026-09-29、PR #1) で check 全体が通過した (23 分 16 秒、`backend:test-integration` と 0017 の e2e を含む)。
 
 ## 補足
 

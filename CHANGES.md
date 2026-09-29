@@ -73,3 +73,5 @@
   - @sfuruya0612
 - [FIX] CI の Rust ツールチェーンに clippy と rustfmt を入れ、Flutter の初回のビルドを並列の前に直列で済ませる
   - @sfuruya0612
+- [FIX] CI の chromedriver が runner image の Chrome ではなく Chrome for Testing を起動するようにする
+  - @sfuruya0612
