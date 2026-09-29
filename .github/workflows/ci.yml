@@ -34,8 +34,10 @@ jobs:
             "https://storage.googleapis.com/chrome-for-testing-public/154.0.8037.57/linux64/chrome-linux64.zip"
           unzip -q chrome-for-testing.zip
           # chromedriver が探す名前 (google-chrome) で PATH の先頭に置き、Flutter には
-          # CHROME_EXECUTABLE で同じ実体を指す。
+          # CHROME_EXECUTABLE で同じ実体を指す。Runner 上の ChromeDriver は
+          # /opt/google/chrome/chrome も直接使うため、そのパスも同じ実体にする。
           sudo ln -sf "$PWD/chrome-linux64/chrome" /usr/local/bin/google-chrome
+          sudo ln -sf "$PWD/chrome-linux64/chrome" /opt/google/chrome/chrome
           echo "CHROME_EXECUTABLE=$PWD/chrome-linux64/chrome" >> "$GITHUB_ENV"
       # 手元と同じ入口のタスクで、静的検査と全ての自動テストを実行する (ADR-0009)。
       - run: mise run check
