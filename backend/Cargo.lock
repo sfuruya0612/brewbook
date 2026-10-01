@@ -129,6 +129,7 @@ version = "0.1.0"
 dependencies = [
  "brew_book_core",
  "headless_chrome",
+ "libc",
  "reqwest",
  "serde",
  "serde_json",
@@ -140,6 +141,7 @@ name = "brew_book_admin"
 version = "0.1.0"
 dependencies = [
  "brew_book_core",
+ "libc",
  "reqwest",
  "serde",
  "serde_json",

@@ -79,3 +79,5 @@
   - @sfuruya0612
 - [FIX] CI の chromedriver が runner image の Chrome ではなく Chrome for Testing を起動するようにする
   - @sfuruya0612
+- [FIX] 結合テストの `wrangler dev` が残す `workerd` などの孤児プロセスをなくす
+  - @sfuruya0612

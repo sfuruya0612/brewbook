@@ -1,6 +1,6 @@
 mod support;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// 0001 の完了条件: `wrangler dev` の起動とマイグレーションの適用と停止を 1 つのテスト実行で行い、
 /// 存在しない経路の 404 と、リクエスト 1 件ごとのログを確認する。
@@ -91,5 +91,26 @@ fn wrangler_dev_server_returns_json_404_and_logs_the_request() {
         log.len(),
         5,
         "the log must have exactly the five metadata fields"
+    );
+}
+
+/// 0019 の完了条件: `DevServer` の停止で、`wrangler` の孫 (`workerd`、esbuild) が孤児として残らない。
+///
+/// `wrangler` は `workerd` と esbuild を子として起動する。停止はプロセスグループごとに行い、
+/// グループにプロセスが残っていないことを確認する。
+#[test]
+fn wrangler_dev_server_stop_leaves_no_process_in_its_process_group() {
+    let mut server = support::DevServer::start().expect("wrangler dev must start");
+    let process_group_id = server.process_group_id();
+    server.stop();
+
+    // SIGKILL と、孤児の回収 (launchd による reap) の反映を待つ。
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while support::process_group_exists(process_group_id) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(
+        !support::process_group_exists(process_group_id),
+        "the process group {process_group_id} must be empty after stop but still has processes"
     );
 }

@@ -16,5 +16,7 @@ worker = { version = "0.8.6", features = ["d1"] }
 [dev-dependencies]
 # `wrangler dev` を起動する結合テストのハーネス (0001 のハーネスと同じ方式) に使う。
 # 利用者向けの Worker の結合テストと同じ組に限る (ADR-0001)。
+# libc はハーネスが `wrangler` をプロセスグループごと停止するために使う (0019)。
+libc = "0.2"
 reqwest = { version = "0.12", features = ["blocking"] }
 serde_json = "1"

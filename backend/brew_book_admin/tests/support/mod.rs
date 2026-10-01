@@ -10,11 +10,15 @@
 //!
 //! 成功指標の照合 (経路の台帳とテストの識別子) もここが持つ。管理者 API はアプリ内の認証を
 //! 持たない (ADR-0008) ため、種別は正常系と入力不正 400 の 2 つだけである。
+//!
+//! `wrangler dev` は子として `workerd` と esbuild を起動する。停止はプロセスグループごとに
+//! 行い、孫が孤児として残らないようにする (0019)。
 
 #![allow(dead_code)] // ハーネスは複数のテストクレートで共有するため、各クレートから見て未使用の項目がある
 
 use std::io::{BufRead, BufReader, Read};
 use std::net::TcpListener;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
@@ -29,6 +33,9 @@ pub const KIND_INVALID_INPUT_400: &str = "invalid_input_400";
 /// 起動を待つ上限。初回は worker-build のビルドを含むため長めにする。
 const READY_TIMEOUT: Duration = Duration::from_secs(600);
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
+
+/// `stop` がプロセスグループへ SIGTERM を送ってから、SIGKILL に切り替えるまでの待ち時間。
+const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// 結合テストのスイートが経路ごとに持つテストの種別。
 pub struct SuiteEntry {
@@ -209,6 +216,8 @@ impl DevServer {
             .env_remove("CLAUDECODE")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        // 孫 (workerd、esbuild) まで確実に停止できるように、子を新しいプロセスグループにする (0019)。
+        command.process_group(0);
         for (key, value) in vars {
             command.arg("--var").arg(format!("{key}:{value}"));
         }
@@ -324,10 +333,39 @@ impl DevServer {
     }
 
     /// 子プロセスを停止する (Drop でも呼ばれる)。
+    ///
+    /// `wrangler` は子として `workerd` と esbuild を起動する。`Child::kill` (SIGKILL) だけでは
+    /// `wrangler` が後始末できず、孫が孤児として残ってしまう (0019)。プロセスグループごと
+    /// SIGTERM で止め、`STOP_TIMEOUT` を過ぎても残っていれば SIGKILL で確実に止める。
     pub fn stop(&mut self) {
-        let _ = self.child.kill();
+        let process_group = self.child.id() as libc::pid_t;
+        // 起動に失敗した場合など、既に子が終了していても killpg は無害 (ESRCH になるだけ)。
+        unsafe { libc::killpg(process_group, libc::SIGTERM) };
+        let deadline = Instant::now() + STOP_TIMEOUT;
+        while Instant::now() < deadline {
+            match self.child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) => thread::sleep(POLL_INTERVAL),
+                Err(_) => break,
+            }
+        }
+        unsafe { libc::killpg(process_group, libc::SIGKILL) };
         let _ = self.child.wait();
     }
+
+    /// テスト用: 子プロセスが属するプロセスグループの ID。
+    ///
+    /// `process_group(0)` で起動するため、子プロセスの ID と同じになる。
+    pub fn process_group_id(&self) -> u32 {
+        self.child.id()
+    }
+}
+
+/// テスト用: プロセスグループにプロセスが残っているかを確認する。
+///
+/// 停止の後に `workerd` などの孫が残っていないことの検証に使う (0019)。
+pub fn process_group_exists(process_group_id: u32) -> bool {
+    unsafe { libc::killpg(process_group_id as libc::pid_t, 0) == 0 }
 }
 
 impl Drop for DevServer {
