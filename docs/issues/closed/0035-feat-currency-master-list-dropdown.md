@@ -2,6 +2,7 @@
 
 Created: 2026-09-30
 Model: deepseek-v4p1-flash
+Completed: 2026-10-01
 
 ## 背景
 
@@ -91,3 +92,41 @@ PRD FR-9 も「ISO 4217 の 3 文字の英大文字だけを受け付ける」�
 - バックエンドの検証 (`validate_currency`) と PRD FR-9 の変更。
 - 通貨コードを表示する他の画面 (一覧、詳細、統計、エクスポート) の変更。
 - `docs/design` への Select の設計の追加。
+## 解決方法
+
+購入の通貨の欄を自由入力からマスタのプルダウンに変えた。
+
+- `frontend/lib/records/currencies.dart` を新設した。主要な通貨 30 種の `currencyCodes` (コードの昇順)、ARB から名前を引く `currencyName` (マスタに無いコードはコードをそのまま返す)、選択肢の表示を作る `currencyOptionLabel` (マスタにあるコードは「コード 通貨名」、無いコードはコードだけ)、選択肢を組み立てる `currencyOptions` (現在値がマスタに無いときだけ足し、コードの昇順を保つ。現在値がマスタにあるときはマスタの選択肢だけにし、現在値と同じコードの項目を重ねて作らない) を置いた。
+- `frontend/lib/widgets/app_field.dart` に `AppSelectField` を追加した。`AppField` の枠の中の `DropdownButtonFormField<String>` で、`initialValue` に選択値、`selectedItemBuilder` で選択中の表示をコードだけにし、`menuMaxHeight` を 320 にし、`enabled` が false のときは `onChanged` を null にする。
+- `frontend/lib/screens/purchase_form_screen.dart` の通貨の欄を `AppTextField` から `AppSelectField` に変えた。`_currency` を `String` (既定値 `defaultCurrency`) にし、編集では `purchase.priceCurrency ?? defaultCurrency` を入れ、保存では `price == null ? null : _currency` を送る。`_currencyPattern`、`_currencyError`、`validationCurrency` の表示を削除した。
+- `frontend/lib/l10n/app_ja.arb` と `app_en.arb` に 30 種の通貨名 (`currencyJpy` など。日本語は「日本円」「米ドル」、英語は CLDR の表示名「Japanese Yen」「US Dollar」) を追加し、`validationCurrency` を削除した。生成物 (`app_localizations*.dart`) を更新した。
+- テスト: `frontend/test/currencies_test.dart` と `frontend/test/property/currencies_property_test.dart` を新設し、`frontend/test/purchase_screens_test.dart` を更新した。
+
+完了条件の検証:
+
+- 登録の画面の通貨がプルダウンになり、選択肢が `currencyCodes` の 30 種と一致し、コードの昇順で、「コード 通貨名」で表示され、既定で `JPY` が選ばれて表示が `JPY` である: `frontend/test/purchase_screens_test.dart` の「通貨は主要な 30 種のプルダウンで、既定は JPY」が、選択肢の値の並びと表示文字列、`initialValue`、選択中の子 (`IndexedStack` の index) で確認した。
+- メニューの高さが `menuMaxHeight` の指定 (320) 以下で、30 種をスクロールして `ZAR` を選べる: 「通貨のメニューの高さは 320 以下で、30 種をスクロールして ZAR を選べる」が `tester.getSize` と `scrollUntilVisible`、選択中の子の index で確認した。
+- 30 種の通貨名が日本語と英語の ARB にあり、空でなく、コードと異なる: `frontend/test/currencies_test.dart` の「30 種すべての通貨名が日本語と英語の ARB にあり、CLDR の表示名と一致する」が確認した (30 種 × 日本語と英語の 60 値を期待値として固定する。英語の ARB からキーが抜けて日本語の値で埋まる場合も、期待値と一致しなくなる)。`JPY` が `JPY 日本円`、マスタに無い `ETB` が `ETB` になることは「選択肢の表示は、マスタにあるコードは「コード 通貨名」、無いコードはコードだけ」が確認した。
+- 価格を入力して保存すると選んだコードを送り、価格が無いときは null を送る: 「プルダウンで選んだ通貨コードを price_currency として送る」と「価格を入力しないときは price_currency を null で送る」が確認した。
+- 編集で既定値と異なるマスタの通貨 (`USD`) を開くと選ばれて表示され、保存で送られる: 「編集で既定値と異なる通貨を開くと、そのコードが選ばれて送られる」が確認した。
+- 編集でマスタに無いコードを開くと選択肢に足されて選ばれ、同じコードが 2 つ現れず、保存で送られる: 「編集でマスタに無い通貨コードを開くと、そのコードを足して選ぶ」が確認した。`currencyOptions` の「マスタの 30 種を保ち、入力のコードを高々 1 つ足し、コードの昇順になる」不変条件は `frontend/test/property/currencies_property_test.dart` の property が、マスタの全 30 種とマスタに無い代表、任意の文字列、null について確認した。
+- 編集で価格が無い購入を開くと `JPY` が選ばれ、保存で null を送る: 「編集で価格が無い購入を開くと、既定の JPY を選び、保存では null を送る」が確認した。
+- 保存中は通貨のプルダウンの選択が無効である: 「保存中は通貨のプルダウンを選べない」が `holdOnce` と `onChanged` の null で確認した。
+- 自由入力と `validationCurrency` の表示が無くなり、l10n の `validationCurrency` も削除された: `purchase_form_screen.dart` から `_currencyPattern`、`_currencyError`、`validationCurrency` の表示を削除し、ARB と生成物から `validationCurrency` を削除した。「価格と重量の検証エラーを表示する」を重量の欄の新しい索引 4 に合わせて書き換えた。
+- `currencyCodes` が設計判断に列挙した 30 種と一致し、ISO 4217 の 3 文字の英大文字で、重複が無く、コードの昇順で、`JPY` を含む: 「通貨コードは設計判断の 30 種と一致し、形と順序と重複に問題が無い」が確認した。
+- 画面の振る舞い: 上の各ウィジェットテストが確認した。
+- 既存のテストの書き換え: 「価格と重量の検証エラーを表示する」を書き換え、`validationCurrency` と小文字の入力の正規化の確認を削除した。
+- `mise run check` が通過する: 直列実行 (`mise run --jobs 1 check`) で通過した (exit 0、2142 秒)。既定の並列実行は、ベースラインの取得時に `frontend:test-integration` が Chrome のセッション作成に失敗した (issue 0029 と同じ Chrome のセッション作成の失敗。issue 0029 は「発生は確率的」と記録している) ため、issue 0029 の記録にある直列実行を使った。実行したタスクは `fmt`、`lint`、`frontend:build`、`frontend:analyze`、`formal`、`backend:test`、`backend:test-integration`、`frontend:test` (196 件)、`frontend:test-web` (206 件)、`frontend:test-integration`、`frontend:test-same-origin` で、すべて成功した。ベースライン (実装前の直列実行) も通過しており (exit 0、2035 秒)、新たな失敗は無い。
+
+方針からの乖離: 実装詳細で 1 件。設計判断が枠の要素として挙げた「必須」と「検証の誤り」は、購入の画面で使わないため `AppSelectField` に持たせていない (使う画面が現れたときに足す)。ほかは方針どおり。次は方針の範囲内で選んだ実装の詳細である。`AppSelectField` の `menuMaxHeight` の既定値を 320 にした (issue の例と同じ)。テストの補助関数 (`openCurrencyMenu`、`currencyMenuScrollable`、`selectCurrency`、`expectSelectedCurrency`) を追加した。
+
+レビューの指摘の反映 (Step 7):
+
+- 英語の ARB からキーが抜けた場合を検出できるよう、通貨名のテストで 30 種 × 日本語と英語の 60 値を CLDR の表示名として固定した。
+- `currencyOptions` の不変条件を `frontend/test/property/currencies_property_test.dart` の property でも確認するようにした (代表値の単体テストは残す。ADR-0013 の PBT の役割分担)。
+- property の生成器にマスタの全 30 種とマスタに無い代表 (`ETB`) を足し、マスタにあるコードの分岐 (重複を作らない) を必ず通るようにした。property は実装の式を写さず、不変条件 (マスタの 30 種を保つ、入力を高々 1 つ足す、昇順) で書いた。
+- 選択中の表示の確認を、`find.text` ではなく `DropdownButton` の `IndexedStack` の index と、表示中の子の `Text` の文字列で行うようにした (選択されていない選択肢の `Text` を拾わないため)。FR-19 の「推測の値を空の入力欄だけに反映する」の通貨の確認も同じ形にそろえた。
+- `currencyOptionLabel` のマスタの判定を、名前とコードの比較ではなく `currencyCodes.contains` に変えた (マスタにあるかの判定を直接的で意図が読み取れる形にするため)。
+- `AppSelectField` から、購入の画面が使わない `required` と `errorText` (と検証の誤り用の枠の色分け) を削除した (使う画面が現れたときに足す)。
+- 並列実行の記述を、実際に観測した失敗 (issue 0029 と同じ Chrome のセッション作成の失敗) と、直列実行を使った事実に直した。
+

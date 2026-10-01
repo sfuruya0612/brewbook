@@ -241,6 +241,96 @@ class AppLocalizationsJa extends AppLocalizations {
   String get currencyLabel => '通貨';
 
   @override
+  String get currencyAed => 'UAE ディルハム';
+
+  @override
+  String get currencyAud => '豪ドル';
+
+  @override
+  String get currencyBrl => 'ブラジル レアル';
+
+  @override
+  String get currencyCad => 'カナダ ドル';
+
+  @override
+  String get currencyChf => 'スイス フラン';
+
+  @override
+  String get currencyCny => '中国人民元';
+
+  @override
+  String get currencyCzk => 'チェコ コルナ';
+
+  @override
+  String get currencyDkk => 'デンマーク クローネ';
+
+  @override
+  String get currencyEur => 'ユーロ';
+
+  @override
+  String get currencyGbp => '英ポンド';
+
+  @override
+  String get currencyHkd => '香港ドル';
+
+  @override
+  String get currencyIdr => 'インドネシア ルピア';
+
+  @override
+  String get currencyInr => 'インド ルピー';
+
+  @override
+  String get currencyJpy => '日本円';
+
+  @override
+  String get currencyKrw => '韓国ウォン';
+
+  @override
+  String get currencyMxn => 'メキシコ ペソ';
+
+  @override
+  String get currencyMyr => 'マレーシア リンギット';
+
+  @override
+  String get currencyNok => 'ノルウェー クローネ';
+
+  @override
+  String get currencyNzd => 'ニュージーランド ドル';
+
+  @override
+  String get currencyPhp => 'フィリピン ペソ';
+
+  @override
+  String get currencyPln => 'ポーランド ズウォティ';
+
+  @override
+  String get currencySar => 'サウジアラビア リヤル';
+
+  @override
+  String get currencySek => 'スウェーデン クローナ';
+
+  @override
+  String get currencySgd => 'シンガポール ドル';
+
+  @override
+  String get currencyThb => 'タイ バーツ';
+
+  @override
+  String get currencyTry => 'トルコ リラ';
+
+  @override
+  String get currencyTwd => '新台湾ドル';
+
+  @override
+  String get currencyUsd => '米ドル';
+
+  @override
+  String get currencyVnd => 'ベトナム ドン';
+
+  @override
+  String get currencyZar => '南アフリカ ランド';
+
+  @override
   String get weightLabel => '重量';
 
   @override
@@ -382,9 +472,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String priceValue(String amount, String currency) {
     return '$amount $currency';
   }
-
-  @override
-  String get validationCurrency => '通貨コードを ISO 4217 の 3 文字の英大文字で入力してください。';
 
   @override
   String get statsTitle => '統計';

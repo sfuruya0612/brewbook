@@ -249,6 +249,96 @@ class AppLocalizationsEn extends AppLocalizations {
   String get currencyLabel => 'Currency';
 
   @override
+  String get currencyAed => 'UAE Dirham';
+
+  @override
+  String get currencyAud => 'Australian Dollar';
+
+  @override
+  String get currencyBrl => 'Brazilian Real';
+
+  @override
+  String get currencyCad => 'Canadian Dollar';
+
+  @override
+  String get currencyChf => 'Swiss Franc';
+
+  @override
+  String get currencyCny => 'Chinese Yuan';
+
+  @override
+  String get currencyCzk => 'Czech Koruna';
+
+  @override
+  String get currencyDkk => 'Danish Krone';
+
+  @override
+  String get currencyEur => 'Euro';
+
+  @override
+  String get currencyGbp => 'British Pound';
+
+  @override
+  String get currencyHkd => 'Hong Kong Dollar';
+
+  @override
+  String get currencyIdr => 'Indonesian Rupiah';
+
+  @override
+  String get currencyInr => 'Indian Rupee';
+
+  @override
+  String get currencyJpy => 'Japanese Yen';
+
+  @override
+  String get currencyKrw => 'South Korean Won';
+
+  @override
+  String get currencyMxn => 'Mexican Peso';
+
+  @override
+  String get currencyMyr => 'Malaysian Ringgit';
+
+  @override
+  String get currencyNok => 'Norwegian Krone';
+
+  @override
+  String get currencyNzd => 'New Zealand Dollar';
+
+  @override
+  String get currencyPhp => 'Philippine Peso';
+
+  @override
+  String get currencyPln => 'Polish Zloty';
+
+  @override
+  String get currencySar => 'Saudi Riyal';
+
+  @override
+  String get currencySek => 'Swedish Krona';
+
+  @override
+  String get currencySgd => 'Singapore Dollar';
+
+  @override
+  String get currencyThb => 'Thai Baht';
+
+  @override
+  String get currencyTry => 'Turkish Lira';
+
+  @override
+  String get currencyTwd => 'New Taiwan Dollar';
+
+  @override
+  String get currencyUsd => 'US Dollar';
+
+  @override
+  String get currencyVnd => 'Vietnamese Dong';
+
+  @override
+  String get currencyZar => 'South African Rand';
+
+  @override
   String get weightLabel => 'Weight';
 
   @override
@@ -391,10 +481,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String priceValue(String amount, String currency) {
     return '$amount $currency';
   }
-
-  @override
-  String get validationCurrency =>
-      'Enter the ISO 4217 currency code (three uppercase letters).';
 
   @override
   String get statsTitle => 'Stats';

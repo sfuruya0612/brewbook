@@ -170,3 +170,79 @@ class AppTextField extends StatelessWidget {
     );
   }
 }
+
+/// [AppField] の中に置くプルダウンの選択欄 (docs/design/components/Field)。
+///
+/// 選択肢の一覧の表示は [optionLabel] が組み立て、選択中の表示は値だけにする
+/// (2 対 1 の 2 列では名前まで入らないため)。メニューの高さは [menuMaxHeight] で
+/// 画面に収まる値に制限する。枠の見た目は `InputDecorationTheme` に従う。
+/// 購入の画面が使う口だけを持ち、必須と検証の誤りは持たない (使う画面が現れたときに足す)。
+class AppSelectField extends StatelessWidget {
+  const AppSelectField({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.optionLabel,
+    required this.onChanged,
+    this.enabled = true,
+    this.menuMaxHeight = 320,
+  });
+
+  /// 項目名 (ARB から取る)。
+  final String label;
+
+  /// 選択中の値。
+  final String value;
+
+  /// 選択肢の値。並び順のままメニューに出す。
+  final List<String> options;
+
+  /// 選択肢の表示 (例: `JPY 日本円`)。ウィジェット側に文言を直書きしない (FR-16)。
+  final String Function(String value) optionLabel;
+
+  /// 選び直したときの動き。
+  final ValueChanged<String> onChanged;
+
+  /// 選べるか。保存中は false にする。
+  final bool enabled;
+
+  /// メニューの高さの上限 (px)。
+  final double menuMaxHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
+    return AppField(
+      label: label,
+      child: DropdownButtonFormField<String>(
+        // 選択値は initialValue で渡す (value は Flutter 3.33 で非推奨)。
+        initialValue: value,
+        isExpanded: true,
+        menuMaxHeight: menuMaxHeight,
+        iconEnabledColor: brewbook.palette.inkMuted,
+        iconDisabledColor: brewbook.inkFaint,
+        style: AppTextStyle.value(color: brewbook.palette.ink),
+        items: <DropdownMenuItem<String>>[
+          for (final String option in options)
+            DropdownMenuItem<String>(value: option, child: Text(optionLabel(option))),
+        ],
+        // 選択中の表示は値 (コード) だけにする。幅の足りない 2 対 1 の 2 列でも省略されない。
+        selectedItemBuilder: (BuildContext context) => <Widget>[
+          for (final String option in options)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(option, overflow: TextOverflow.ellipsis),
+            ),
+        ],
+        onChanged: enabled
+            ? (String? selected) {
+                if (selected != null) {
+                  onChanged(selected);
+                }
+              }
+            : null,
+      ),
+    );
+  }
+}

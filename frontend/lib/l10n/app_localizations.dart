@@ -560,6 +560,186 @@ abstract class AppLocalizations {
   /// **'通貨'**
   String get currencyLabel;
 
+  /// No description provided for @currencyAed.
+  ///
+  /// In ja, this message translates to:
+  /// **'UAE ディルハム'**
+  String get currencyAed;
+
+  /// No description provided for @currencyAud.
+  ///
+  /// In ja, this message translates to:
+  /// **'豪ドル'**
+  String get currencyAud;
+
+  /// No description provided for @currencyBrl.
+  ///
+  /// In ja, this message translates to:
+  /// **'ブラジル レアル'**
+  String get currencyBrl;
+
+  /// No description provided for @currencyCad.
+  ///
+  /// In ja, this message translates to:
+  /// **'カナダ ドル'**
+  String get currencyCad;
+
+  /// No description provided for @currencyChf.
+  ///
+  /// In ja, this message translates to:
+  /// **'スイス フラン'**
+  String get currencyChf;
+
+  /// No description provided for @currencyCny.
+  ///
+  /// In ja, this message translates to:
+  /// **'中国人民元'**
+  String get currencyCny;
+
+  /// No description provided for @currencyCzk.
+  ///
+  /// In ja, this message translates to:
+  /// **'チェコ コルナ'**
+  String get currencyCzk;
+
+  /// No description provided for @currencyDkk.
+  ///
+  /// In ja, this message translates to:
+  /// **'デンマーク クローネ'**
+  String get currencyDkk;
+
+  /// No description provided for @currencyEur.
+  ///
+  /// In ja, this message translates to:
+  /// **'ユーロ'**
+  String get currencyEur;
+
+  /// No description provided for @currencyGbp.
+  ///
+  /// In ja, this message translates to:
+  /// **'英ポンド'**
+  String get currencyGbp;
+
+  /// No description provided for @currencyHkd.
+  ///
+  /// In ja, this message translates to:
+  /// **'香港ドル'**
+  String get currencyHkd;
+
+  /// No description provided for @currencyIdr.
+  ///
+  /// In ja, this message translates to:
+  /// **'インドネシア ルピア'**
+  String get currencyIdr;
+
+  /// No description provided for @currencyInr.
+  ///
+  /// In ja, this message translates to:
+  /// **'インド ルピー'**
+  String get currencyInr;
+
+  /// No description provided for @currencyJpy.
+  ///
+  /// In ja, this message translates to:
+  /// **'日本円'**
+  String get currencyJpy;
+
+  /// No description provided for @currencyKrw.
+  ///
+  /// In ja, this message translates to:
+  /// **'韓国ウォン'**
+  String get currencyKrw;
+
+  /// No description provided for @currencyMxn.
+  ///
+  /// In ja, this message translates to:
+  /// **'メキシコ ペソ'**
+  String get currencyMxn;
+
+  /// No description provided for @currencyMyr.
+  ///
+  /// In ja, this message translates to:
+  /// **'マレーシア リンギット'**
+  String get currencyMyr;
+
+  /// No description provided for @currencyNok.
+  ///
+  /// In ja, this message translates to:
+  /// **'ノルウェー クローネ'**
+  String get currencyNok;
+
+  /// No description provided for @currencyNzd.
+  ///
+  /// In ja, this message translates to:
+  /// **'ニュージーランド ドル'**
+  String get currencyNzd;
+
+  /// No description provided for @currencyPhp.
+  ///
+  /// In ja, this message translates to:
+  /// **'フィリピン ペソ'**
+  String get currencyPhp;
+
+  /// No description provided for @currencyPln.
+  ///
+  /// In ja, this message translates to:
+  /// **'ポーランド ズウォティ'**
+  String get currencyPln;
+
+  /// No description provided for @currencySar.
+  ///
+  /// In ja, this message translates to:
+  /// **'サウジアラビア リヤル'**
+  String get currencySar;
+
+  /// No description provided for @currencySek.
+  ///
+  /// In ja, this message translates to:
+  /// **'スウェーデン クローナ'**
+  String get currencySek;
+
+  /// No description provided for @currencySgd.
+  ///
+  /// In ja, this message translates to:
+  /// **'シンガポール ドル'**
+  String get currencySgd;
+
+  /// No description provided for @currencyThb.
+  ///
+  /// In ja, this message translates to:
+  /// **'タイ バーツ'**
+  String get currencyThb;
+
+  /// No description provided for @currencyTry.
+  ///
+  /// In ja, this message translates to:
+  /// **'トルコ リラ'**
+  String get currencyTry;
+
+  /// No description provided for @currencyTwd.
+  ///
+  /// In ja, this message translates to:
+  /// **'新台湾ドル'**
+  String get currencyTwd;
+
+  /// No description provided for @currencyUsd.
+  ///
+  /// In ja, this message translates to:
+  /// **'米ドル'**
+  String get currencyUsd;
+
+  /// No description provided for @currencyVnd.
+  ///
+  /// In ja, this message translates to:
+  /// **'ベトナム ドン'**
+  String get currencyVnd;
+
+  /// No description provided for @currencyZar.
+  ///
+  /// In ja, this message translates to:
+  /// **'南アフリカ ランド'**
+  String get currencyZar;
+
   /// No description provided for @weightLabel.
   ///
   /// In ja, this message translates to:
@@ -817,12 +997,6 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'{amount} {currency}'**
   String priceValue(String amount, String currency);
-
-  /// No description provided for @validationCurrency.
-  ///
-  /// In ja, this message translates to:
-  /// **'通貨コードを ISO 4217 の 3 文字の英大文字で入力してください。'**
-  String get validationCurrency;
 
   /// 統計画面の見出し (FR-18)
   ///

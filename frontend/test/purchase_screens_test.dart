@@ -1,7 +1,9 @@
 import 'dart:typed_data';
 
+import 'package:brew_book/l10n/app_localizations.dart';
 import 'package:brew_book/photo/image_converter.dart';
 import 'package:brew_book/photo/photo_picker.dart';
+import 'package:brew_book/records/currencies.dart';
 import 'package:brew_book/records/values.dart';
 import 'package:brew_book/router/app_router.dart';
 import 'package:brew_book/screens/login_screen.dart';
@@ -147,6 +149,55 @@ void main() {
     await scrollAndTap(tester, find.text(label));
     await tester.tap(find.text(value).last);
     await tester.pumpAndSettle();
+  }
+
+  /// 通貨のプルダウンを開く (FR-9)。
+  Future<void> openCurrencyMenu(WidgetTester tester) async {
+    final field = find.byType(DropdownButtonFormField<String>);
+    await tester.ensureVisible(field);
+    await tester.pumpAndSettle();
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+  }
+
+  /// 開いている通貨のメニューの一覧 (スクロールの対象)。
+  Finder currencyMenuScrollable() {
+    return find.descendant(of: find.byType(Scrollbar), matching: find.byType(Scrollable));
+  }
+
+  /// 通貨のプルダウンからコードを選ぶ。メニューはコードの昇順のため、必要ならスクロールする。
+  Future<void> selectCurrency(
+    WidgetTester tester,
+    AppLocalizations l10n,
+    String code,
+  ) async {
+    await openCurrencyMenu(tester);
+    final option = find.text(currencyOptionLabel(l10n, code));
+    await tester.scrollUntilVisible(option, 200, scrollable: currencyMenuScrollable());
+    // 一覧の外に組み立てられた選択肢を、タップできる位置まで送る。
+    await tester.ensureVisible(option);
+    await tester.pumpAndSettle();
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+  }
+
+  /// 選択中の通貨の表示を確かめる。
+  ///
+  /// 選択中の子は `DropdownButton` の `IndexedStack` の index で決まる。`find.text` は
+  /// 選択されていない選択肢の `Text` も拾うため、表示中の 1 件を区別できない。
+  void expectSelectedCurrency(WidgetTester tester, String code) {
+    final dropdown = tester.widget<DropdownButton<String>>(find.byType(DropdownButton<String>));
+    final values = dropdown.items!.map((item) => item.value).toList();
+    final stack = tester.widget<IndexedStack>(
+      find.descendant(
+        of: find.byType(DropdownButtonFormField<String>),
+        matching: find.byType(IndexedStack),
+      ),
+    );
+    expect(stack.index, values.indexOf(code));
+    // 表示中の子の文字列も確認する (index だけでは、選択肢の並びと表示のずれを検出できない)。
+    final selected = stack.children[stack.index!] as Align;
+    expect((selected.child as Text).data, code);
   }
 
   testWidgets('一覧に行を表示し、行から詳細を開く', (tester) async {
@@ -488,28 +539,169 @@ void main() {
 
     await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
     await scrollAndEnterText(tester, find.byType(TextField).at(3), '1.5.2');
-    await scrollAndEnterText(tester, find.byType(TextField).at(5), 'abc');
+    await scrollAndEnterText(tester, find.byType(TextField).at(4), 'abc');
     await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
     expect(find.text(l10n.validationNumber), findsNWidgets(2));
     expect(api.calls, <String>['GET /api/passkeys', 'GET /api/brews', 'GET /api/products']);
 
-    // 通貨コードは ISO 4217 の 3 文字の英大文字だけを受け付ける (FR-9。入力は大文字に直してから検証する)。
+    // 価格と重量を直し、通貨はプルダウンから選んで保存できる (FR-9)。
+    api.on('POST', '/api/purchases', status: 200, body: purchaseJson(id: 'purchase-1'));
     await scrollAndEnterText(tester, find.byType(TextField).at(3), '1200');
-    await scrollAndEnterText(tester, find.byType(TextField).at(4), 'us');
+    await scrollAndEnterText(tester, find.byType(TextField).at(4), '100');
+    await selectCurrency(tester, l10n, 'USD');
     await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
-    expect(find.text(l10n.validationCurrency), findsOneWidget);
+    expect(find.text(l10n.validationNumber), findsNothing);
+    expect(api.lastBody('POST', '/api/purchases')?['price_currency'], 'USD');
+  });
 
-    // 小文字の 3 文字は大文字に直してから検証するため通る (FR-9)。
-    api.on('POST', '/api/purchases', status: 200, body: purchaseJson(id: 'purchase-1'));
-    await scrollAndEnterText(tester, find.byType(TextField).at(4), 'usd');
-    await scrollAndEnterText(tester, find.byType(TextField).at(5), '100');
+  testWidgets('通貨は主要な 30 種のプルダウンで、既定は JPY', (tester) async {
+    final l10n = await loadL10n();
+    await openPurchaseForm(tester);
+
+    // 選択肢はマスタの 30 種と一致し、コードの昇順に並ぶ (FR-9)。
+    final dropdown = tester.widget<DropdownButton<String>>(find.byType(DropdownButton<String>));
+    expect(dropdown.items!.map((item) => item.value).toList(), currencyCodes);
+    // 各選択肢は「コード 通貨名」で表示する (FR-9)。
+    expect(
+      dropdown.items!.map((item) => (item.child as Text).data).toList(),
+      <String>[for (final code in currencyCodes) currencyOptionLabel(l10n, code)],
+    );
+    // 既定値の JPY が選ばれ、選択中の表示はコードだけになる。
+    final field = tester.widget<DropdownButtonFormField<String>>(
+      find.byType(DropdownButtonFormField<String>),
+    );
+    expect(field.initialValue, 'JPY');
+    expectSelectedCurrency(tester, 'JPY');
+    expect(find.text(currencyOptionLabel(l10n, 'JPY')), findsNothing);
+  });
+
+  testWidgets('通貨のメニューの高さは 320 以下で、30 種をスクロールして ZAR を選べる', (tester) async {
+    final l10n = await loadL10n();
+    await openPurchaseForm(tester);
+
+    await openCurrencyMenu(tester);
+
+    // メニューの高さは menuMaxHeight (320) に収まる (フォームの他の欄を隠さない)。
+    expect(tester.getSize(find.byType(Scrollbar)).height, lessThanOrEqualTo(320));
+    // 選択肢は「コード 通貨名」で出る (選択中は JPY がボタンに合わせて見える)。
+    expect(find.text(currencyOptionLabel(l10n, 'JPY')), findsOneWidget);
+
+    // 末尾の ZAR までスクロールして選べる。
+    final zar = find.text(currencyOptionLabel(l10n, 'ZAR'));
+    await tester.scrollUntilVisible(zar, 200, scrollable: currencyMenuScrollable());
+    await tester.ensureVisible(zar);
+    await tester.pumpAndSettle();
+    await tester.tap(zar);
+    await tester.pumpAndSettle();
+
+    // 選んだコードが選択中の表示になる。
+    expectSelectedCurrency(tester, 'ZAR');
+  });
+
+  testWidgets('プルダウンで選んだ通貨コードを price_currency として送る', (tester) async {
+    final l10n = await loadL10n();
+    final api = await openPurchaseForm(tester);
+    api.on('POST', '/api/purchases', status: 200, body: purchaseJson(id: 'purchase-9'));
+
+    await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
+    await scrollAndEnterText(tester, find.byType(TextField).at(3), '1200');
+    await selectCurrency(tester, l10n, 'EUR');
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
+
+    expect(api.lastBody('POST', '/api/purchases')?['price_currency'], 'EUR');
+  });
+
+  testWidgets('価格を入力しないときは price_currency を null で送る', (tester) async {
+    final l10n = await loadL10n();
+    final api = await openPurchaseForm(tester);
+    api.on('POST', '/api/purchases', status: 200, body: purchaseJson(id: 'purchase-9'));
+
+    await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
+    // 通貨は既定値の JPY が選ばれている (FR-9)。
+    expectSelectedCurrency(tester, 'JPY');
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
+
+    expect(api.lastBody('POST', '/api/purchases')?['price_amount'], isNull);
+    expect(api.lastBody('POST', '/api/purchases')?['price_currency'], isNull);
+  });
+
+  testWidgets('保存中は通貨のプルダウンを選べない', (tester) async {
+    final l10n = await loadL10n();
+    final api = await openPurchaseForm(tester);
+    api
+      ..on('POST', '/api/purchases', status: 200, body: purchaseJson(id: 'purchase-9'))
+      // 保存の応答を保留して、送信中の表示を確認する。
+      ..holdOnce('POST', '/api/purchases');
+
     await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
     await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
 
-    expect(find.text(l10n.validationCurrency), findsNothing);
-    expect(api.lastBody('POST', '/api/purchases')?['price_currency'], 'USD');
+    // 送信中は選び直せない (送った値と画面の表示が食い違わないようにする)。
+    final field = tester.widget<DropdownButtonFormField<String>>(
+      find.byType(DropdownButtonFormField<String>),
+    );
+    expect(field.onChanged, isNull);
+
+    api.release('POST', '/api/purchases');
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('編集で既定値と異なる通貨を開くと、そのコードが選ばれて送られる', (tester) async {
+    final l10n = await loadL10n();
+    final api = await openPurchaseForm(
+      tester,
+      id: 'purchase-1',
+      purchase: purchaseJson(id: 'purchase-1', priceAmount: 1200, priceCurrency: 'USD'),
+    );
+    api.on('PATCH', '/api/purchases/purchase-1', status: 200, body: purchaseJson());
+
+    // 選択中の表示はコードだけにする (名前は出さない)。
+    expectSelectedCurrency(tester, 'USD');
+    expect(find.text(currencyOptionLabel(l10n, 'USD')), findsNothing);
+
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
+
+    expect(api.lastBody('PATCH', '/api/purchases/purchase-1')?['price_currency'], 'USD');
+  });
+
+  testWidgets('編集でマスタに無い通貨コードを開くと、そのコードを足して選ぶ', (tester) async {
+    final l10n = await loadL10n();
+    final api = await openPurchaseForm(
+      tester,
+      id: 'purchase-1',
+      purchase: purchaseJson(id: 'purchase-1', priceAmount: 1200, priceCurrency: 'ETB'),
+    );
+    api.on('PATCH', '/api/purchases/purchase-1', status: 200, body: purchaseJson());
+
+    // マスタに無いコードは選択肢に足す (同じコードを 2 つ作らない)。
+    final dropdown = tester.widget<DropdownButton<String>>(find.byType(DropdownButton<String>));
+    final values = dropdown.items!.map((item) => item.value).toList();
+    final expected = <String>[...currencyCodes, 'ETB']..sort();
+    expect(values, expected);
+    expect(values.where((value) => value == 'ETB').length, 1);
+    // 名前を付けず、コードだけで表示する。
+    expectSelectedCurrency(tester, 'ETB');
+
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
+
+    expect(api.lastBody('PATCH', '/api/purchases/purchase-1')?['price_currency'], 'ETB');
+  });
+
+  testWidgets('編集で価格が無い購入を開くと、既定の JPY を選び、保存では null を送る', (tester) async {
+    final l10n = await loadL10n();
+    final api = await openPurchaseForm(tester, id: 'purchase-1');
+    api.on('PATCH', '/api/purchases/purchase-1', status: 200, body: purchaseJson());
+
+    // 通貨コードが null の購入は、既定値の JPY を選んだ状態にする (FR-9)。
+    expectSelectedCurrency(tester, 'JPY');
+
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
+
+    // 価格が無いため、通貨は送らない。
+    expect(api.lastBody('PATCH', '/api/purchases/purchase-1')?['price_amount'], isNull);
+    expect(api.lastBody('PATCH', '/api/purchases/purchase-1')?['price_currency'], isNull);
   });
 
   testWidgets('購入を編集し、店を外せる', (tester) async {
@@ -1044,7 +1236,7 @@ void main() {
     expect(find.widgetWithText(TextField, '2026-09-20'), findsOneWidget);
     expect(find.widgetWithText(TextField, '200'), findsOneWidget);
     // 通貨は推測せず、既定値の JPY のままにする (FR-19)。
-    expect(find.widgetWithText(TextField, 'JPY'), findsOneWidget);
+    expectSelectedCurrency(tester, 'JPY');
     // 商品が未選択のときだけ、名前の完全一致 (前後の空白を除き、大文字と小文字を区別しない) で
     // 一致する商品を選ぶ (FR-19)。
     expect(api.lastQuery('GET', '/api/products')?['name'], 'Ethiopia Guji');

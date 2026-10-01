@@ -6,6 +6,7 @@ import '../api/records_api.dart';
 import '../l10n/app_localizations.dart';
 import '../photo/image_converter.dart';
 import '../photo/photo_picker.dart';
+import '../records/currencies.dart';
 import '../records/record_services.dart';
 import '../records/values.dart';
 import '../theme/app_theme.dart';
@@ -19,9 +20,6 @@ import '../widgets/picker_tile.dart';
 import '../widgets/record_picker.dart';
 import '../widgets/suggestion_field.dart';
 import 'product_form_screen.dart';
-
-/// ISO 4217 の通貨コードの形 (英大文字 3 文字)。
-final RegExp _currencyPattern = RegExp(r'^[A-Z]{3}$');
 
 /// 通貨コードの既定値 (FR-9)。
 const String defaultCurrency = 'JPY';
@@ -64,8 +62,10 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   final TextEditingController _roast = TextEditingController();
   final TextEditingController _roastDate = TextEditingController();
   final TextEditingController _price = TextEditingController();
-  final TextEditingController _currency = TextEditingController(text: defaultCurrency);
   final TextEditingController _weight = TextEditingController();
+
+  /// 選択中の通貨コード。プルダウンで選ぶ (FR-9)。
+  String _currency = defaultCurrency;
 
   Product? _product;
   Shop? _shop;
@@ -104,7 +104,6 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   String? _purchasedOnError;
   String? _roastDateError;
   String? _priceError;
-  String? _currencyError;
   String? _weightError;
   String? _errorMessage;
   String? _loadError;
@@ -130,7 +129,6 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     _roast.dispose();
     _roastDate.dispose();
     _price.dispose();
-    _currency.dispose();
     _weight.dispose();
     super.dispose();
   }
@@ -154,7 +152,8 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
         _roast.text = purchase.roast ?? '';
         _roastDate.text = purchase.roastDate ?? '';
         _price.text = purchase.priceAmount?.toString() ?? '';
-        _currency.text = purchase.priceCurrency ?? defaultCurrency;
+        // 価格が無い購入 (通貨コードが null) は既定値を選んだ状態にする (FR-9)。
+        _currency = purchase.priceCurrency ?? defaultCurrency;
         _weight.text = purchase.weightGrams?.toString() ?? '';
         _photoKey = purchase.photoKey;
       });
@@ -431,7 +430,6 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     final roastDate = roastDateText.isEmpty ? null : parseDay(roastDateText);
     final priceText = _price.text.trim();
     final price = priceText.isEmpty ? null : parseCount(priceText);
-    final currency = _currency.text.trim().toUpperCase();
     final weightText = _weight.text.trim();
     final weight = weightText.isEmpty ? null : parseCount(weightText);
 
@@ -440,9 +438,6 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     final roastDateError =
         roastDateText.isNotEmpty && roastDate == null ? l10n.validationDay : null;
     final priceError = priceText.isNotEmpty && price == null ? l10n.validationNumber : null;
-    final currencyError = price != null && !_currencyPattern.hasMatch(currency)
-        ? l10n.validationCurrency
-        : null;
     final weightError =
         weightText.isNotEmpty && weight == null ? l10n.validationNumber : null;
     setState(() {
@@ -450,14 +445,12 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       _purchasedOnError = purchasedOnError;
       _roastDateError = roastDateError;
       _priceError = priceError;
-      _currencyError = currencyError;
       _weightError = weightError;
       _errorMessage = null;
       _showValidationBanner = productError != null ||
           purchasedOnError != null ||
           roastDateError != null ||
           priceError != null ||
-          currencyError != null ||
           weightError != null;
     });
     if (_showValidationBanner) {
@@ -471,7 +464,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
       roast: _optionalText(_roast),
       roastDate: roastDate == null ? null : formatDay(roastDate),
       priceAmount: price,
-      priceCurrency: price == null ? null : currency,
+      priceCurrency: price == null ? null : _currency,
       weightGrams: weight,
     );
     setState(() => _busy = true);
@@ -621,11 +614,13 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
               errorText: _priceError,
               keyboardType: TextInputType.number,
             ),
-            AppTextField(
-              controller: _currency,
+            AppSelectField(
               label: l10n.currencyLabel,
+              value: _currency,
+              options: currencyOptions(_currency),
+              optionLabel: (code) => currencyOptionLabel(l10n, code),
               enabled: !_busy,
-              errorText: _currencyError,
+              onChanged: (value) => setState(() => _currency = value),
             ),
           ],
         ),
