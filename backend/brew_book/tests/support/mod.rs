@@ -32,7 +32,7 @@ static START_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// R2 の操作の一時ファイルの連番。同じテストバイナリ内の並行するテストで衝突しないようにする。
 static R2_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-/// 正常系のテストの種別。
+/// 正常系のテストの種別。CI で実行する経路が持つ。
 pub const KIND_OK: &str = "ok";
 /// 未認証 401 のテストの種別。
 pub const KIND_UNAUTHENTICATED_401: &str = "unauthenticated_401";
@@ -50,7 +50,9 @@ pub struct SuiteEntry {
 /// このスイートが持つテストの種別。0005 が認証の 10 経路、0006 が店と商品とタグの 13 経路、
 /// 0007 が購入と抽出の 12 経路、0008 がサジェストの 1 経路、0009 が購入の写真の 4 経路、
 /// 0010 が統計と評価の推移の 4 経路、0011 がエクスポートの 1 経路、
-/// 0012 がアカウント削除の 1 経路を追加する。
+/// 0012 がアカウント削除の 1 経路、0034 が写真からの推測の 1 経路を追加する。
+/// 写真からの推測の正常系は Workers AI の推論を要するため CI では実行せず、手元で確認する
+/// (正常系の種別を持たない。PRD の成功指標の例外。FR-19)。
 pub const SUITE: &[SuiteEntry] = &[
     SuiteEntry {
         route: "auth_register_begin",
@@ -213,6 +215,11 @@ pub const SUITE: &[SuiteEntry] = &[
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
     },
     SuiteEntry {
+        // 正常系は CI で実行できない (Workers AI の推論を要する。FR-19)。
+        route: "purchase_suggestions",
+        kinds: &[KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
         route: "stats_brews",
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
     },
@@ -247,6 +254,7 @@ pub fn suite_covers_ledger() -> Result<(), String> {
 ///
 /// 台帳の全経路が同じ名前のスイートの項目を持ち、スイートの種別が必要な種別 (正常系、
 /// 未認証 401、入力不正 400) と過不足なく一致することを確認する。
+/// 正常系を CI で実行できない経路 (`OkTest::Manual`) は正常系の種別を要求しない (FR-19)。
 pub fn covers(
     routes: &[brew_book_core::routes::Route],
     suite: &[SuiteEntry],
@@ -268,7 +276,7 @@ pub fn covers(
             .expect("the route names match above");
         let requirements = brew_book_core::routes::test_requirements(route);
         let mut expected: Vec<&str> = Vec::new();
-        if requirements.ok {
+        if requirements.ok == brew_book_core::routes::OkTest::Ci {
             expected.push(KIND_OK);
         }
         if requirements.unauthenticated_401 {
@@ -358,6 +366,11 @@ impl DevServer {
         let mut command = Command::new("wrangler");
         command
             .arg("dev")
+            // リモートのバインディング (AI) を無効にして起動する。AI バインディングは起動時に
+            // リモートのプロキシのセッションを開くため、これが無いとログインの無い CI では
+            // `wrangler dev` が起動しない。`--local` でも未認証 401 と入力不正 400 のテストは
+            // 実行でき、AI を呼ぶ経路は 500 になる (ADR-0016、issue 0034)。
+            .arg("--local")
             .arg("--ip")
             .arg("127.0.0.1")
             .arg("--port")

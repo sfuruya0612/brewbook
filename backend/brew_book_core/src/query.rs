@@ -179,6 +179,9 @@ pub struct ListQuery<'a> {
     pub cursor: Option<CursorKey>,
     /// 取得件数。
     pub limit: u32,
+    /// 名前の完全一致の絞り込み (FR-19)。前後の空白を除いた値で、大文字と小文字を区別せず
+    /// 比べる。絞り込まないときは None。商品の一覧だけが指定する。
+    pub name: Option<&'a str>,
 }
 
 /// 1 件の取得のクエリの入力。
@@ -280,6 +283,7 @@ pub fn list(query: &ListQuery<'_>) -> Result<Statement, QueryError> {
             order_kind: query.order_kind,
             user_id: query.user_id,
             archived: query.archived,
+            name: query.name,
         },
         query.cursor.clone(),
         query.limit,
@@ -316,6 +320,8 @@ struct QualifiedList<'a> {
     user_id: &'a str,
     /// アーカイブ済みの行の扱い。
     archived: Archived,
+    /// 名前の完全一致の絞り込み (FR-19)。絞り込まないときは None。
+    name: Option<&'a str>,
 }
 
 /// 別名を付けた一覧の SQL を組み立てる。
@@ -343,6 +349,15 @@ fn list_qualified(
         sql.push_str(" AND ");
         sql.push_str(&qualified(query.alias, "archived_at"));
         sql.push_str(" IS NULL");
+    }
+
+    // 名前の完全一致の絞り込み (FR-19)。値は前後の空白を除いて渡す。
+    // `COLLATE NOCASE` で大文字と小文字を区別せずに比べる (SQLite は ASCII だけを畳む)。
+    if let Some(name) = query.name {
+        sql.push_str(" AND ");
+        sql.push_str(&qualified(query.alias, "name"));
+        sql.push_str(" = ? COLLATE NOCASE");
+        params.push(Value::Text(name.to_owned()));
     }
 
     if let Some(cursor) = &cursor {
@@ -725,6 +740,7 @@ pub fn shops_list(
         archived,
         cursor,
         limit,
+        name: None,
     })
 }
 
@@ -793,11 +809,14 @@ pub fn shop_set_archived(
 }
 
 /// 商品の一覧を組み立てる。並び順は作成日時の降順と ID の昇順。
+/// `name` を指定したときは、名前の完全一致 (前後の空白を除き、大文字と小文字を区別しない) で
+/// 絞り込む (FR-19)。
 pub fn products_list(
     user_id: &str,
     archived: Archived,
     cursor: Option<CursorKey>,
     limit: u32,
+    name: Option<&str>,
 ) -> Result<Statement, QueryError> {
     list(&ListQuery {
         table: PRODUCTS_TABLE,
@@ -808,6 +827,7 @@ pub fn products_list(
         archived,
         cursor,
         limit,
+        name,
     })
 }
 
@@ -886,6 +906,7 @@ pub fn purchases_list(
             order_kind: OrderKind::Date,
             user_id,
             archived,
+            name: None,
         },
         cursor,
         limit,
@@ -984,6 +1005,7 @@ pub fn brews_list(
             order_kind: OrderKind::DateTime,
             user_id,
             archived,
+            name: None,
         },
         cursor,
         limit,

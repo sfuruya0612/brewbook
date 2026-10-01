@@ -570,6 +570,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get uploadingLabel => 'アップロード中';
 
   @override
+  String get suggestionLoadingLabel => '写真から推測中';
+
+  @override
+  String get suggestionFailedMessage => '写真からの推測に失敗しました。手入力で続けられます。';
+
+  @override
+  String get suggestionRegisterProductButton => '推測した内容で商品を登録';
+
+  @override
   String get loginRegisterHint => 'ログインできないときは管理者から登録用のリンクを受け取ってください。';
 
   @override

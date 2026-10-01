@@ -1172,6 +1172,24 @@ abstract class AppLocalizations {
   /// **'アップロード中'**
   String get uploadingLabel;
 
+  /// 写真からの推測中の表示 (FR-19)
+  ///
+  /// In ja, this message translates to:
+  /// **'写真から推測中'**
+  String get suggestionLoadingLabel;
+
+  /// 写真からの推測に失敗したときのバナー (FR-19)
+  ///
+  /// In ja, this message translates to:
+  /// **'写真からの推測に失敗しました。手入力で続けられます。'**
+  String get suggestionFailedMessage;
+
+  /// 一致する商品が無いときの商品の登録の導線 (FR-19)
+  ///
+  /// In ja, this message translates to:
+  /// **'推測した内容で商品を登録'**
+  String get suggestionRegisterProductButton;
+
   /// ログイン画面の下端の案内 (FR-1)
   ///
   /// In ja, this message translates to:

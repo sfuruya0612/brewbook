@@ -74,6 +74,24 @@ impl ApiClient {
         self.send(Method::POST, path, Some(body))
     }
 
+    /// 本体をバイト列として送る。Content-Type を指定する (写真からの推測の検査に使う。FR-19)。
+    pub fn post_bytes(&self, path: &str, content_type: &str, bytes: &[u8]) -> Response {
+        let mut request = self
+            .client
+            .request(Method::POST, format!("{}{path}", self.base_url))
+            .header("content-type", content_type)
+            .body(bytes.to_vec());
+        if let Some(cookie) = &self.cookie {
+            request = request.header("cookie", cookie);
+        }
+        if let Some(origin) = &self.origin {
+            request = request.header("origin", origin);
+        }
+        request
+            .send()
+            .expect("the request must reach the dev server")
+    }
+
     pub fn patch_json(&self, path: &str, body: &Value) -> Response {
         self.send(Method::PATCH, path, Some(body))
     }

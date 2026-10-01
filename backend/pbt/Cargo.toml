@@ -8,3 +8,5 @@ publish = false
 brew_book_admin = { path = "../brew_book_admin" }
 brew_book_core = { path = "../brew_book_core" }
 proptest = "1"
+# 応答の JSON の値を作るため (brew_book_core の依存に含まれるクレート。issue 0034 の乖離)。
+serde_json = "1"

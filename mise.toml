@@ -101,7 +101,7 @@ description = "wrangler dev を起動する結合テストを実行する"
 dir = "backend"
 # wrangler dev は Static Assets のディレクトリが無いと起動しないため、先に Flutter をビルドする (0017)。
 depends = ["frontend:build"]
-run = "cargo test -p brew_book --test dev_server --test d1_binding --test wrangler_auth_api --test wrangler_passkey_flow --test wrangler_records_api --test wrangler_purchases_brews_api --test wrangler_suggestions_api --test wrangler_photos_api --test wrangler_stats_api --test wrangler_export_api --test wrangler_account_api --test wrangler_records_scale --test wrangler_stats_scale --test wrangler_same_origin_api --test wrangler_display_name && cargo test -p brew_book_admin --test wrangler_admin_api"
+run = "cargo test -p brew_book --test dev_server --test d1_binding --test wrangler_auth_api --test wrangler_passkey_flow --test wrangler_records_api --test wrangler_purchases_brews_api --test wrangler_suggestions_api --test wrangler_purchase_suggestions_api --test wrangler_photos_api --test wrangler_stats_api --test wrangler_export_api --test wrangler_account_api --test wrangler_records_scale --test wrangler_stats_scale --test wrangler_same_origin_api --test wrangler_display_name && cargo test -p brew_book_admin --test wrangler_admin_api"
 
 [tasks.dev]
 description = "ローカル開発の画面と API を同じオリジンから配信する"

@@ -8,6 +8,7 @@
 pub mod brews;
 pub mod photos;
 pub mod products;
+pub mod purchase_suggestions;
 pub mod purchases;
 pub mod shops;
 pub mod stats;

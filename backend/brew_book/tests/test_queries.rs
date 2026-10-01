@@ -31,8 +31,14 @@ fn statements() -> Vec<String> {
                 .sql,
         );
         statements.push(
-            query::products_list(USER, archived, None, 20)
+            query::products_list(USER, archived, None, 20, None)
                 .expect("the products list must be built")
+                .sql,
+        );
+        // 名前の絞り込み (FR-19) を付けた商品の一覧も、同じ検査の対象にする。
+        statements.push(
+            query::products_list(USER, archived, None, 20, Some("名前"))
+                .expect("the products list with a name must be built")
                 .sql,
         );
         statements.push(

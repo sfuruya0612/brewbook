@@ -408,6 +408,18 @@
   "@uploadingLabel": {
     "description": "写真のアップロード中の表示 (FR-10)"
   },
+  "suggestionLoadingLabel": "写真から推測中",
+  "@suggestionLoadingLabel": {
+    "description": "写真からの推測中の表示 (FR-19)"
+  },
+  "suggestionFailedMessage": "写真からの推測に失敗しました。手入力で続けられます。",
+  "@suggestionFailedMessage": {
+    "description": "写真からの推測に失敗したときのバナー (FR-19)"
+  },
+  "suggestionRegisterProductButton": "推測した内容で商品を登録",
+  "@suggestionRegisterProductButton": {
+    "description": "一致する商品が無いときの商品の登録の導線 (FR-19)"
+  },
   "loginRegisterHint": "ログインできないときは管理者から登録用のリンクを受け取ってください。",
   "@loginRegisterHint": {
     "description": "ログイン画面の下端の案内 (FR-1)"

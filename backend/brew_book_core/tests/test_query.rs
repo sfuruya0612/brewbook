@@ -26,6 +26,7 @@ mod list_builders {
             archived,
             cursor,
             limit,
+            name: None,
         }
     }
 
@@ -100,6 +101,7 @@ mod list_builders {
             archived: Archived::Exclude,
             cursor: Some(cursor),
             limit: 200,
+            name: None,
         };
         let statement = list(&query).unwrap();
         assert!(statement
@@ -110,6 +112,27 @@ mod list_builders {
             .contains("ORDER BY purchased_on DESC, id ASC LIMIT ?"));
         assert_eq!(statement.params.len(), 5);
         assert_eq!(statement.params[4], Value::Integer(200));
+    }
+
+    #[test]
+    fn a_list_query_with_a_name_filters_by_the_exact_name_ignoring_case() {
+        let mut query = shop_query(Archived::Exclude, None, 50);
+        query.name = Some("Ethiopia");
+        let statement = list(&query).unwrap();
+        assert_eq!(
+            statement.sql,
+            "SELECT id, user_id, name, address, created_at, updated_at, archived_at FROM shops \
+             WHERE user_id = ? AND archived_at IS NULL AND name = ? COLLATE NOCASE \
+             ORDER BY created_at DESC, id ASC LIMIT ?"
+        );
+        assert_eq!(
+            statement.params,
+            vec![
+                Value::Text(USER_ID.to_owned()),
+                Value::Text("Ethiopia".to_owned()),
+                Value::Integer(50),
+            ]
+        );
     }
 
     #[test]
@@ -138,6 +161,7 @@ mod list_builders {
                         archived,
                         cursor,
                         limit: 50,
+                        name: None,
                     };
                     let statement = list(&query).unwrap();
                     assert!(
@@ -1074,7 +1098,13 @@ mod conditions {
             });
             checked.push(Checked {
                 name: "products list",
-                statement: query::products_list(USER_ID, archived, None, 50).unwrap(),
+                statement: query::products_list(USER_ID, archived, None, 50, None).unwrap(),
+                kind: Kind::List,
+                default_archived,
+            });
+            checked.push(Checked {
+                name: "products list with a name",
+                statement: query::products_list(USER_ID, archived, None, 50, Some("名前")).unwrap(),
                 kind: Kind::List,
                 default_archived,
             });
@@ -1245,7 +1275,8 @@ mod conditions {
         });
         checked.push(Checked {
             name: "products list with a cursor",
-            statement: query::products_list(USER_ID, Archived::Exclude, Some(cursor), 50).unwrap(),
+            statement: query::products_list(USER_ID, Archived::Exclude, Some(cursor), 50, None)
+                .unwrap(),
             kind: Kind::List,
             default_archived: true,
         });

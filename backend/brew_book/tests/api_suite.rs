@@ -1,9 +1,9 @@
 mod support;
 
-use brew_book_core::routes::{Method, Route};
+use brew_book_core::routes::{Method, OkTest, Route};
 
 /// 台帳とスイートの照合の検査を試すための経路。実際の経路は 0005 以降が追加する。
-/// 5 つのメソッドと、認証と入力の 4 通りの組み合わせを含める。
+/// 5 つのメソッドと、認証と入力の 4 通りの組み合わせと、正常系を手元で確認する区分を含める。
 fn sample_ledger() -> Vec<Route> {
     vec![
         Route {
@@ -12,6 +12,7 @@ fn sample_ledger() -> Vec<Route> {
             pattern: "/api/shops",
             auth_required: true,
             has_input: false,
+            ok_test: OkTest::Ci,
         },
         Route {
             name: "shops_create",
@@ -19,6 +20,7 @@ fn sample_ledger() -> Vec<Route> {
             pattern: "/api/shops",
             auth_required: true,
             has_input: true,
+            ok_test: OkTest::Ci,
         },
         Route {
             name: "shops_update",
@@ -26,6 +28,7 @@ fn sample_ledger() -> Vec<Route> {
             pattern: "/api/shops/:id",
             auth_required: true,
             has_input: true,
+            ok_test: OkTest::Ci,
         },
         Route {
             name: "shops_archive",
@@ -33,6 +36,7 @@ fn sample_ledger() -> Vec<Route> {
             pattern: "/api/shops/:id",
             auth_required: true,
             has_input: false,
+            ok_test: OkTest::Ci,
         },
         Route {
             name: "passkeys_delete",
@@ -40,6 +44,7 @@ fn sample_ledger() -> Vec<Route> {
             pattern: "/api/passkeys/:id",
             auth_required: true,
             has_input: false,
+            ok_test: OkTest::Ci,
         },
         Route {
             name: "auth_challenge",
@@ -47,6 +52,7 @@ fn sample_ledger() -> Vec<Route> {
             pattern: "/api/auth/challenge",
             auth_required: false,
             has_input: false,
+            ok_test: OkTest::Ci,
         },
         Route {
             name: "auth_verify",
@@ -54,6 +60,16 @@ fn sample_ledger() -> Vec<Route> {
             pattern: "/api/auth/login/verify",
             auth_required: false,
             has_input: true,
+            ok_test: OkTest::Ci,
+        },
+        Route {
+            // 正常系を CI で実行できない経路 (写真からの推測。FR-19)。
+            name: "purchase_suggestions",
+            method: Method::Post,
+            pattern: "/api/purchase-suggestions",
+            auth_required: true,
+            has_input: true,
+            ok_test: OkTest::Manual,
         },
     ]
 }
@@ -92,6 +108,11 @@ fn sample_suite() -> Vec<support::SuiteEntry> {
             route: "auth_verify",
             kinds: &[OK, INPUT],
         },
+        support::SuiteEntry {
+            // 正常系を手元で確認する経路は、正常系の種別を持たない (FR-19)。
+            route: "purchase_suggestions",
+            kinds: &[UNAUTH, INPUT],
+        },
     ]
 }
 
@@ -104,6 +125,29 @@ fn the_ledger_and_the_suite_match() {
 fn the_checker_accepts_a_complete_suite() {
     support::covers(&sample_ledger(), &sample_suite())
         .expect("a suite with every required kind must be accepted");
+}
+
+#[test]
+fn the_checker_rejects_an_ok_test_for_a_route_that_ci_cannot_run() {
+    // 正常系を手元で確認する経路 (FR-19) に正常系の種別を付けると、CI で実行できないテストを
+    // 要求したことになるため検出する。
+    let ledger = sample_ledger();
+    let mut suite = sample_suite();
+    let entry = suite
+        .iter_mut()
+        .find(|entry| entry.route == "purchase_suggestions")
+        .expect("the sample suite must have purchase_suggestions");
+    entry.kinds = &[
+        support::KIND_OK,
+        support::KIND_UNAUTHENTICATED_401,
+        support::KIND_INVALID_INPUT_400,
+    ];
+    let error = support::covers(&ledger, &suite)
+        .expect_err("an ok test for a manual route must be detected");
+    assert!(
+        error.contains("purchase_suggestions"),
+        "the error must name the route: {error}"
+    );
 }
 
 #[test]

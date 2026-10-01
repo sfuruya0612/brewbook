@@ -15,4 +15,5 @@ pub mod query;
 pub mod records;
 pub mod routes;
 pub mod stats;
+pub mod suggestion;
 pub mod webauthn;

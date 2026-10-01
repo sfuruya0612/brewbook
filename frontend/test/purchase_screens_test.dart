@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:brew_book/photo/image_converter.dart';
 import 'package:brew_book/photo/photo_picker.dart';
 import 'package:brew_book/records/values.dart';
 import 'package:brew_book/router/app_router.dart';
@@ -19,7 +20,19 @@ import 'support/fake_photo.dart';
 import 'support/fake_records.dart';
 import 'support/pump_app.dart';
 
-/// 購入の画面 (一覧、詳細、登録、編集、アーカイブ、写真。FR-9、FR-10、FR-12) のウィジェットテスト。
+/// 推測できない応答 (FR-19)。写真を選ぶテストのうち、推測の値を使わないテストが登録する。
+Map<String, Object?> emptySuggestionJson() {
+  return <String, Object?>{
+    'product': null,
+    'roast': null,
+    'roast_date': null,
+    'price_amount': null,
+    'weight_grams': null,
+  };
+}
+
+/// 購入の画面 (一覧、詳細、登録、編集、アーカイブ、写真。FR-9、FR-10、FR-12) と、
+/// 写真からの推測の反映 (FR-19) のウィジェットテスト。
 void main() {
   /// 購入の一覧の画面を開いた状態にする。
   Future<FakeApi> openPurchaseList(
@@ -555,6 +568,12 @@ void main() {
       ..on('POST', '/api/purchases', status: 200, body: purchaseJson(id: 'purchase-9'))
       ..on(
         'POST',
+        '/api/purchase-suggestions',
+        status: 200,
+        body: emptySuggestionJson(),
+      )
+      ..on(
+        'POST',
         '/api/purchases/purchase-9/photo/upload-url',
         status: 200,
         body: <String, Object?>{'url': 'https://r2.example/upload', 'key': 'pending/user-1/x.jpg'},
@@ -596,6 +615,8 @@ void main() {
     expect(api.calls, <String>[
       'GET /api/passkeys',
       'GET /api/brews',
+      // 写真を選んだ直後に推測を呼ぶ (FR-19)。
+      'POST /api/purchase-suggestions',
       'GET /api/products',
       'POST /api/purchases',
       'POST /api/purchases/purchase-9/photo/upload-url',
@@ -626,6 +647,12 @@ void main() {
     );
     api
       ..on('PATCH', '/api/purchases/purchase-1', status: 200, body: purchaseJson())
+      ..on(
+        'POST',
+        '/api/purchase-suggestions',
+        status: 200,
+        body: emptySuggestionJson(),
+      )
       ..on(
         'POST',
         '/api/purchases/purchase-1/photo/upload-url',
@@ -761,6 +788,12 @@ void main() {
     api
       ..on(
         'POST',
+        '/api/purchase-suggestions',
+        status: 200,
+        body: emptySuggestionJson(),
+      )
+      ..on(
+        'POST',
         '/api/purchases',
         status: 200,
         body: purchaseJson(id: 'purchase-1'),
@@ -792,6 +825,12 @@ void main() {
       upload: upload,
     );
     api
+      ..on(
+        'POST',
+        '/api/purchase-suggestions',
+        status: 200,
+        body: emptySuggestionJson(),
+      )
       ..on('POST', '/api/purchases', status: 200, body: purchaseJson(id: 'purchase-9'))
       ..on(
         'POST',
@@ -894,5 +933,705 @@ void main() {
 
     expect(find.text(l10n.errorNetwork), findsNothing);
     expect(find.widgetWithText(TextField, 'Retried Roast'), findsOneWidget);
+  });
+
+  // 写真からの推測の反映 (FR-19、ADR-0016)。
+
+  /// 推測の応答を組み立てる。無い項目は null にする。
+  Map<String, Object?> suggestionJson({
+    Map<String, Object?>? product,
+    String? roast,
+    String? roastDate,
+    int? priceAmount,
+    int? weightGrams,
+  }) {
+    return <String, Object?>{
+      'product': product,
+      'roast': roast,
+      'roast_date': roastDate,
+      'price_amount': priceAmount,
+      'weight_grams': weightGrams,
+    };
+  }
+
+  /// 商品の一覧の応答を、名前の完全一致の絞り込み (FR-19) に応じて変える。
+  ///
+  /// 絞り込みが無い呼び出し (商品の選択のダイアログ) は既定の 1 件を返す。
+  void onProductNameLookup(FakeApi api, List<Map<String, Object?>> matched) {
+    api.onQuery('GET', '/api/products', (query) {
+      if (query['name'] == null) {
+        return (
+          status: 200,
+          body: pageJson(
+            key: 'products',
+            items: <Map<String, Object?>>[productJson(id: 'product-1', name: 'Ethiopia')],
+          ),
+        );
+      }
+      return (status: 200, body: pageJson(key: 'products', items: matched));
+    });
+  }
+
+  /// 推測の商品の項目を組み立てる。
+  Map<String, Object?> suggestedProductJson({
+    String? name = 'New Bean',
+    String? producer,
+    String? origin,
+    String? region,
+    String? process,
+    String? variety,
+    List<String> flavorNotes = const <String>[],
+  }) {
+    return <String, Object?>{
+      'name': name,
+      'producer': producer,
+      'origin': origin,
+      'region': region,
+      'process': process,
+      'variety': variety,
+      'flavor_notes': flavorNotes,
+    };
+  }
+
+  testWidgets('写真を選ぶと推測を呼び、空の入力欄にだけ反映する', (tester) async {
+    final l10n = await loadL10n();
+    final picker = FakePhotoPicker(
+      photo: PickedPhoto(name: 'package.png', bytes: Uint8List.fromList(<int>[1, 2, 3])),
+    );
+    final converter = FakeImageConverter(
+      bytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF, 4, 5]),
+    );
+    final api = await openPurchaseForm(tester, picker: picker, converter: converter);
+    onProductNameLookup(api, <Map<String, Object?>>[
+      productJson(id: 'product-2', name: 'Ethiopia Guji'),
+    ]);
+    api.on(
+      'POST',
+      '/api/purchase-suggestions',
+      status: 200,
+      body: suggestionJson(
+        product: suggestedProductJson(
+          name: 'Ethiopia Guji',
+          producer: 'Guji',
+          origin: 'Ethiopia',
+          process: 'Washed',
+          flavorNotes: <String>['Floral'],
+        ),
+        roast: 'Medium',
+        roastDate: '2026-09-20',
+        priceAmount: 1200,
+        weightGrams: 200,
+      ),
+    );
+
+    // 入力済みの焙煎度と価格は上書きしない (FR-19)。
+    await scrollAndEnterText(tester, find.byType(TextField).at(1), 'Custom Roast');
+    await scrollAndEnterText(tester, find.byType(TextField).at(3), '999');
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.photoSelectButton));
+
+    // 変換済みの JPEG をそのまま送る (FR-19)。
+    final request = api.requests.lastWhere(
+      (request) => request.url.path == '/api/purchase-suggestions',
+    );
+    expect(request.headers['Content-Type'], 'image/jpeg');
+    expect(request.bodyBytes, <int>[0xFF, 0xD8, 0xFF, 4, 5]);
+
+    // 空の入力欄だけに反映する (入力済みの焙煎度と価格は残る)。
+    expect(find.widgetWithText(TextField, 'Custom Roast'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Medium'), findsNothing);
+    expect(find.widgetWithText(TextField, '999'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '1200'), findsNothing);
+    expect(find.widgetWithText(TextField, '2026-09-20'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '200'), findsOneWidget);
+    // 通貨は推測せず、既定値の JPY のままにする (FR-19)。
+    expect(find.widgetWithText(TextField, 'JPY'), findsOneWidget);
+    // 商品が未選択のときだけ、名前の完全一致 (前後の空白を除き、大文字と小文字を区別しない) で
+    // 一致する商品を選ぶ (FR-19)。
+    expect(api.lastQuery('GET', '/api/products')?['name'], 'Ethiopia Guji');
+    expect(find.text('Ethiopia Guji'), findsOneWidget);
+    // 推測はどの記録も変更しない (FR-19)。購入の API は呼ばれない。
+    expect(api.calls.where((call) => call.contains('/api/purchases')), isEmpty);
+  });
+
+  testWidgets('推測中はインジケータを出し、失敗するとバナーを出して手入力を続けられる', (tester) async {
+    final l10n = await loadL10n();
+    final picker = FakePhotoPicker(
+      photo: PickedPhoto(name: 'package.png', bytes: Uint8List.fromList(<int>[1, 2, 3])),
+    );
+    final api = await openPurchaseForm(
+      tester,
+      picker: picker,
+      converter: FakeImageConverter(bytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF])),
+      upload: FakeUploadClient(),
+    );
+    // AI の呼び出しの失敗 (500) を返す (FR-19)。
+    api
+      ..on(
+        'POST',
+        '/api/purchase-suggestions',
+        status: 500,
+        body: <String, Object?>{
+          'error': <String, Object?>{
+            'code': 'internal_error',
+            'message': 'the suggestion failed',
+          },
+        },
+      )
+      // 応答を保留して、推測中の表示を確認できるようにする。
+      ..holdOnce('POST', '/api/purchase-suggestions');
+
+    final select = find.widgetWithText(OutlinedButton, l10n.photoSelectButton);
+    await tester.ensureVisible(select);
+    await tester.pumpAndSettle();
+    await tester.tap(select);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    // 推測中はインジケータを出す (FR-19)。
+    expect(find.text(l10n.suggestionLoadingLabel), findsOneWidget);
+
+    api.release('POST', '/api/purchase-suggestions');
+    await tester.pumpAndSettle();
+
+    // 失敗はバナーで表示し、写真の選択は残る (FR-19)。
+    expect(find.text(l10n.suggestionFailedMessage), findsOneWidget);
+    expect(find.byKey(const Key('purchase-photo')), findsOneWidget);
+
+    // 手入力を続けられる (商品を選んで保存できる)。
+    api
+      ..on('POST', '/api/purchases', status: 200, body: purchaseJson(id: 'purchase-1'))
+      ..on(
+        'POST',
+        '/api/purchases/purchase-1/photo/upload-url',
+        status: 200,
+        body: <String, Object?>{'url': 'https://r2.example/upload', 'key': 'pending/user-1/a.jpg'},
+      )
+      ..on(
+        'POST',
+        '/api/purchases/purchase-1/photo',
+        status: 200,
+        body: purchaseJson(
+          id: 'purchase-1',
+          photoKey: 'users/user-1/purchases/purchase-1/a.jpg',
+        ),
+      );
+    await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
+    await scrollAndEnterText(tester, find.byType(TextField).at(1), 'Manual Roast');
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
+
+    expect(api.calls, contains('POST /api/purchases'));
+    expect(find.text(l10n.savedMessage), findsOneWidget);
+  });
+
+  testWidgets('一致する商品が無いときは推測した内容で商品を登録し、その商品を選択する', (tester) async {
+    final l10n = await loadL10n();
+    final picker = FakePhotoPicker(
+      photo: PickedPhoto(name: 'package.png', bytes: Uint8List.fromList(<int>[1, 2, 3])),
+    );
+    final api = await openPurchaseForm(
+      tester,
+      picker: picker,
+      converter: FakeImageConverter(bytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF])),
+    );
+    // 名前の完全一致に一致する商品は無い。
+    onProductNameLookup(api, <Map<String, Object?>>[]);
+    api
+      ..on(
+        'POST',
+        '/api/purchase-suggestions',
+        status: 200,
+        body: suggestionJson(
+          product: suggestedProductJson(
+            producer: 'New Producer',
+            origin: 'Ethiopia',
+            region: 'Guji',
+            process: 'Washed',
+            variety: 'Heirloom',
+            flavorNotes: <String>['Floral', 'Citrus'],
+          ),
+          roast: 'Medium',
+        ),
+      )
+      ..on(
+        'POST',
+        '/api/products',
+        status: 200,
+        body: productJson(id: 'product-9', name: 'New Bean'),
+      );
+
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.photoSelectButton));
+
+    // 一致が無いときは、推測した内容で商品を登録する導線を出す (FR-19)。
+    await scrollAndTap(
+      tester,
+      find.widgetWithText(OutlinedButton, l10n.suggestionRegisterProductButton),
+    );
+
+    // 商品のフォームに推測値 (商品名、Producer、Origin、Region、Process、Variety、
+    // Flavor Notes) を引き継ぐ (FR-19)。
+    expect(find.byType(ProductFormScreen), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'New Bean'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'New Producer'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Ethiopia'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Guji'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Washed'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Heirloom'), findsOneWidget);
+    expect(find.text('Floral'), findsOneWidget);
+    expect(find.text('Citrus'), findsOneWidget);
+
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
+
+    // 登録した商品の本文に推測値が入る。
+    expect(api.lastBody('POST', '/api/products'), <String, Object?>{
+      'name': 'New Bean',
+      'producer': 'New Producer',
+      'origin': 'Ethiopia',
+      'region': 'Guji',
+      'process': 'Washed',
+      'variety': 'Heirloom',
+      'flavor_notes': <String>['Floral', 'Citrus'],
+    });
+    // 購入のフォームに戻り、登録した商品を選択する (FR-19)。
+    expect(find.byType(PurchaseFormScreen), findsOneWidget);
+    expect(find.text('New Bean'), findsOneWidget);
+    expect(
+      find.widgetWithText(OutlinedButton, l10n.suggestionRegisterProductButton),
+      findsNothing,
+    );
+    // 推測は保存を伴わない (購入の API はまだ呼ばれない)。
+    expect(api.calls.where((call) => call.contains('/api/purchases')), isEmpty);
+  });
+
+  testWidgets('選択済みの商品は推測で上書きしない', (tester) async {
+    final l10n = await loadL10n();
+    final picker = FakePhotoPicker(
+      photo: PickedPhoto(name: 'package.png', bytes: Uint8List.fromList(<int>[1, 2, 3])),
+    );
+    final api = await openPurchaseForm(
+      tester,
+      picker: picker,
+      converter: FakeImageConverter(bytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF])),
+    );
+    onProductNameLookup(api, <Map<String, Object?>>[
+      productJson(id: 'product-2', name: 'Ethiopia Guji'),
+    ]);
+    api.on(
+      'POST',
+      '/api/purchase-suggestions',
+      status: 200,
+      body: suggestionJson(
+        product: suggestedProductJson(name: 'Ethiopia Guji'),
+        roast: 'Medium',
+      ),
+    );
+
+    // 先に商品を選んでおく (FR-19)。
+    await pickFromDialog(tester, l10n.productLabel, 'Ethiopia');
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.photoSelectButton));
+
+    // 選択済みの商品は上書きせず、一致の探索もしない。
+    expect(find.text('Ethiopia'), findsOneWidget);
+    expect(find.text('Ethiopia Guji'), findsNothing);
+    expect(
+      api.calls.where((call) => call == 'GET /api/products').length,
+      1,
+      reason: 'the product picker must be the only products call',
+    );
+    // 一致が無いときの導線も出さない。
+    expect(
+      find.widgetWithText(OutlinedButton, l10n.suggestionRegisterProductButton),
+      findsNothing,
+    );
+    // 空の焙煎度には反映する。
+    expect(find.widgetWithText(TextField, 'Medium'), findsOneWidget);
+  });
+
+  testWidgets('推測の待ち中に選んだ商品は上書きしない', (tester) async {
+    final l10n = await loadL10n();
+    final picker = FakePhotoPicker(
+      photo: PickedPhoto(name: 'package.png', bytes: Uint8List.fromList(<int>[1, 2, 3])),
+    );
+    final api = await openPurchaseForm(
+      tester,
+      picker: picker,
+      converter: FakeImageConverter(bytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF])),
+    );
+    onProductNameLookup(api, <Map<String, Object?>>[
+      productJson(id: 'product-2', name: 'Ethiopia Guji'),
+    ]);
+    api
+      ..on(
+        'POST',
+        '/api/purchase-suggestions',
+        status: 200,
+        body: suggestionJson(
+          product: suggestedProductJson(name: 'Ethiopia Guji'),
+          roast: 'Medium',
+        ),
+      )
+      // 推測の応答を保留して、待ち中の選択を再現する (FR-19)。
+      ..holdOnce('POST', '/api/purchase-suggestions');
+
+    // 推測中はインジケータが動くため、`pumpAndSettle` は使わずに手動で進める。
+    final select = find.widgetWithText(OutlinedButton, l10n.photoSelectButton);
+    await tester.ensureVisible(select);
+    await tester.pumpAndSettle();
+    await tester.tap(select);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+
+    // 推測の待ち中に商品を選ぶ (FR-19)。
+    await tester.ensureVisible(find.text(l10n.productLabel));
+    await tester.pump();
+    await tester.tap(find.text(l10n.productLabel));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    await tester.tap(find.text('Ethiopia').last);
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+
+    api.release('POST', '/api/purchase-suggestions');
+    await tester.pumpAndSettle();
+    // 待ち中に選んだ商品を、推測の一致で上書きしない (FR-19)。
+    expect(find.text('Ethiopia'), findsOneWidget);
+    expect(find.text('Ethiopia Guji'), findsNothing);
+    // 商品が選択済みのため、一致の探索もしない (商品の選択のダイアログの 1 回だけ)。
+    expect(
+      api.calls.where((call) => call == 'GET /api/products').length,
+      1,
+      reason: 'the product picker must be the only products call',
+    );
+    // 空の焙煎度には反映する。
+    expect(find.widgetWithText(TextField, 'Medium'), findsOneWidget);
+  });
+
+  testWidgets('商品の照合が失敗しても、推測の反映は残る', (tester) async {
+    final l10n = await loadL10n();
+    final picker = FakePhotoPicker(
+      photo: PickedPhoto(name: 'package.png', bytes: Uint8List.fromList(<int>[1, 2, 3])),
+    );
+    final api = await openPurchaseForm(
+      tester,
+      picker: picker,
+      converter: FakeImageConverter(bytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF])),
+    );
+    api
+      ..on(
+        'POST',
+        '/api/purchase-suggestions',
+        status: 200,
+        body: suggestionJson(
+          product: suggestedProductJson(name: 'Ethiopia Guji'),
+          roast: 'Medium',
+          roastDate: '2026-09-20',
+          priceAmount: 1200,
+          weightGrams: 200,
+        ),
+      )
+      // 商品の照合 (名前の絞り込み) だけが失敗する (FR-19)。
+      ..on(
+        'GET',
+        '/api/products',
+        status: 500,
+        body: <String, Object?>{
+          'error': <String, Object?>{
+            'code': 'internal_error',
+            'message': 'the products failed',
+          },
+        },
+      );
+
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.photoSelectButton));
+
+    // 照合の失敗は推測の反映を妨げない (FR-19)。
+    expect(find.widgetWithText(TextField, 'Medium'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '2026-09-20'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '1200'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '200'), findsOneWidget);
+    // 照合の失敗を推測の失敗として表示しない (FR-19)。
+    expect(find.text(l10n.suggestionFailedMessage), findsNothing);
+    // 一致の有無が分からないため、商品の登録の導線は出さない (FR-19)。
+    expect(
+      find.widgetWithText(OutlinedButton, l10n.suggestionRegisterProductButton),
+      findsNothing,
+    );
+  });
+
+  testWidgets('推測の商品の照合中に選んだ商品は上書きしない', (tester) async {
+    final l10n = await loadL10n();
+    final picker = FakePhotoPicker(
+      photo: PickedPhoto(name: 'package.png', bytes: Uint8List.fromList(<int>[1, 2, 3])),
+    );
+    final api = await openPurchaseForm(
+      tester,
+      picker: picker,
+      converter: FakeImageConverter(bytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF])),
+    );
+    onProductNameLookup(api, <Map<String, Object?>>[
+      productJson(id: 'product-2', name: 'Ethiopia Guji'),
+    ]);
+    api
+      ..on(
+        'POST',
+        '/api/purchase-suggestions',
+        status: 200,
+        body: suggestionJson(
+          product: suggestedProductJson(name: 'Ethiopia Guji'),
+          roast: 'Medium',
+        ),
+      )
+      // 名前の照合 (GET /api/products) の応答を保留して、照合中の選択を再現する (FR-19)。
+      ..holdOnce('GET', '/api/products');
+
+    // 推測中はインジケータが動くため、`pumpAndSettle` は使わずに手動で進める。
+    final select = find.widgetWithText(OutlinedButton, l10n.photoSelectButton);
+    await tester.ensureVisible(select);
+    await tester.pumpAndSettle();
+    await tester.tap(select);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+
+    // 名前の照合の待ち中に、商品の選択のダイアログから商品を選ぶ (FR-19)。
+    await tester.ensureVisible(find.text(l10n.productLabel));
+    await tester.pump();
+    await tester.tap(find.text(l10n.productLabel));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    await tester.tap(find.text('Ethiopia').last);
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+
+    api.release('GET', '/api/products');
+    await tester.pumpAndSettle();
+
+    // 照合の待ち中に選んだ商品を、照合の一致で上書きしない (FR-19)。
+    expect(find.text('Ethiopia'), findsOneWidget);
+    expect(find.text('Ethiopia Guji'), findsNothing);
+    // 空の焙煎度には反映する。
+    expect(find.widgetWithText(TextField, 'Medium'), findsOneWidget);
+  });
+
+  testWidgets('5 MB を超える写真を選び直したら、前の写真の推測を反映しない', (tester) async {
+    final l10n = await loadL10n();
+    final picker = FakePhotoPicker(
+      photo: PickedPhoto(name: 'package.png', bytes: Uint8List.fromList(<int>[1, 2, 3])),
+    );
+    final converter = FakeImageConverter(bytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF]));
+    final api = await openPurchaseForm(tester, picker: picker, converter: converter);
+    api
+      ..on(
+        'POST',
+        '/api/purchase-suggestions',
+        status: 200,
+        body: suggestionJson(roast: 'Medium'),
+      )
+      // 1 枚目の推測の応答を保留する (FR-19)。
+      ..holdOnce('POST', '/api/purchase-suggestions');
+
+    // 1 枚目の写真を選ぶ (推測は保留される)。
+    final select = find.widgetWithText(OutlinedButton, l10n.photoSelectButton);
+    await tester.ensureVisible(select);
+    await tester.pumpAndSettle();
+    await tester.tap(select);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+
+    // 5 MB を超える写真を選び直す (推測は呼ばず、前の応答を捨てる。FR-19)。
+    converter.bytes = Uint8List(maxPhotoBytes + 1);
+    final replace = find.widgetWithText(OutlinedButton, l10n.photoReplaceButton);
+    await tester.ensureVisible(replace);
+    await tester.pump();
+    await tester.tap(replace);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    api.release('POST', '/api/purchase-suggestions');
+    await tester.pumpAndSettle();
+
+    // 前の写真の推測を反映しない (FR-19)。
+    expect(find.widgetWithText(TextField, 'Medium'), findsNothing);
+    // 2 枚目の写真は選択されたまま (アップロードは保存のときに行う)。
+    expect(find.byKey(const Key('purchase-photo')), findsOneWidget);
+    // 推測の API は 1 枚目で 1 回だけ呼ばれる (2 枚目では呼ばない)。
+    expect(
+      api.calls.where((call) => call == 'POST /api/purchase-suggestions').length,
+      1,
+    );
+  });
+
+  testWidgets('写真を削除したら、飛んでいる推測を反映しない', (tester) async {
+    final l10n = await loadL10n();
+    final picker = FakePhotoPicker(
+      photo: PickedPhoto(name: 'package.png', bytes: Uint8List.fromList(<int>[1, 2, 3])),
+    );
+    final api = await openPurchaseForm(
+      tester,
+      picker: picker,
+      converter: FakeImageConverter(bytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF])),
+    );
+    api
+      ..on(
+        'POST',
+        '/api/purchase-suggestions',
+        status: 200,
+        body: suggestionJson(roast: 'Medium'),
+      )
+      // 推測の応答を保留する (FR-19)。
+      ..holdOnce('POST', '/api/purchase-suggestions');
+
+    // 写真を選ぶ (推測は保留される)。
+    final select = find.widgetWithText(OutlinedButton, l10n.photoSelectButton);
+    await tester.ensureVisible(select);
+    await tester.pumpAndSettle();
+    await tester.tap(select);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+
+    // 推測の待ち中に写真を削除する (FR-19)。
+    final delete = find.widgetWithText(TextButton, l10n.photoDeleteButton);
+    await tester.ensureVisible(delete);
+    await tester.pump();
+    await tester.tap(delete);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    api.release('POST', '/api/purchase-suggestions');
+    await tester.pumpAndSettle();
+
+    // 削除した写真の推測を反映しない (FR-19)。
+    expect(find.widgetWithText(TextField, 'Medium'), findsNothing);
+    expect(find.byKey(const Key('purchase-photo')), findsNothing);
+  });
+
+  testWidgets('5 MB を超える写真を選び直すと、商品の登録の導線を消す', (tester) async {
+    final l10n = await loadL10n();
+    final picker = FakePhotoPicker(
+      photo: PickedPhoto(name: 'package.png', bytes: Uint8List.fromList(<int>[1, 2, 3])),
+    );
+    final converter = FakeImageConverter(bytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF]));
+    final api = await openPurchaseForm(tester, picker: picker, converter: converter);
+    // 一致が無い推測を返し、商品の登録の導線を出す (FR-19)。
+    onProductNameLookup(api, <Map<String, Object?>>[]);
+    api.on(
+      'POST',
+      '/api/purchase-suggestions',
+      status: 200,
+      body: suggestionJson(product: suggestedProductJson(name: 'New Bean')),
+    );
+
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.photoSelectButton));
+    expect(
+      find.widgetWithText(OutlinedButton, l10n.suggestionRegisterProductButton),
+      findsOneWidget,
+    );
+
+    // 5 MB を超える写真を選び直すと、商品の登録の導線を消す (FR-19)。
+    converter.bytes = Uint8List(maxPhotoBytes + 1);
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.photoReplaceButton));
+    expect(
+      find.widgetWithText(OutlinedButton, l10n.suggestionRegisterProductButton),
+      findsNothing,
+    );
+  });
+
+  testWidgets('変換の結果が 5 MB を超えるときは推測を呼ばない', (tester) async {
+    final l10n = await loadL10n();
+    final picker = FakePhotoPicker(
+      photo: PickedPhoto(name: 'big.jpg', bytes: Uint8List.fromList(<int>[1])),
+    );
+    final api = await openPurchaseForm(
+      tester,
+      picker: picker,
+      converter: FakeImageConverter(bytes: Uint8List(maxPhotoBytes + 1)),
+    );
+
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.photoSelectButton));
+
+    // 5 MB を超える写真では推測を呼ばない (FR-19)。
+    expect(api.calls, isNot(contains('POST /api/purchase-suggestions')));
+    expect(find.byKey(const Key('purchase-photo')), findsOneWidget);
+  });
+
+  testWidgets('2 段組で商品の登録から戻っても、写真と推測の反映と入力値が残る', (tester) async {
+    // 幅 840 px 以上の 2 段組で立ち上げる (docs/design/components/WideLayout)。
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final l10n = await loadL10n();
+    final picker = FakePhotoPicker(
+      photo: PickedPhoto(name: 'package.png', bytes: Uint8List.fromList(<int>[1, 2, 3])),
+    );
+    final api = signedInApi()
+      ..on(
+        'GET',
+        '/api/brews',
+        status: 200,
+        body: pageJson(key: 'brews', items: <Map<String, Object?>>[]),
+      )
+      ..on(
+        'GET',
+        '/api/purchases',
+        status: 200,
+        body: pageJson(key: 'purchases', items: <Map<String, Object?>>[]),
+      );
+    onProductNameLookup(api, <Map<String, Object?>>[]);
+    api
+      ..on(
+        'POST',
+        '/api/purchase-suggestions',
+        status: 200,
+        body: suggestionJson(
+          product: suggestedProductJson(name: 'New Bean', origin: 'Ethiopia'),
+          roast: 'Medium',
+          priceAmount: 1200,
+        ),
+      )
+      ..on(
+        'POST',
+        '/api/products',
+        status: 200,
+        body: productJson(id: 'product-9', name: 'New Bean'),
+      );
+    await pumpApp(
+      tester,
+      apiClient: api.client(),
+      passkeyClient: FakePasskeyClient(),
+      photoPicker: picker,
+      imageConverter: FakeImageConverter(bytes: Uint8List.fromList(<int>[0xFF, 0xD8, 0xFF])),
+    );
+    await openLocation(tester, AppRoutes.purchases);
+    expect(find.byType(PurchaseListScreen), findsOneWidget);
+
+    // 2 段組の右の面で購入を登録する。
+    await tester.tap(find.widgetWithText(FloatingActionButton, l10n.newPurchaseButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(PurchaseFormScreen), findsOneWidget);
+
+    // 入力値と写真を用意し、推測を反映する。
+    await scrollAndEnterText(tester, find.byType(TextField).at(1), 'Custom Roast');
+    await scrollAndTap(tester, find.widgetWithText(OutlinedButton, l10n.photoSelectButton));
+
+    // 押し出しの画面で商品を登録する (右の面は入れ替えない。FR-19)。
+    await scrollAndTap(
+      tester,
+      find.widgetWithText(OutlinedButton, l10n.suggestionRegisterProductButton),
+    );
+    expect(find.byType(ProductFormScreen), findsOneWidget);
+    await scrollAndTap(tester, find.widgetWithText(TextButton, l10n.saveButton));
+
+    // 購入のフォームに戻り、選択した写真、推測の反映、入力値が残る (FR-19)。
+    expect(find.byType(PurchaseFormScreen), findsOneWidget);
+    expect(find.byKey(const Key('purchase-photo')), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Custom Roast'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '1200'), findsOneWidget);
+    expect(find.text('New Bean'), findsOneWidget);
   });
 }

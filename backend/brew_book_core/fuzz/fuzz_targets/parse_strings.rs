@@ -55,10 +55,23 @@ const SEEDS: &[&str] = &[
     "name",
     "JPY",
     "1.5",
+    // 推測の応答 (suggestion::parse_response の成功側)。
+    r#"{"product": {"name": "エチオピア イルガチェフェ", "origin": "エチオピア", "flavor_notes": ["フローラル"]}, "roast": "中煎り", "roast_date": "2026-09-20", "price_amount": 1200, "weight_grams": 200}"#,
+    "```json\n{\"roast\": null}\n```",
+    // AI バインディングの応答の形 (suggestion::output_text と parse_response の成功側)。
+    r#"{"response": "{\"roast\": \"中煎り\", \"roast_date\": \"2026-09-20\"}"}"#,
+    r#"{"choices": [{"index": 0, "message": {"role": "assistant", "content": "{\"roast\": \"中煎り\"}"}}], "usage": {"total_tokens": 100}}"#,
     // 経路のパターンとパス。
     "/api/shops/:id",
     "/api/shops/00000000-0000-4000-8000-000000000000",
 ];
+
+/// 1 つの JSON の値を、AI バインディングの応答からの出力の取り出しと解析に与える (FR-19)。
+fn exercise_model_result(value: &serde_json::Value) {
+    let _ = brew_book_core::suggestion::parse_response(
+        &brew_book_core::suggestion::output_text(value),
+    );
+}
 
 /// 1 つの文字列を、入力の文字列を読むパーサの全てに与える。
 fn exercise(text: &str) {
@@ -89,6 +102,13 @@ fn exercise(text: &str) {
     let names = [text.to_owned()];
     let _ = brew_book_core::records::validate_flavor_notes(&names);
 
+    // 写真からの推測の応答の解析 (FR-19)。
+    let _ = brew_book_core::suggestion::parse_response(text);
+    // AI バインディングの応答の形の文字列は、JSON の値としても与える (FR-19)。
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
+        exercise_model_result(&value);
+    }
+
     // start と end は独立した入力にする (同じ文字列を渡すと期間の逆転の分岐に届かない)。
     // 分割の位置は文字の境界に合わせる (バイト列の中間は文字の途中になりうる)。
     let half = text.len() / 2;
@@ -101,10 +121,16 @@ fn exercise(text: &str) {
 }
 
 fuzz_target!(|data: &[u8]| {
+    // 任意のバイト列を JSON の値として読めたときは、AI バインディングの応答からの出力の
+    // 取り出しと解析にも与える (FR-19。実経路は `parse_response(output_text(v))`)。
+    if let Ok(value) = serde_json::from_slice::<serde_json::Value>(data) {
+        exercise_model_result(&value);
+    }
     if let Ok(text) = std::str::from_utf8(data) {
         exercise(text);
 
         // 任意の入力では成功側に届きにくいパーサのために、代表的な入力を与える。
+        // 応答の形の文字列は `exercise` が JSON の値としても与える。
         for seed in SEEDS {
             exercise(seed);
         }

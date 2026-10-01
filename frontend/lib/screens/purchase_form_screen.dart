@@ -18,6 +18,7 @@ import '../widgets/error_message.dart';
 import '../widgets/picker_tile.dart';
 import '../widgets/record_picker.dart';
 import '../widgets/suggestion_field.dart';
+import 'product_form_screen.dart';
 
 /// ISO 4217 の通貨コードの形 (英大文字 3 文字)。
 final RegExp _currencyPattern = RegExp(r'^[A-Z]{3}$');
@@ -80,6 +81,18 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
 
   /// アップロード済みの写真を消す操作をしたか。
   bool _removePhoto = false;
+
+  /// 推測中か。推測中はインジケータを出す (FR-19)。
+  bool _suggesting = false;
+
+  /// 推測に失敗したか。失敗しても手入力を続けられる (FR-19)。
+  bool _suggestionFailed = false;
+
+  /// 一致する商品が無かった推測の商品。商品の登録の導線に使う (FR-19)。
+  ProductSuggestion? _unmatchedProduct;
+
+  /// 推測の世代。写真を選び直したら古い応答を捨てる (購入の詳細の評価の推移と同じ扱い)。
+  int _suggestionGeneration = 0;
 
   /// この画面で登録した購入の ID。
   ///
@@ -178,6 +191,8 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     setState(() {
       _product = choice.value;
       _productError = null;
+      // 利用者が選び直したら、推測の商品の登録の導線は出さない (FR-19)。
+      _unmatchedProduct = null;
     });
   }
 
@@ -206,9 +221,13 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
   /// 写真を選び、JPEG に変換して長辺を縮める (FR-10、ADR-0003)。
   ///
   /// アップロードは購入を保存した後に行う (URL の発行に購入の ID が要るため)。
+  /// 変換の直後に、写真からの推測を呼ぶ (FR-19)。
   Future<void> _pickPhoto() async {
     final l10n = AppLocalizations.of(context);
-    setState(() => _errorMessage = null);
+    setState(() {
+      _errorMessage = null;
+      _suggestionFailed = false;
+    });
     try {
       final photo = await widget.services.picker.pickPhoto();
       if (photo == null) {
@@ -223,6 +242,7 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
         _converted = converted;
         _removePhoto = false;
       });
+      await _suggest(converted);
     } catch (error) {
       if (!mounted) {
         return;
@@ -231,11 +251,169 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
     }
   }
 
+  /// 変換済みの写真から購入と商品の項目の推測を呼ぶ (FR-19)。
+  ///
+  /// 結果はまだ空の入力欄にだけ入れる (入力済みの値は上書きしない)。
+  /// 失敗したときはバナーで表示し、手入力を続けられる。
+  /// 写真を選び直したときは、古い応答を世代番号で捨てる。
+  Future<void> _suggest(ConvertedImage image) async {
+    // 写真を選び直した時点で世代を進め、飛んでいる古い応答を無効にする (FR-19)。
+    final generation = ++_suggestionGeneration;
+    // 5 MB を超える写真では推測を呼ばない (FR-19)。前の写真の推測の表示も消す。
+    if (image.size > maxPhotoBytes) {
+      setState(() {
+        _suggesting = false;
+        _suggestionFailed = false;
+        _unmatchedProduct = null;
+      });
+      return;
+    }
+    setState(() {
+      _suggesting = true;
+      _suggestionFailed = false;
+      _unmatchedProduct = null;
+    });
+    final PurchaseSuggestion suggestion;
+    try {
+      suggestion = await widget.services.records.suggestPurchase(image);
+    } catch (error) {
+      if (!mounted || generation != _suggestionGeneration) {
+        return;
+      }
+      setState(() {
+        _suggestionFailed = true;
+        _suggesting = false;
+      });
+      return;
+    }
+    if (!mounted || generation != _suggestionGeneration) {
+      return;
+    }
+    // 推測の反映は、商品の照合の成否と独立に行う (照合の失敗で推測を捨てない)。
+    setState(() => _applySuggestion(suggestion));
+    // 商品が未選択のときだけ、推測した商品名に一致する商品を探す (FR-19)。
+    final suggestedName = suggestion.product?.name;
+    if (_product != null || suggestedName == null) {
+      setState(() {
+        _suggesting = false;
+        _unmatchedProduct = null;
+      });
+      return;
+    }
+    final Product? matched;
+    try {
+      matched = await _findProduct(suggestedName);
+    } catch (error) {
+      // 照合の失敗は推測の反映を妨げない。一致の選択と導線だけを諦める。
+      if (!mounted || generation != _suggestionGeneration) {
+        return;
+      }
+      setState(() {
+        _suggesting = false;
+        _unmatchedProduct = null;
+      });
+      return;
+    }
+    if (!mounted || generation != _suggestionGeneration) {
+      return;
+    }
+    setState(() {
+      // 待っている間に利用者が商品を選んだときは上書きしない (FR-19)。
+      if (matched != null && _product == null) {
+        _product = matched;
+        _productError = null;
+      }
+      // 一致する商品が無いときは、推測した内容で商品を登録する導線を出す (FR-19)。
+      _unmatchedProduct = matched == null && _product == null ? suggestion.product : null;
+      _suggesting = false;
+    });
+  }
+
+  /// 推測をまだ空の入力欄にだけ入れる。入力済みの値は上書きしない (FR-19)。
+  void _applySuggestion(PurchaseSuggestion suggestion) {
+    final roast = suggestion.roast;
+    if (roast != null && _roast.text.trim().isEmpty) {
+      _roast.text = roast;
+    }
+    final roastDate = suggestion.roastDate;
+    if (roastDate != null && _roastDate.text.trim().isEmpty) {
+      _roastDate.text = roastDate;
+      _roastDateError = null;
+    }
+    final price = suggestion.priceAmount;
+    if (price != null && _price.text.trim().isEmpty) {
+      _price.text = price.toString();
+      _priceError = null;
+    }
+    final weight = suggestion.weightGrams;
+    if (weight != null && _weight.text.trim().isEmpty) {
+      _weight.text = weight.toString();
+      _weightError = null;
+    }
+    // 通貨は推測しない (画面の既定値の JPY のまま。FR-19)。
+  }
+
+  /// 推測した商品名と前後の空白を除いて一致する (大文字と小文字を区別しない)、アーカイブされて
+  /// いない商品を 1 件引く (FR-19)。無ければ null を返す。
+  ///
+  /// 名前の完全一致の絞り込み (`name`) を使い、1 リクエストで引く。
+  Future<Product?> _findProduct(String name) async {
+    final page = await widget.services.records.products(
+      name: name,
+      includeArchived: false,
+    );
+    return page.items.isEmpty ? null : page.items.first;
+  }
+
+  /// 推測した内容で商品を登録する導線を開く (FR-19)。
+  ///
+  /// 2 段組でも押し出しの画面を使う。右の面を入れ替えると、購入のフォームの未保存の状態が
+  /// 破棄されるためである。保存した商品が返ってきたら、選択中の商品に反映する。
+  Future<void> _registerSuggestedProduct() async {
+    final suggested = _unmatchedProduct;
+    if (suggested == null) {
+      return;
+    }
+    final created = await Navigator.of(context).push<Product>(
+      MaterialPageRoute<Product>(
+        builder: (context) => ProductFormScreen(
+          services: widget.services,
+          initial: ProductInput(
+            name: suggested.name ?? '',
+            producer: suggested.producer,
+            origin: suggested.origin,
+            region: suggested.region,
+            process: suggested.process,
+            variety: suggested.variety,
+            flavorNotes: suggested.flavorNotes,
+          ),
+          onSaved: (product) => Navigator.of(context).pop(product),
+        ),
+      ),
+    );
+    if (created == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _product = created;
+      _productError = null;
+      _unmatchedProduct = null;
+    });
+    // 商品の登録の通知は出さない。押し出しの画面を戻す遷移と同じフレームで SnackBar を出すと、
+    // 2 段組では下の面の Scaffold にも同じ SnackBar が出て、遷移が失敗するためである
+    // (通知は購入の保存のときに出す)。
+  }
+
   /// 写真の選択を取り消す、またはアップロード済みの写真を消す操作を記録する (FR-10)。
   ///
   /// アップロード済みの写真の削除は、保存のときに API を呼ぶ。
   void _deletePhoto() {
     setState(() {
+      // 写真を消したら、飛んでいる推測の応答は捨てる (FR-19)。
+      _suggestionGeneration++;
+      _suggesting = false;
+      _suggestionFailed = false;
+      _unmatchedProduct = null;
       _picked = null;
       _converted = null;
       if (_photoKey != null) {
@@ -399,6 +577,15 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
           errorText: _productError,
           onPressed: _busy ? null : _pickProduct,
         ),
+        // 一致する商品が無いときは、推測した内容で商品を登録する導線を出す (FR-19)。
+        if (_unmatchedProduct != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton(
+              onPressed: _busy || _suggesting ? null : _registerSuggestedProduct,
+              child: Text(l10n.suggestionRegisterProductButton),
+            ),
+          ),
         PickerTile(
           label: l10n.shopLabel,
           value: _shop?.name,
@@ -451,7 +638,26 @@ class _PurchaseFormScreenState extends State<PurchaseFormScreen> {
           keyboardType: TextInputType.number,
         ),
         _photo(context, l10n),
+        // 推測中はインジケータを出し、失敗はバナーで表示して手入力を続けられるようにする (FR-19)。
+        if (_suggesting) _suggestionProgress(context, l10n),
+        if (_suggestionFailed) ErrorBanner(message: l10n.suggestionFailedMessage),
         if (_errorMessage != null) ErrorBanner(message: _errorMessage!),
+      ],
+    );
+  }
+
+  /// 推測中のインジケータ (FR-19)。
+  Widget _suggestionProgress(BuildContext context, AppLocalizations l10n) {
+    final BrewbookTheme brewbook = BrewbookTheme.of(context);
+    return Row(
+      children: <Widget>[
+        SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2, color: brewbook.inkFaint),
+        ),
+        const SizedBox(width: AppSpacing.x2),
+        Text(l10n.suggestionLoadingLabel, style: AppTextStyle.caption(color: brewbook.palette.inkMuted)),
       ],
     );
   }

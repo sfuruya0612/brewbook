@@ -234,6 +234,76 @@ class Brew {
   bool get isArchived => archivedAt != null;
 }
 
+/// 写真から推測した商品の項目 (FR-19)。推測できない項目は null。
+///
+/// 商品の応答 (`Product`) とは違い、ID と日時を持たない候補である。
+class ProductSuggestion {
+  const ProductSuggestion({
+    this.name,
+    this.producer,
+    this.origin,
+    this.region,
+    this.process,
+    this.variety,
+    this.flavorNotes = const <String>[],
+  });
+
+  /// JSON のオブジェクトから組み立てる。
+  factory ProductSuggestion.fromJson(Map<String, Object?> json) {
+    return ProductSuggestion(
+      name: _optionalString(json, 'name'),
+      producer: _optionalString(json, 'producer'),
+      origin: _optionalString(json, 'origin'),
+      region: _optionalString(json, 'region'),
+      process: _optionalString(json, 'process'),
+      variety: _optionalString(json, 'variety'),
+      flavorNotes: _stringList(json, 'flavor_notes'),
+    );
+  }
+
+  final String? name;
+  final String? producer;
+  final String? origin;
+  final String? region;
+  final String? process;
+  final String? variety;
+
+  /// Flavor Notes の候補 (FR-8)。
+  final List<String> flavorNotes;
+}
+
+/// 写真から推測した購入と商品の項目 (FR-19)。キーは購入の応答の列名に揃える。
+class PurchaseSuggestion {
+  const PurchaseSuggestion({
+    this.product,
+    this.roast,
+    this.roastDate,
+    this.priceAmount,
+    this.weightGrams,
+  });
+
+  /// JSON のオブジェクトから組み立てる。
+  factory PurchaseSuggestion.fromJson(Map<String, Object?> json) {
+    final product = _optionalObject(json, 'product');
+    return PurchaseSuggestion(
+      product: product == null ? null : ProductSuggestion.fromJson(product),
+      roast: _optionalString(json, 'roast'),
+      roastDate: _optionalString(json, 'roast_date'),
+      priceAmount: _optionalInt(json, 'price_amount'),
+      weightGrams: _optionalInt(json, 'weight_grams'),
+    );
+  }
+
+  /// 商品の項目。1 つも推測できないときは null。
+  final ProductSuggestion? product;
+  final String? roast;
+  final String? roastDate;
+
+  /// 価格 (整数)。通貨は推測しない (画面の既定値の JPY のまま。FR-19)。
+  final int? priceAmount;
+  final int? weightGrams;
+}
+
 /// 一覧の 1 ページ (カーソル方式。ADR-0002)。
 class RecordPage<T> {
   const RecordPage({required this.items, this.nextCursor});

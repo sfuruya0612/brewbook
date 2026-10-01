@@ -14,11 +14,11 @@ use brew_book_core::query::{self, Archived, OrderKind, ProductValues};
 use brew_book_core::records::{trim_optional, validate_flavor_notes, validate_name};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Database;
-use worker::{Env, Request, Response, Result};
+use worker::{console_error, Env, Request, Response, Result};
 
 use super::{
-    flavor_notes, flavor_notes_for, invalid_input, merge_name, not_found, query_error_response,
-    read_input, replace_flavor_notes, ListParams,
+    flavor_notes, flavor_notes_for, internal_error, invalid_input, merge_name, not_found,
+    query_error_response, read_input, replace_flavor_notes, ListParams,
 };
 use crate::auth::session::Session;
 use crate::db;
@@ -104,10 +104,58 @@ struct UpdateInput {
     flavor_notes: Option<Option<Vec<String>>>,
 }
 
+/// 商品の一覧だけが読む、名前の完全一致の絞り込み (FR-19)。
+///
+/// 推測した商品名で既存の商品を 1 リクエストで引くために追加する。共有の [`ListParams`] には
+/// 足さず、商品の一覧だけが読むクエリとして扱う (他の一覧は名前の絞り込みを持たない)。
+struct NameFilter {
+    /// 前後の空白を除いた名前。絞り込まないときは None。
+    name: Option<String>,
+}
+
+impl NameFilter {
+    /// リクエストのクエリ文字列から読む。複数回の指定と、空白だけの値は 400 の応答にする。
+    fn from_request(req: &Request) -> Result<Self, Response> {
+        let url = match req.url() {
+            Ok(url) => url,
+            Err(error) => {
+                console_error!("the request URL is not readable: {error}");
+                return Err(internal_error());
+            }
+        };
+        let mut name = None;
+        for (key, value) in url.query_pairs() {
+            if key == "name" {
+                // 複数回の指定は配列として扱い、受け取らない (`q` と同じ扱い)。
+                if name.is_some() {
+                    return Err(invalid_input("name must be a single string"));
+                }
+                name = Some(value.into_owned());
+            }
+        }
+        let name = match name {
+            Some(name) => {
+                let name = name.trim();
+                if name.is_empty() {
+                    return Err(invalid_input("the name filter must not be empty"));
+                }
+                Some(name.to_owned())
+            }
+            None => None,
+        };
+        Ok(Self { name })
+    }
+}
+
 /// 商品の一覧を返す。認証が必要。
 pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Response> {
     let params = match ListParams::from_request(req) {
         Ok(params) => params,
+        Err(response) => return Ok(response),
+    };
+    // 名前の完全一致の絞り込み (FR-19)。照合は前後の空白を除き、大文字と小文字を区別しない。
+    let name = match NameFilter::from_request(req) {
+        Ok(filter) => filter.name,
         Err(response) => return Ok(response),
     };
     let d1 = db::database(env)?;
@@ -116,6 +164,7 @@ pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Respons
         params.archived,
         params.cursor.clone(),
         params.limit,
+        name.as_deref(),
     ) {
         Ok(statement) => statement,
         Err(error) => return Ok(query_error_response(error)),

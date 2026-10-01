@@ -51,6 +51,23 @@ class ApiClient {
     );
   }
 
+  /// `POST` を呼び、バイト列を本文として送り、JSON のオブジェクトを返す (FR-19 の写真の送信)。
+  Future<Map<String, Object?>> postBytes(
+    String path,
+    List<int> bytes, {
+    required String contentType,
+  }) async {
+    return _decodeJson(
+      await _send(
+        () => _http.post(
+          _uri(path),
+          headers: <String, String>{'Content-Type': contentType},
+          body: bytes,
+        ),
+      ),
+    );
+  }
+
   /// `PATCH` を呼び、JSON のオブジェクトを返す。
   Future<Map<String, Object?>> patchJson(String path, Map<String, Object?> body) async {
     return _decodeJson(

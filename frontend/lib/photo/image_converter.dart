@@ -6,6 +6,11 @@ import 'image_converter_stub.dart'
 /// 写真の長辺の上限 (px。FR-10)。
 const int maxPhotoLongSide = 2048;
 
+/// 写真のサイズの上限 (バイト。FR-10 の申告サイズと同じ値)。
+///
+/// 変換の結果がこれを超えるときは、推測 (FR-19) の呼び出しを行わない。
+const int maxPhotoBytes = 5000000;
+
 /// 変換した後の写真 (FR-10)。
 class ConvertedImage {
   const ConvertedImage(this.bytes);

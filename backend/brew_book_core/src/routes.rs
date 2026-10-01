@@ -26,6 +26,16 @@ impl Method {
     }
 }
 
+/// 正常系のテストの実行方法。PRD の成功指標の照合に使う。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OkTest {
+    /// CI で実行する正常系のテストを持つ。
+    Ci,
+    /// CI では実行できない正常系のため、手元で確認する (写真からの推測は Workers AI の
+    /// 推論を要する。PRD の成功指標の例外。FR-19)。
+    Manual,
+}
+
 /// `/api` の経路 1 件のメタデータ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Route {
@@ -38,6 +48,8 @@ pub struct Route {
     pub auth_required: bool,
     /// 入力を持つ経路は、入力不正 400 のテストを持つ (PRD の成功指標)。
     pub has_input: bool,
+    /// 正常系のテストの実行方法 (PRD の成功指標)。
+    pub ok_test: OkTest,
 }
 
 /// 経路の台帳。経路は 0005 以降が追加する。
@@ -53,6 +65,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/auth/register/begin",
         auth_required: false,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "auth_register_complete",
@@ -60,6 +73,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/auth/register/complete",
         auth_required: false,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "auth_login_begin",
@@ -67,6 +81,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/auth/login/begin",
         auth_required: false,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "auth_login_complete",
@@ -74,6 +89,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/auth/login/complete",
         auth_required: false,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "auth_logout",
@@ -81,6 +97,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/auth/logout",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "passkeys_list",
@@ -88,6 +105,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/passkeys",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "passkeys_begin",
@@ -95,6 +113,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/passkeys/begin",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "passkeys_complete",
@@ -102,6 +121,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/passkeys/complete",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "passkeys_rename",
@@ -109,6 +129,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/passkeys/:id",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "passkeys_delete",
@@ -116,6 +137,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/passkeys/:id",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "shops_list",
@@ -123,6 +145,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/shops",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "shops_create",
@@ -130,6 +153,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/shops",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "shops_get",
@@ -137,6 +161,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/shops/:id",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "shops_update",
@@ -144,6 +169,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/shops/:id",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "shops_archive",
@@ -151,6 +177,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/shops/:id/archive",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "shops_unarchive",
@@ -158,6 +185,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/shops/:id/unarchive",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "products_list",
@@ -165,6 +193,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/products",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "products_create",
@@ -172,6 +201,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/products",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "products_get",
@@ -179,6 +209,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/products/:id",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "products_update",
@@ -186,6 +217,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/products/:id",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "products_archive",
@@ -193,6 +225,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/products/:id/archive",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "products_unarchive",
@@ -200,6 +233,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/products/:id/unarchive",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "flavor_tags_list",
@@ -207,6 +241,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/flavor-tags",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "purchases_list",
@@ -214,6 +249,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/purchases",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "purchases_create",
@@ -221,6 +257,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/purchases",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "purchases_get",
@@ -228,6 +265,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/purchases/:id",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "purchases_update",
@@ -235,6 +273,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/purchases/:id",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "purchases_archive",
@@ -242,6 +281,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/purchases/:id/archive",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "purchases_unarchive",
@@ -249,6 +289,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/purchases/:id/unarchive",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "purchases_photo_upload_url",
@@ -256,6 +297,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/purchases/:id/photo/upload-url",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "purchases_photo_complete",
@@ -263,6 +305,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/purchases/:id/photo",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "purchases_photo_get",
@@ -270,6 +313,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/purchases/:id/photo",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "purchases_photo_delete",
@@ -277,6 +321,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/purchases/:id/photo",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "brews_list",
@@ -284,6 +329,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/brews",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "brews_create",
@@ -291,6 +337,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/brews",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "brews_get",
@@ -298,6 +345,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/brews/:id",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "brews_update",
@@ -305,6 +353,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/brews/:id",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "brews_archive",
@@ -312,6 +361,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/brews/:id/archive",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "brews_unarchive",
@@ -319,6 +369,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/brews/:id/unarchive",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "suggestions_list",
@@ -327,6 +378,19 @@ pub const ROUTES: &[Route] = &[
         auth_required: true,
         // 入力中の文字列 (`q`) を読む (項目名は経路のパラメータであり、入力には数えない)。
         has_input: true,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // 写真から購入と商品の項目を推測する (FR-19)。FR-13 の `suggestions_list`
+        // (過去の入力値の候補) とは別の機能である。
+        name: "purchase_suggestions",
+        method: Method::Post,
+        pattern: "/api/purchase-suggestions",
+        auth_required: true,
+        // 入力は変換済みの JPEG の本体である (Content-Type とサイズを検証する)。
+        has_input: true,
+        // 正常系は Workers AI の推論を要するため、CI では実行せず手元で確認する (PRD の成功指標)。
+        ok_test: OkTest::Manual,
     },
     Route {
         name: "stats_brews",
@@ -334,6 +398,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/stats/brews",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "stats_purchases",
@@ -341,6 +406,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/stats/purchases",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "stats_brew_ratings",
@@ -348,6 +414,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/stats/brew-ratings",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "purchases_rating_history",
@@ -355,6 +422,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/purchases/:id/rating-history",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "export_get",
@@ -362,6 +430,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/export",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "account_delete",
@@ -369,6 +438,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/account",
         auth_required: true,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
 ];
 
@@ -410,8 +480,8 @@ pub fn matched(method: &str, path: &str) -> Option<&'static Route> {
 /// 経路が持つべきテストの種別。PRD の成功指標の照合に使う。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TestRequirements {
-    /// 正常系のテスト。全ての経路が持つ。
-    pub ok: bool,
+    /// 正常系のテスト。全ての経路が持つ。CI で実行できない経路は手元で確認する。
+    pub ok: OkTest,
     /// 未認証 401 のテスト。認証が必要な経路だけが持つ。
     pub unauthenticated_401: bool,
     /// 入力不正 400 のテスト。入力を持つ経路だけが持つ。
@@ -421,7 +491,7 @@ pub struct TestRequirements {
 /// 成功指標に基づき、経路が持つべきテストの種別を返す。
 pub fn test_requirements(route: &Route) -> TestRequirements {
     TestRequirements {
-        ok: true,
+        ok: route.ok_test,
         unauthenticated_401: route.auth_required,
         invalid_input_400: route.has_input,
     }

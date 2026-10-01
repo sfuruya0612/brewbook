@@ -57,6 +57,16 @@ database_id = "00000000-0000-0000-0000-000000000000"
 binding = "PHOTOS"
 bucket_name = "brewbook-photos"
 
+# Workers AI のバインディング (ADR-0016)。写真からの推測 (FR-19) を Workers AI の
+# vision モデルで行う。バインディングは環境に継承されないため、トップレベルと
+# [env.staging] と [env.production] のそれぞれに置く。
+# ローカルの `wrangler dev` は既定でリモートの推論に接続する (remote binding)。
+# ログインの無い CI の `wrangler dev` は `--local` を付けて起動し、リモートの
+# バインディングを使わない (推測の呼び出しは 500 になり、未認証 401 と入力不正 400 の
+# テストだけを実行する。ADR-0016)。
+[ai]
+binding = "AI"
+
 [vars]
 # ローカルの署名付き URL のバケット名。ローカルで写真を試すときは、`.dev.vars` (git 管理外) で
 # `R2_BUCKET=brewbook-photos-staging` に上書きし、ステージングの資格情報を使う
@@ -65,6 +75,10 @@ R2_BUCKET = "brewbook-photos"
 # パスキーの Relying Party ID と、アプリの Origin (ADR-0004、ADR-0005)。
 RP_ID = "localhost"
 ORIGIN = "http://localhost:8787"
+# 写真からの推測 (FR-19) に使う Workers AI のモデル (ADR-0016)。2026-09-30 の実写真での
+# 比較で、名前の抽出の精度、所要 (約 4 秒)、1 回あたりの消費 (約 62 Neurons) の均衡から選んだ
+# (issue 0034)。
+AI_SUGGEST_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
 
 # 検証用の環境 (staging)。Worker は brewbook-staging。
 # 初回だけ、次の値を作成の結果に置き換える (README のデプロイ手順)。
@@ -83,10 +97,14 @@ database_id = "2270033b-4db7-4a49-84b2-d15cdd1f2f82"
 binding = "PHOTOS"
 bucket_name = "brewbook-photos-staging"
 
+[env.staging.ai]
+binding = "AI"
+
 [env.staging.vars]
 R2_BUCKET = "brewbook-photos-staging"
 RP_ID = "brewbook-staging.phack.workers.dev"
 ORIGIN = "https://brewbook-staging.phack.workers.dev"
+AI_SUGGEST_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
 
 # 本番の環境。Worker は brewbook。既存のリソース (D1 と R2) をそのまま使う。
 [env.production]
@@ -102,10 +120,14 @@ database_id = "000b5de5-4c5a-486a-a067-8d9625a5709b"
 binding = "PHOTOS"
 bucket_name = "brewbook-photos"
 
+[env.production.ai]
+binding = "AI"
+
 [env.production.vars]
 R2_BUCKET = "brewbook-photos"
 RP_ID = "brewbook.phack.workers.dev"
 ORIGIN = "https://brewbook.phack.workers.dev"
+AI_SUGGEST_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
 
 # S3 互換エンドポイント (R2_ENDPOINT) と API トークン (R2_ACCESS_KEY_ID、
 # R2_SECRET_ACCESS_KEY) は環境ごとに違うため、開発では `.dev.vars` (git 管理外)、

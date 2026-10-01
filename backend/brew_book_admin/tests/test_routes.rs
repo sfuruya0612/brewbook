@@ -6,7 +6,7 @@
 mod support;
 
 use brew_book_admin::routes::ROUTES;
-use brew_book_core::routes::{Method, Route};
+use brew_book_core::routes::{Method, OkTest, Route};
 use support::{SuiteEntry, KIND_INVALID_INPUT_400, KIND_OK};
 
 /// 照合の検査を試すための経路。実際の経路は `ROUTES` が持つ。
@@ -18,6 +18,7 @@ fn sample_ledger() -> Vec<Route> {
             pattern: "/",
             auth_required: false,
             has_input: false,
+            ok_test: OkTest::Ci,
         },
         Route {
             name: "users_create",
@@ -25,6 +26,7 @@ fn sample_ledger() -> Vec<Route> {
             pattern: "/users",
             auth_required: false,
             has_input: true,
+            ok_test: OkTest::Ci,
         },
     ]
 }

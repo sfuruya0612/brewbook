@@ -589,6 +589,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uploadingLabel => 'Uploading';
 
   @override
+  String get suggestionLoadingLabel => 'Reading the photo';
+
+  @override
+  String get suggestionFailedMessage =>
+      'Could not read the photo. You can continue by entering the values manually.';
+
+  @override
+  String get suggestionRegisterProductButton =>
+      'Add a product with the suggested values';
+
+  @override
   String get loginRegisterHint =>
       'If you cannot log in, ask the administrator for a registration link.';
 

@@ -6,12 +6,13 @@
 //! 認証は Worker 単位の Cloudflare Access が担うため、アプリ内の認証を要する経路は無い
 //! (`auth_required` は全て false。ADR-0008)。
 
-use brew_book_core::routes::{Method, Route};
+use brew_book_core::routes::{Method, OkTest, Route};
 
 /// 管理者画面と管理者 API の経路。
 ///
 /// `GET /` は利用者の一覧、`POST /users` は利用者の作成 (入力は表示名)、
 /// `POST /users/:id/tokens` は登録用トークンの発行を担う。
+/// 正常系はどれも CI で実行する (`ok_test` は `Ci`)。
 pub const ROUTES: &[Route] = &[
     Route {
         name: "users_list",
@@ -19,6 +20,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/",
         auth_required: false,
         has_input: false,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "users_create",
@@ -26,6 +28,7 @@ pub const ROUTES: &[Route] = &[
         pattern: "/users",
         auth_required: false,
         has_input: true,
+        ok_test: OkTest::Ci,
     },
     Route {
         name: "tokens_create",
@@ -34,5 +37,6 @@ pub const ROUTES: &[Route] = &[
         auth_required: false,
         // 経路のパラメータ (`:id`) は入力に数えない (0017 の `suggestions_list` と同じ扱い)。
         has_input: false,
+        ok_test: OkTest::Ci,
     },
 ];

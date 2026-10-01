@@ -7,6 +7,7 @@ library;
 import 'api_client.dart';
 import 'models.dart';
 import 'record_inputs.dart';
+import '../photo/image_converter.dart';
 
 /// サジェスト (FR-13) の対象の項目名。値は API の経路の名前と同じにする。
 abstract final class SuggestionFields {
@@ -85,9 +86,16 @@ class RecordsApi {
   }
 
   /// 商品の一覧を引く (FR-7、FR-8)。
-  Future<RecordPage<Product>> products({String? cursor, bool includeArchived = false}) async {
+  ///
+  /// `name` を指定したときは、前後の空白を除いて大文字と小文字を区別しない名前の完全一致で
+  /// 絞り込む (FR-19。写真からの推測で一致する商品を 1 リクエストで引くために使う)。
+  Future<RecordPage<Product>> products({
+    String? cursor,
+    bool includeArchived = false,
+    String? name,
+  }) async {
     final json = await _api.getJson(
-      _listPath('/products', cursor: cursor, includeArchived: includeArchived),
+      _listPath('/products', cursor: cursor, includeArchived: includeArchived, name: name),
     );
     return RecordPage<Product>(
       items: _objects(json, 'products').map(Product.fromJson).toList(),
@@ -173,6 +181,19 @@ class RecordsApi {
     return Purchase.fromJson(await _api.deleteJson('/purchases/$purchaseId/photo'));
   }
 
+  /// 変換済みの写真から購入と商品の項目の推測を引く (FR-19)。
+  ///
+  /// 写真は変換済みの JPEG をそのまま送る。推測はどの記録も変更しない。
+  /// AI の呼び出しに失敗したときは API が 500 を返し、[ApiError] になる。
+  Future<PurchaseSuggestion> suggestPurchase(ConvertedImage image) async {
+    final json = await _api.postBytes(
+      '/purchase-suggestions',
+      image.bytes,
+      contentType: 'image/jpeg',
+    );
+    return PurchaseSuggestion.fromJson(json);
+  }
+
   /// 写真の取得の URL (FR-10)。写真は Backend が認証付きで返すため、この URL を表示に使う。
   /// 他の呼び出しと同じく、`ApiClient` の `basePath` を基準にする。
   Uri photoUrl(String purchaseId) =>
@@ -222,13 +243,21 @@ class RecordsApi {
   }
 
   /// 一覧の経路に、件数とカーソルとアーカイブの指定を付ける。
-  static String _listPath(String path, {String? cursor, required bool includeArchived}) {
+  static String _listPath(
+    String path, {
+    String? cursor,
+    required bool includeArchived,
+    String? name,
+  }) {
     final params = <String, String>{'limit': '$pageSize'};
     if (includeArchived) {
       params['include_archived'] = 'true';
     }
     if (cursor != null) {
       params['cursor'] = cursor;
+    }
+    if (name != null) {
+      params['name'] = name;
     }
     return Uri(path: path, queryParameters: params).toString();
   }

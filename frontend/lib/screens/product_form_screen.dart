@@ -2,6 +2,7 @@ import 'dart:ui' show PathMetric;
 
 import 'package:flutter/material.dart';
 
+import '../api/models.dart';
 import '../api/record_inputs.dart';
 import '../api/records_api.dart';
 import '../l10n/app_localizations.dart';
@@ -19,12 +20,15 @@ import '../widgets/suggestion_field.dart';
 /// 商品名は必須。Producer、Origin、Region、Process、Variety は自由記述で、入力中に過去の
 /// 入力値の候補を出す (FR-13)。Flavor Notes はタグとして追加と削除ができ、更新では入力した
 /// 配列で置き換える (FR-8)。
+/// 写真からの推測 (FR-19) の導線は、推測した値を [initial] に渡して開き、保存した商品を
+/// [onSaved] で返せるようにする。
 class ProductFormScreen extends StatefulWidget {
   const ProductFormScreen({
     super.key,
     required this.services,
     this.id,
     this.embedded = false,
+    this.initial,
     this.onClose,
     this.onSaved,
   });
@@ -38,11 +42,18 @@ class ProductFormScreen extends StatefulWidget {
   /// 幅 840 px 以上の 2 段組の右の面に出すか。
   final bool embedded;
 
+  /// 新規の登録のときに最初から入れる値 (FR-19 の推測の引き継ぎ)。編集では使わない。
+  final ProductInput? initial;
+
   /// 閉じる動き。無いときは前の画面へ戻る。
   final VoidCallback? onClose;
 
-  /// 保存できたときの動き。無いときは前の画面へ戻る。
-  final VoidCallback? onSaved;
+  /// 保存できたときの動き。保存した商品を受け取る。無いときは前の画面へ戻る。
+  ///
+  /// 押し出しの画面へ結果を返すとき (FR-19 の商品の登録の導線) は、この画面では保存の通知を
+  /// 出さない。2 段組では画面の下の面にも Scaffold があり、同じ SnackBar が 2 つあると
+  /// みなされて戻る遷移が失敗するためである。この場合の通知は購入の保存のときに出す。
+  final ValueChanged<Product>? onSaved;
 
   @override
   State<ProductFormScreen> createState() => _ProductFormScreenState();
@@ -76,6 +87,18 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final id = widget.id;
     if (id != null) {
       _load(id);
+      return;
+    }
+    // 写真からの推測 (FR-19) の値を引き継いで開いたときは、最初から入れておく。
+    final initial = widget.initial;
+    if (initial != null) {
+      _name.text = initial.name;
+      _producer.text = initial.producer ?? '';
+      _origin.text = initial.origin ?? '';
+      _region.text = initial.region ?? '';
+      _process.text = initial.process ?? '';
+      _variety.text = initial.variety ?? '';
+      _flavorNotes.addAll(initial.flavorNotes);
     }
   }
 
@@ -210,22 +233,24 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     setState(() => _busy = true);
     try {
       final id = widget.id;
-      if (id == null) {
-        await widget.services.records.createProduct(input);
-      } else {
-        await widget.services.records.updateProduct(id, input);
-      }
+      final Product saved = id == null
+          ? await widget.services.records.createProduct(input)
+          : await widget.services.records.updateProduct(id, input);
       widget.services.markRecordsChanged();
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.savedMessage)),
-      );
-      if (widget.embedded) {
-        widget.onSaved?.call();
+      // 保存した商品を呼び出し元に返す (FR-19 の商品の登録の導線)。無いときは前の画面へ戻る。
+      // 通知は、押し出しの画面へ結果を返すとき以外はここで出す (パラメータの説明を参照)。
+      final onSaved = widget.onSaved;
+      if (onSaved != null) {
+        onSaved(saved);
+        if (widget.embedded) {
+          _showSaved(l10n);
+        }
       } else {
         Navigator.of(context).pop();
+        _showSaved(l10n);
       }
     } catch (error) {
       if (!mounted) {
@@ -237,6 +262,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         setState(() => _busy = false);
       }
     }
+  }
+
+  /// 保存できたことを知らせる (FR-8)。
+  void _showSaved(AppLocalizations l10n) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.savedMessage)),
+    );
   }
 
   /// 空の入力を API の null にする。

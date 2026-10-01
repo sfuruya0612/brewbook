@@ -82,7 +82,8 @@ pub fn covers(
             .expect("the route names match above");
         let requirements = brew_book_core::routes::test_requirements(route);
         let mut expected: Vec<&str> = Vec::new();
-        if requirements.ok {
+        // 正常系を CI で実行できない経路は正常系の種別を要求しない (管理者の経路は全て CI。FR-19)。
+        if requirements.ok == brew_book_core::routes::OkTest::Ci {
             expected.push(KIND_OK);
         }
         if requirements.unauthenticated_401 {
@@ -187,6 +188,11 @@ impl DevServer {
         let mut command = Command::new("wrangler");
         command
             .arg("dev")
+            // リモートのバインディング (利用者向けの Worker の AI) を無効にして起動する。AI
+            // バインディングは起動時にリモートのプロキシのセッションを開くため、これが無いと
+            // ログインの無い CI や、アカウントを 1 つに選べない環境では `wrangler dev` が起動しない
+            // (このスイートは利用者向けの Worker の `wrangler dev` も起動する。ADR-0016、issue 0034)。
+            .arg("--local")
             .arg("--ip")
             .arg("127.0.0.1")
             .arg("--port")

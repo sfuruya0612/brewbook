@@ -115,7 +115,8 @@ class _ProductListScreenState extends State<ProductListScreen> {
         services: widget.services,
         embedded: true,
         onClose: () => setState(() => _creating = false),
-        onSaved: () => setState(() => _creating = false),
+        // 一覧は保存した商品を使わない (FR-19 の導線だけが結果を受け取る)。
+        onSaved: (_) => setState(() => _creating = false),
       );
     }
     final selectedId = _selectedId;
@@ -127,7 +128,7 @@ class _ProductListScreenState extends State<ProductListScreen> {
       id: selectedId,
       embedded: true,
       onClose: () => setState(() => _selectedId = null),
-      onSaved: () => setState(() => _selectedId = null),
+      onSaved: (_) => setState(() => _selectedId = null),
     );
   }
 

@@ -41,6 +41,11 @@ struct TestData {
     product_list_session: String,
     product_list_products: Vec<SeededProduct>,
     product_list_archived: SeededProduct,
+    /// 名前の絞り込みのテストの利用者 (FR-19)。
+    name_filter_session: String,
+    name_filter_products: Vec<SeededProduct>,
+    name_filter_archived: SeededProduct,
+    name_filter_other_session: String,
     /// 商品の書き換えのテストの利用者。
     product_write_user: String,
     product_write_session: String,
@@ -113,6 +118,24 @@ fn build_data() -> TestData {
     seed.user(&product_write_user, "product write user", created);
     let product_write_session = seed.session(&product_write_user, future, created);
 
+    // 名前の絞り込みのテストの利用者 (FR-19)。大文字と小文字の違いと、前後の空白の扱いを
+    // 確かめる商品を置く。並びは作成日時の降順なので、先に作った方が後ろに返る。
+    let name_filter_user = user_id(8);
+    seed.user(&name_filter_user, "name filter user", created);
+    let name_filter_session = seed.session(&name_filter_user, future, created);
+    let name_filter_products = vec![
+        seed.product(&name_filter_user, "Ethiopia Guji", T21, T21, None),
+        seed.product(&name_filter_user, "Ethiopia", T20, T20, None),
+        seed.product(&name_filter_user, "ethiopia guji", T19, T19, None),
+    ];
+    let name_filter_archived =
+        seed.product(&name_filter_user, "Ethiopia Guji", T19, T19, Some(T19));
+    // 他の利用者の同じ名前の商品は、絞り込みでも返らない (FR-5)。
+    let name_filter_other_user = user_id(9);
+    seed.user(&name_filter_other_user, "name filter other user", created);
+    let name_filter_other_session = seed.session(&name_filter_other_user, future, created);
+    seed.product(&name_filter_other_user, "Ethiopia Guji", T21, T21, None);
+
     // 他の利用者。店と商品とタグを 1 つずつ持つ。
     let other_user = user_id(5);
     seed.user(&other_user, "other user", created);
@@ -145,6 +168,10 @@ fn build_data() -> TestData {
         product_list_session,
         product_list_products,
         product_list_archived,
+        name_filter_session,
+        name_filter_products,
+        name_filter_archived,
+        name_filter_other_session,
         product_write_user,
         product_write_session,
         other_user,
@@ -213,6 +240,20 @@ fn assert_shop(body: &Value, user_id: &str, name: &str, address: Option<&str>) {
 /// ミリ秒だけ待つ。`updated_at` が確実に進むようにする。
 fn sleep_millis(millis: u64) {
     std::thread::sleep(Duration::from_millis(millis));
+}
+
+/// クエリの値を URL に載せる形 (パーセントエンコード) にする。
+/// テストの値には空白と日本語を含めるため、自前でエンコードする。
+fn encode_query(value: &str) -> String {
+    let mut encoded = String::new();
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    encoded
 }
 
 mod shops {
@@ -820,6 +861,143 @@ mod products {
         ] {
             assert_bad_request(client.get(&format!("/api/products?{query}")));
         }
+    }
+
+    // 名前の絞り込み (FR-19)。
+
+    /// 名前の絞り込みを付けた一覧を引く。
+    fn list_by_name(client: &ApiClient, query: &str) -> Value {
+        assert_status(
+            client.get(&format!("/api/products?name={}", encode_query(query))),
+            200,
+        )
+    }
+
+    #[test]
+    fn wrangler_products_list_filters_by_the_exact_name() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.name_filter_session));
+        // 完全一致で絞る (FR-19)。前方一致ではないため、部分一致の商品は返らない。
+        let body = list_by_name(&client, "Ethiopia");
+        let products = body["products"].as_array().expect("products");
+        assert_eq!(products.len(), 1, "{body}");
+        assert_eq!(products[0]["name"], "Ethiopia");
+        let body = list_by_name(&client, "Guji");
+        assert_eq!(body["products"], json!([]), "{body}");
+        // 一致する商品が無い名前でも 200 を返す (一覧と同じ扱い)。
+        let body = list_by_name(&client, "存在しない豆");
+        assert_eq!(body["products"], json!([]), "{body}");
+    }
+
+    #[test]
+    fn wrangler_products_list_name_ignores_trim_and_case_and_excludes_archived() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.name_filter_session));
+        // 照合は前後の空白を除いて大文字と小文字を区別しない (FR-19)。
+        // 並び順は一覧と同じく作成日時の降順なので、新しい方が先に返る。
+        for query in [
+            "Ethiopia Guji",
+            "  Ethiopia Guji  ",
+            "ethiopia guji",
+            "ETHIOPIA GUJI",
+        ] {
+            let body = list_by_name(&client, query);
+            let products = body["products"].as_array().expect("products");
+            assert_eq!(products.len(), 2, "{query}: {body}");
+            assert_eq!(
+                products[0]["id"], data.name_filter_products[0].id,
+                "{query}"
+            );
+            assert_eq!(
+                products[1]["id"], data.name_filter_products[2].id,
+                "{query}"
+            );
+        }
+        // 既定ではアーカイブ済みの商品を含めない (FR-12、FR-19)。
+        assert!(
+            !list_by_name(&client, "Ethiopia Guji")["products"]
+                .as_array()
+                .expect("products")
+                .iter()
+                .any(|product| product["id"] == data.name_filter_archived.id),
+            "the archived product must not be listed"
+        );
+        // include_archived=true ではアーカイブ済みも含める。
+        let body = assert_status(
+            client.get(&format!(
+                "/api/products?name={}&include_archived=true",
+                encode_query("Ethiopia Guji")
+            )),
+            200,
+        );
+        let products = body["products"].as_array().expect("products");
+        assert_eq!(products.len(), 3, "{body}");
+        assert_eq!(products[2]["id"], data.name_filter_archived.id, "{body}");
+    }
+
+    #[test]
+    fn wrangler_products_list_name_returns_only_own_records() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        // 他の利用者の同じ名前の商品は返らない (FR-5)。
+        let own = list_by_name(
+            &ApiClient::new(&base_url, Some(&data.name_filter_session)),
+            "Ethiopia Guji",
+        );
+        assert_eq!(own["products"].as_array().expect("products").len(), 2);
+        let other = list_by_name(
+            &ApiClient::new(&base_url, Some(&data.name_filter_other_session)),
+            "Ethiopia Guji",
+        );
+        let products = other["products"].as_array().expect("products");
+        assert_eq!(products.len(), 1, "{other}");
+        assert_eq!(products[0]["name"], "Ethiopia Guji");
+        // 記録が無い利用者では空になる。
+        let empty = list_by_name(
+            &ApiClient::new(&base_url, Some(&data.empty_session)),
+            "Ethiopia Guji",
+        );
+        assert_eq!(empty["products"], json!([]), "{empty}");
+    }
+
+    #[test]
+    fn wrangler_products_list_name_invalid_input_400() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.name_filter_session));
+        // 絞り込みの名前は空白を除いて空にできない。複数回の指定も受け付けない。
+        for query in ["name=", "name=%20%20", "name=Ethiopia&name=Ethiopia"] {
+            assert_bad_request(client.get(&format!("/api/products?{query}")));
+        }
+    }
+
+    #[test]
+    fn wrangler_products_list_name_must_not_change_the_other_filters() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.name_filter_session));
+        // 名前の絞り込みを付けても、limit と include_archived は同じように働く (FR-19)。
+        let body = assert_status(
+            client.get(&format!(
+                "/api/products?limit=1&name={}&include_archived=true",
+                encode_query("Ethiopia Guji")
+            )),
+            200,
+        );
+        let products = body["products"].as_array().expect("products");
+        assert_eq!(products.len(), 1, "{body}");
+        assert_eq!(products[0]["id"], data.name_filter_products[0].id, "{body}");
+        assert!(
+            body["next_cursor"].as_str().is_some(),
+            "a full page must carry the next cursor: {body}"
+        );
     }
 
     #[test]
