@@ -81,3 +81,5 @@
   - @sfuruya0612
 - [FIX] 結合テストの `wrangler dev` が残す `workerd` などの孤児プロセスをなくす
   - @sfuruya0612
+- [FIX] 結合テストの worker のビルドを 1 回にまとめ、`wrangler dev` の起動ごとの重複ビルドをなくす
+  - @sfuruya0612

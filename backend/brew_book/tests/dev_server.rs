@@ -114,3 +114,17 @@ fn wrangler_dev_server_stop_leaves_no_process_in_its_process_group() {
         "the process group {process_group_id} must be empty after stop but still has processes"
     );
 }
+
+/// 0020 の完了条件: テストの `wrangler dev` は `worker-build` を実行しない。
+///
+/// ビルドはハーネスが 1 回だけ行い、`wrangler dev` にはビルドのない一時の設定を渡す。
+#[test]
+fn wrangler_dev_server_does_not_run_worker_build() {
+    let server = support::DevServer::start().expect("wrangler dev must start");
+    let output = server.output();
+    assert!(
+        !output.iter().any(|line| line.contains("worker-build")),
+        "wrangler dev must not run worker-build but its output was:\n{}",
+        output.join("\n")
+    );
+}

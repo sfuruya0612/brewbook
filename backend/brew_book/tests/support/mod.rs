@@ -13,11 +13,12 @@
 
 use std::io::{BufRead, BufReader, Read};
 use std::net::TcpListener;
+use std::os::fd::AsRawFd;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, Weak};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -32,6 +33,20 @@ const OUTPUT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// `stop` がプロセスグループへ SIGTERM を送ってから、SIGKILL に切り替えるまでの待ち時間。
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// 事前にビルドした worker を再利用することを指示する環境変数。mise のタスクが設定する (0020)。
+const SKIP_WORKER_BUILD_ENV: &str = "BREWBOOK_SKIP_WORKER_BUILD";
+
+/// 空きポートの確認から wrangler の bind までの間に、他のテストが同じポートを使うことがある。
+/// workerd がこのメッセージで終了したら、別のポートで起動をやり直す (0020)。
+const PORT_IN_USE_ERROR: &str = "Address already in use";
+
+/// `wrangler dev` の起動の再試行の上限 (ポートの競合のときだけ再試行する)。
+const START_ATTEMPTS: usize = 3;
+
+/// 子プロセスが終了したときに、出力の読み取りが追いつくのを待つ時間。
+/// 起動失敗の原因をエラーに含めて、再試行の判定に使うためである。
+const OUTPUT_DRAIN_TIMEOUT: Duration = Duration::from_millis(200);
 
 /// 起動ごとの連番。同じテストバイナリ内で複数のサーバーを起動しても状態ディレクトリが衝突しないようにする。
 static START_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -311,6 +326,8 @@ pub struct DevServer {
     port: u16,
     persist_dir: PathBuf,
     output_lines: Arc<Mutex<Vec<String>>>,
+    /// 起動の再試行のために状態ディレクトリを残すかどうか。`stop` は false のとき消す。
+    keep_persist_dir: bool,
 }
 
 impl DevServer {
@@ -334,7 +351,7 @@ impl DevServer {
     /// WebAuthn の Origin はポートを含むため、vars の組み立てにポートが要る。
     /// 下ごしらえは子プロセスの起動前に実行し、実行中の D1 への同時の書き込みを避ける。
     pub fn start_with(
-        vars: impl FnOnce(u16) -> Vec<(String, String)>,
+        vars: impl Fn(u16) -> Vec<(String, String)>,
         seed_sql: &str,
     ) -> Result<Self, String> {
         Self::start_with_assets(vars, seed_sql, None)
@@ -345,7 +362,7 @@ impl DevServer {
     /// 実バックエンドの統合テスト (0017) が、テストコード入りの Web ビルドを配信するために使う。
     /// `None` なら `wrangler.toml` の `[assets]` のディレクトリを使う。
     pub fn start_with_assets(
-        vars: impl FnOnce(u16) -> Vec<(String, String)>,
+        vars: impl Fn(u16) -> Vec<(String, String)>,
         seed_sql: &str,
         assets_dir: Option<&Path>,
     ) -> Result<Self, String> {
@@ -359,68 +376,79 @@ impl DevServer {
         std::fs::create_dir_all(&persist_dir)
             .map_err(|error| format!("failed to create {}: {error}", persist_dir.display()))?;
         ensure_assets_dir(&manifest_dir, assets_dir)?;
-        let config = match assets_dir {
-            Some(assets_dir) => Some(override_config(&manifest_dir, &persist_dir, assets_dir)?),
-            None => None,
-        };
-        let port = free_port()?;
+        ensure_worker_built(&manifest_dir)?;
+        let config = override_config(&manifest_dir, &persist_dir, assets_dir)?;
 
         apply_migrations(&manifest_dir, &persist_dir)?;
         if !seed_sql.is_empty() {
             execute_sql_at(&manifest_dir, &persist_dir, seed_sql)?;
         }
 
-        let mut command = Command::new("wrangler");
-        command
-            .arg("dev")
-            // リモートのバインディング (AI) を無効にして起動する。AI バインディングは起動時に
-            // リモートのプロキシのセッションを開くため、これが無いとログインの無い CI では
-            // `wrangler dev` が起動しない。`--local` でも未認証 401 と入力不正 400 のテストは
-            // 実行でき、AI を呼ぶ経路は 500 になる (ADR-0016、issue 0034)。
-            .arg("--local")
-            .arg("--ip")
-            .arg("127.0.0.1")
-            .arg("--port")
-            .arg(port.to_string())
-            .arg("--persist-to")
-            .arg(&persist_dir)
-            .current_dir(&manifest_dir)
-            .env("WRANGLER_SEND_METRICS", "false")
-            // AI エージェント検出を無効にする。検出されると wrangler はログを標準出力ではなく
-            // Local Explorer の観測ストアに出すため、テストが出力を読めない。
-            .env_remove("OPENCODE")
-            .env_remove("AGENT")
-            .env_remove("AI_AGENT")
-            .env_remove("CLAUDECODE")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        // 孫 (workerd、esbuild) まで確実に停止できるように、子を新しいプロセスグループにする (0019)。
-        command.process_group(0);
-        if let Some(config) = &config {
-            command.arg("--config").arg(config);
-        }
-        for (key, value) in vars(port) {
-            command.arg("--var").arg(format!("{key}:{value}"));
-        }
-        let mut child = command
-            .spawn()
-            .map_err(|error| format!("failed to start wrangler dev: {error}"))?;
+        // 空きポートの確認と wrangler の bind の間には隙間がある。並行に起動した別のテストが
+        // そのポートを使うと workerd が `Address already in use` で終了するため、別のポートで
+        // 起動をやり直す (0020)。
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            let port = free_port()?;
+            let mut command = Command::new("wrangler");
+            command
+                .arg("dev")
+                // リモートのバインディング (AI) を無効にして起動する。AI バインディングは起動時に
+                // リモートのプロキシのセッションを開くため、これが無いとログインの無い CI では
+                // `wrangler dev` が起動しない。`--local` でも未認証 401 と入力不正 400 のテストは
+                // 実行でき、AI を呼ぶ経路は 500 になる (ADR-0016、issue 0034)。
+                .arg("--local")
+                .arg("--ip")
+                .arg("127.0.0.1")
+                .arg("--port")
+                .arg(port.to_string())
+                .arg("--persist-to")
+                .arg(&persist_dir)
+                .current_dir(&manifest_dir)
+                .env("WRANGLER_SEND_METRICS", "false")
+                // AI エージェント検出を無効にする。検出されると wrangler はログを標準出力ではなく
+                // Local Explorer の観測ストアに出すため、テストが出力を読めない。
+                .env_remove("OPENCODE")
+                .env_remove("AGENT")
+                .env_remove("AI_AGENT")
+                .env_remove("CLAUDECODE")
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+            // 孫 (workerd、esbuild) まで確実に停止できるように、子を新しいプロセスグループにする (0019)。
+            command.process_group(0);
+            command.arg("--config").arg(&config);
+            for (key, value) in vars(port) {
+                command.arg("--var").arg(format!("{key}:{value}"));
+            }
+            let mut child = command
+                .spawn()
+                .map_err(|error| format!("failed to start wrangler dev: {error}"))?;
 
-        let output_lines = Arc::new(Mutex::new(Vec::new()));
-        capture_output(child.stdout.take(), Arc::clone(&output_lines));
-        capture_output(child.stderr.take(), Arc::clone(&output_lines));
+            let output_lines = Arc::new(Mutex::new(Vec::new()));
+            capture_output(child.stdout.take(), Arc::clone(&output_lines));
+            capture_output(child.stderr.take(), Arc::clone(&output_lines));
 
-        let mut server = Self {
-            child,
-            port,
-            persist_dir,
-            output_lines,
-        };
-        if let Err(error) = server.wait_until_ready() {
-            server.stop();
-            return Err(error);
+            let mut server = Self {
+                child,
+                port,
+                persist_dir: persist_dir.clone(),
+                output_lines,
+                keep_persist_dir: false,
+            };
+            match server.wait_until_ready() {
+                Ok(()) => return Ok(server),
+                Err(error) => {
+                    server.terminate();
+                    if error.contains(PORT_IN_USE_ERROR) && attempt < START_ATTEMPTS {
+                        // 再試行で状態ディレクトリを使うため、Drop の stop で消さないようにする。
+                        server.keep_persist_dir = true;
+                    } else {
+                        return Err(error);
+                    }
+                }
+            }
         }
-        Ok(server)
     }
 
     pub fn base_url(&self) -> String {
@@ -620,6 +648,8 @@ impl DevServer {
                 .try_wait()
                 .map_err(|error| format!("failed to check wrangler dev: {error}"))?
             {
+                // 出力の読み取りが追いつくのを待つ (起動失敗の原因を診断と再試行の判定に使う)。
+                thread::sleep(OUTPUT_DRAIN_TIMEOUT);
                 return Err(format!(
                     "wrangler dev exited before ready with {status}\n{}",
                     self.output().join("\n")
@@ -637,12 +667,20 @@ impl DevServer {
         ))
     }
 
-    /// 子プロセスを停止する (Drop でも呼ばれる)。
+    /// 子プロセスを停止し、状態ディレクトリを消す (Drop でも呼ばれる)。
     ///
     /// `wrangler` は子として `workerd` と esbuild を起動する。`Child::kill` (SIGKILL) だけでは
     /// `wrangler` が後始末できず、孫が孤児として残ってしまう (0019)。プロセスグループごと
     /// SIGTERM で止め、`STOP_TIMEOUT` を過ぎても残っていれば SIGKILL で確実に止める。
     pub fn stop(&mut self) {
+        self.terminate();
+        if !self.keep_persist_dir {
+            let _ = std::fs::remove_dir_all(&self.persist_dir);
+        }
+    }
+
+    /// 子プロセスを停止する。状態ディレクトリは消さない (起動の再試行で使う)。
+    fn terminate(&mut self) {
         let process_group = self.child.id() as libc::pid_t;
         // 起動に失敗した場合など、既に子が終了していても killpg は無害 (ESRCH になるだけ)。
         unsafe { libc::killpg(process_group, libc::SIGTERM) };
@@ -656,7 +694,6 @@ impl DevServer {
         }
         unsafe { libc::killpg(process_group, libc::SIGKILL) };
         let _ = self.child.wait();
-        let _ = std::fs::remove_dir_all(&self.persist_dir);
     }
 
     /// テスト用: 子プロセスが属するプロセスグループの ID。
@@ -916,8 +953,68 @@ fn ensure_assets_dir(manifest_dir: &Path, assets_dir: Option<&Path>) -> Result<(
 /// `wrangler.toml` の `[assets]` が指す、既定の Web ビルドのディレクトリ。
 const DEFAULT_ASSETS_DIR: &str = "../../frontend/build/web";
 
-/// `wrangler.toml` をもとに、テスト用のビルドを配信する一時の設定を書く。
+/// テストの `DevServer` が使う worker を、プロセスごとに 1 回だけビルドする。
 ///
+/// `wrangler dev` の `[build] command` は起動のたびに `worker-build --release` を実行する。
+/// テストの起動ごとに wasm のリリースビルドが重複し、`build/.tmp` の競合で失敗もするため (0020)、
+/// テストでは wrangler にビルドさせず、ここで 1 回だけビルドして `build/worker/shim.mjs` を
+/// 使い回す。ビルドはファイルロックでプロセス間でも直列化する。
+///
+/// 環境変数 `BREWBOOK_SKIP_WORKER_BUILD=1` が設定されているときは、タスクが先に
+/// `backend:build` でビルドしたものとして再利用する (mise.toml の backend:test-integration)。
+fn ensure_worker_built(manifest_dir: &Path) -> Result<(), String> {
+    static BUILT: OnceLock<Result<(), String>> = OnceLock::new();
+    BUILT
+        .get_or_init(|| build_worker_once(manifest_dir))
+        .clone()
+}
+
+/// worker を 1 回だけビルドする。`ensure_worker_built` からプロセスごとに 1 回呼ばれる。
+fn build_worker_once(manifest_dir: &Path) -> Result<(), String> {
+    let shim = manifest_dir.join("build/worker/shim.mjs");
+    if std::env::var(SKIP_WORKER_BUILD_ENV).is_ok_and(|value| value == "1") {
+        return if shim.is_file() {
+            Ok(())
+        } else {
+            Err(format!(
+                "{SKIP_WORKER_BUILD_ENV}=1 is set but {} does not exist; run `mise run backend:build` first",
+                shim.display()
+            ))
+        };
+    }
+
+    let build_dir = manifest_dir.join("build");
+    std::fs::create_dir_all(&build_dir)
+        .map_err(|error| format!("failed to create {}: {error}", build_dir.display()))?;
+    let lock_path = build_dir.join(".worker-build.lock");
+    let lock = std::fs::File::create(&lock_path)
+        .map_err(|error| format!("failed to create {}: {error}", lock_path.display()))?;
+    // 別のテストバイナリや開発者の実行と重ならないように、ビルドをプロセス間で直列化する。
+    // ロックは File を閉じたときに解放され、プロセスが落ちた場合も OS が解放する。
+    if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX) } != 0 {
+        return Err(format!("failed to lock {}", lock_path.display()));
+    }
+
+    let status = Command::new("worker-build")
+        .arg("--release")
+        .current_dir(manifest_dir)
+        .status()
+        .map_err(|error| format!("failed to run worker-build --release: {error}"))?;
+    if !status.success() {
+        return Err(format!("worker-build --release failed with {status}"));
+    }
+    if !shim.is_file() {
+        return Err(format!(
+            "worker-build --release did not produce {}",
+            shim.display()
+        ));
+    }
+    Ok(())
+}
+
+/// `wrangler.toml` をもとに、テスト用の一時の設定を書く。
+///
+/// テストは `wrangler dev` にビルドさせない (`ensure_worker_built` が 1 回だけ行う。0020)。
 /// `wrangler dev --assets` は `[assets]` の `run_worker_first` と `not_found_handling` を
 /// 引き継がない。テストは本番と同じルーティング (`/api/*` は Worker、それ以外は Static Assets と
 /// single-page-application) で動かす必要があるため、`wrangler.toml` のパスだけを絶対パスにした
@@ -925,13 +1022,15 @@ const DEFAULT_ASSETS_DIR: &str = "../../frontend/build/web";
 fn override_config(
     manifest_dir: &Path,
     persist_dir: &Path,
-    assets_dir: &Path,
+    assets_dir: Option<&Path>,
 ) -> Result<PathBuf, String> {
     let source = manifest_dir.join("wrangler.toml");
     let mut text = std::fs::read_to_string(&source)
         .map_err(|error| format!("failed to read {}: {error}", source.display()))?;
     let main = manifest_dir.join("build/worker/shim.mjs");
     let migrations = manifest_dir.join("migrations");
+    let assets =
+        assets_dir.map_or_else(|| manifest_dir.join(DEFAULT_ASSETS_DIR), Path::to_path_buf);
     replace_once(
         &mut text,
         "main = \"build/worker/shim.mjs\"",
@@ -940,21 +1039,18 @@ fn override_config(
     replace_once(
         &mut text,
         "directory = \"../../frontend/build/web\"",
-        &format!("directory = \"{}\"", assets_dir.display()),
+        &format!("directory = \"{}\"", assets.display()),
     )?;
     replace_once(
         &mut text,
         "migrations_dir = \"migrations\"",
         &format!("migrations_dir = \"{}\"", migrations.display()),
     )?;
-    // 設定を別のディレクトリに置くため、ビルドの作業ディレクトリを明示する。
+    // ビルドはハーネスが 1 回だけ行う。`wrangler dev` の起動ごとのビルドを防ぐため、[build] を外す (0020)。
     replace_once(
         &mut text,
-        "[build]\ncommand = \"worker-build --release\"",
-        &format!(
-            "[build]\ncommand = \"worker-build --release\"\ncwd = \"{}\"",
-            manifest_dir.display()
-        ),
+        "[build]\ncommand = \"worker-build --release\"\n",
+        "",
     )?;
     let config = persist_dir.join("wrangler-override.toml");
     std::fs::write(&config, text)
