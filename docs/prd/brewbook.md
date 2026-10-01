@@ -3,13 +3,13 @@
 Created: 2026-09-21
 Model: Claude Fable 5.1
 Status: Draft
+Updated: 2026-10-02
 
 ## 概要
 
 自宅で淹れたコーヒーを記録するための Web アプリケーションを作る。
 豆を買った店、豆の商品、商品を買った購入、コーヒーを淹れた抽出の 4 種類の記録を登録し、抽出から使った豆と、買った店 (登録している場合) をたどれるようにする。
-Frontend は Flutter で Web を先行し、Backend は Rust で Cloudflare Workers 上に置く。
-統計とグラフ、管理者用の Web 画面も初回スコープに含める。
+Frontend は Rust (Dioxus)、Backend は Rust の Cloudflare Worker とし、統計とグラフ、管理者用の Web 画面も初回スコープに含める。
 
 ## 用語
 
@@ -39,7 +39,7 @@ Frontend は Flutter で Web を先行し、Backend は Rust で Cloudflare Work
 会話では筆者が選択肢とその説明を提示し、所有者が選んだ。
 技術的な説明の根拠には、Cloudflare のドキュメント、shiguredo/s3-rs の README、W3C の WebAuthn 仕様を使い、「## 関連資料」に列挙する。
 本文では、所有者が選んだ決定と、筆者が置いて所有者が確認した既定値と、筆者が置いて所有者の確認を得ていない値を書き分ける。
-所有者の確認を得ていない値には本文で「(筆者の設定)」を付け、「## 未確定論点」の「筆者が設定した値」の行に集める。
+所有者の確認を得ていない値には本文で「(筆者の設定)」を付け、「## 未確定論点」に集める。
 2026-09-21 の時点で筆者が置いた値は全て所有者が承認または変更したため、本文に「(筆者の設定)」の印は残っていない。
 所有者が全プロジェクトに課している共通規約 (成果物に絵文字を使わない、コメントは日本語、ログとエラーメッセージは英語、Rust のテスト規約、全テスト通過までマージしない) に由来する項目は、「## 制約と前提」で「所有者の共通規約」と明記する。
 筆者の提案は「## 未確定論点」だけに書く。
@@ -72,8 +72,7 @@ Frontend は Flutter で Web を先行し、Backend は Rust で Cloudflare Work
 - アプリ名は coffee-log とする (2026-09-26 に brewbook へ変更した。ADR-0010)。
 - 独自ドメインは取得せず、Cloudflare が割り当てる workers.dev のホスト名を使う。
   Frontend のビルド成果物は Backend の Worker の Static Assets として配信する (ADR-0005)。
-- iOS の配布形態は引き続き後で決める。
-  CI での iOS のビルドはやめる。
+- iOS の配布形態は後で決めることとし、CI での iOS のビルドはやめる (2026-10-01 にこの 2 つを取り消した。ADR-0017)。
 - 統計とグラフを初回スコープに入れる (FR-18)。
 - 管理者用の Web 画面を作り、Cloudflare Access で保護する (FR-17、ADR-0008)。
   管理者 Worker は Access の JWT を検証しない。
@@ -85,8 +84,7 @@ Frontend は Flutter で Web を先行し、Backend は Rust で Cloudflare Work
 
 同日に筆者が Cloudflare のドキュメントで前提を確認した後 (「## 未確定論点」)、所有者は残りの論点について次を決めた。
 
-- iOS の配布形態は引き続き後で決める。
-  決めるべきことは Apple Developer Program に加入するかであり、iOS の実装に着手するときに決める。
+- iOS の配布形態は引き続き後で決めることとし、Apple Developer Program に加入するかを iOS の実装に着手するときに決める (2026-10-01 に iOS の実装に着手しないことを決めたため、この保留は解消した。ADR-0017)。
 - shiguredo_s3 はプレリリース版 (canary) を版固定で採用する。
   wasm32 でビルドできない場合は署名付き URL の生成を自前で実装する (ADR-0003)。
   同日に所有者が mise で入れた Rust 1.98.1 で、2026.1.0-canary.7 が wasm32-unknown-unknown でビルドできることを筆者が確認した (「## 未確定論点」)。
@@ -94,13 +92,15 @@ Frontend は Flutter で Web を先行し、Backend は Rust で Cloudflare Work
   その他の筆者が置いた値 (訳語、グラフの種類、閾値 62 日、UTC オフセットの符号と範囲、アーカイブの除外規則、評価の推移の置き場所、管理者画面の形式、一覧の列、表示名の長さ、管理者 Worker のテーブル範囲、共有クレート名) は承認した。
 - 設計時に決めるとしていた項目は、依存を最小にする案で決めた (ADR-0005、ADR-0007、ADR-0008)。
 - ツールのバージョン管理と、ビルド、デプロイ、テストなどのコマンドラインは mise で管理する (ADR-0009)。
-  Flutter と Rust のバージョンは `latest` ではなく版を固定し、wrangler も mise で管理する。
+  Rust と Frontend のビルドツールのバージョンは `latest` ではなく版を固定し、wrangler も mise で管理する。
   同日に所有者が `mise.toml` を書き換え、Flutter 3.47.5、Rust 1.98.1 (wasm32-unknown-unknown ターゲット付き)、wrangler 4.135.0 を固定した。
+  2026-10-01 に Frontend を Rust に置き換えることを決めた。Flutter のツールは移行の issue 0037 から 0045 で外し、Dioxus CLI と Tailwind CSS に入れ替える (ADR-0017)。
 
 2026-09-26 に所有者は次を決めた。
 
 - アプリ名を brewbook に変更する。coffee-log の log がログの名前空間と紛らわしいためである。
-  Flutter のパッケージ名は brew_book、Rust のクレートは brew_book、brew_book_admin、brew_book_core とする (ADR-0010)。
+  Flutter のパッケージ名は brew_book、Rust のクレートは brew_book、brew_book_admin、brew_book_core とする (ADR-0010。Flutter のパッケージ名は 2026-10-01 の Frontend の Rust への置き換えで使わなくなる。ADR-0017)。
+  2026-10-01 に Frontend のクレート名を brew_book_frontend とした (ADR-0017)。
 - GitHub Actions の action の版は、タグではなくコミットハッシュで固定する (ADR-0011)。
 - 負荷試験は k6 で VU 50 とし、ローカルの認証が不要な経路だけを対象にする。CI には含めない (ADR-0012)。
 - テストは E2E、PBT、Fuzzing、形式手法、単体の 5 種を網羅する (ADR-0013)。
@@ -111,7 +111,16 @@ Frontend は Flutter で Web を先行し、Backend は Rust で Cloudflare Work
 - 推測は Cloudflare Workers AI で行い、写真を外部 (Cloudflare 以外) の AI サービスに送らない。
 - 推測の結果は利用者が確認して適用し、自動では保存しない。
 - 課金は発生させず、Workers AI の無料枠 (1 日 10,000 Neurons) の範囲で動かす。
-- 推測に使うモデルは実写真での比較で決める (未確定論点)。
+- 推測に使うモデルは実写真での比較で `@cf/meta/llama-4-scout-17b-16e-instruct` に決めた (ADR-0016 の追記、issue 0034)。
+
+2026-10-01 に所有者は次を決めた。
+
+- iOS 版の対応を要件から落とす。
+  iOS 向けのビルドと配布は行わない (上の 2026-09-21 の iOS の 2 つの決定を取り消す)。
+- Frontend を Rust に置き換える。
+  デザインはそのままにし、コードだけを置き換える。
+  技術スタックは Dioxus と Tailwind CSS とし、ビルドは Dioxus CLI (`dx`) を使う (Trunk は使わない。ADR-0017)。
+- 本 PRD の FR-16 (翻訳ファイル)、成功指標 (測定方法)、スコープ、性能 (負荷試験の対象)、制約と前提、未確定論点をこの決定に合わせて改訂する。
 
 ## 目的
 
@@ -130,8 +139,8 @@ Frontend は Flutter で Web を先行し、Backend は Rust で Cloudflare Work
 
 | 指標 | 目標 | 測定方法 |
 | --- | --- | --- |
-| 抽出の登録に必要な画面の数 | 抽出一覧 (ホーム) から保存完了までの最短経路で表示する画面 (ルーターに登録した画面) が、ホームを含めて 3 つ以内 | Flutter の統合テストで最短経路を実行し、表示した画面の種類の数を数える。戻る操作は最短経路に含めない。ダイアログ、ボトムシート、保存完了の通知 (スナックバーなど) は画面に数えない |
-| API の自動テストの網羅 | 利用者向けの Worker では、認証が必要な全エンドポイントに正常系と未認証 (401) のテストがあり、認証が不要な全エンドポイントに正常系のテストと、入力を持つものには入力不正 (400) のテストがある。入力を持たないのはログインのチャレンジ発行だけである (FR-2)。管理者 Worker では、全エンドポイントに正常系のテストと、入力を持つものには入力不正 (400) のテストがある (認証は Cloudflare Access が担うため 401 のテストは無い。FR-17) | 両方の Worker で、Router の定義から生成したエンドポイント一覧と、テストが付けたエンドポイントの識別子を CI で照合する。写真からの推測の API (FR-19) は、正常系が Workers AI の推論を要するため正常系の照合の対象外とし、未認証 401 と入力不正 400 は対象に含める。正常系は手元で確認し、結果を issue に記録する |
+| 抽出の登録に必要な画面の数 | 抽出一覧 (ホーム) から保存完了までの最短経路で表示する画面 (ルーターに登録した画面) が、ホームを含めて 3 つ以内 | Frontend の E2E テストで最短経路を実行し、表示した画面を経路の名前 (経路のパターン) で識別して種類の数を数える。戻る操作は最短経路に含めない。ダイアログ、ボトムシート、保存完了の通知 (スナックバーなど) は画面に数えない |
+| API の自動テストの網羅 | 利用者向けの Worker では、認証が必要な全エンドポイントに正常系と未認証 (401) のテストがあり、認証が不要な全エンドポイントに正常系のテストと、入力を持つものには入力不正 (400) のテストがある。入力を持たないのは、認証が不要な経路のうちログインのチャレンジ発行だけである (FR-2)。写真からの推測の API (FR-19) の正常系は CI では実行できないため除く。管理者 Worker では、全エンドポイントに正常系のテストと、入力を持つものには入力不正 (400) のテストがある (認証は Cloudflare Access が担うため 401 のテストは無い。FR-17) | 両方の Worker で、Router の定義から生成したエンドポイント一覧と、テストが付けたエンドポイントの識別子を CI で照合する。写真からの推測の API (FR-19) は正常系を照合の対象から除き (Workers AI の推論を要するため)、未認証 401 と入力不正 400 は対象に含める。FR-19 の正常系は、staging へのデプロイで実写真を送り、応答の形が FR-19 の基準を満たすこと (対象の項目のキーを持ち、推測できない項目は null で、`product` が null の場合を含む) を確認し、結果を issue に記録する |
 | エクスポートの完全性 | エクスポートした JSON から、ADR-0006 の利用者データの全テーブルの全行と全列 (写真の実体を除く) を復元できる | テスト専用の復元処理でエクスポートを別の利用者に取り込み、user_id と photo_key に含まれる利用者 ID を取り込み先に付け替えた上で、全テーブルの全行と全列を比較する自動テストで検証する。写真は付け替え後の photo_key と件数の一致を検証する |
 | 利用者間のデータ分離 | 他の利用者の記録の ID を指定した全ての API 呼び出しが 404 を返す | 2 利用者を用意した自動テストで、ID を受け取る全エンドポイントを検証する |
 | API の応答時間 | 店、商品、購入、抽出の一覧と単件取得の p95 が 200 ms 以内 | Worker がリクエストごとに経路名と処理時間をログに出し、リリース後に Workers Logs の保持期間の全量 (Workers Free プランは 3 日、Workers Paid プランは 7 日。2026-09-21 に Cloudflare のドキュメントで確認) で p95 を集計する。写真の取得と統計の API は含めない |
@@ -163,7 +172,8 @@ Frontend は Flutter で Web を先行し、Backend は Rust で Cloudflare Work
 | UC-17 | 豆の袋の写真から情報を入れたいとき | 購入の写真を選び、推測された商品と購入の項目を確認して適用する |
 
 UC-15 の行動者は管理者であり、それ以外の行動者は利用者である。
-FR-5 (データ分離) と FR-13 (サジェスト) は全ユースケースに横断する要求であり、対応するユースケースを個別に持たない。
+FR-5 (データ分離) は全ユースケースに横断する要求であり、対応するユースケースを個別に持たない。
+FR-13 (サジェスト) は UC-4 と UC-5 の自由記述の入力に付随する要求である。
 
 ## スコープ
 
@@ -182,9 +192,8 @@ FR-5 (データ分離) と FR-13 (サジェスト) は全ユースケースに�
 - 全記録の JSON エクスポート
 - アカウントと全データの削除
 - UI の日本語と英語の対応
-- Flutter Web のビルド成果物と Rust の Backend を 1 つの Cloudflare Worker としてデプロイ (Static Assets)
+- Frontend のビルド成果物と Rust の Backend を 1 つの Cloudflare Worker としてデプロイ (Static Assets)
 - 管理者用の Worker のデプロイ
-- iOS 向けにビルドできる状態の維持 (CI では検証せず、iOS 対応時に確認する)
 
 ### やらないこと
 
@@ -197,9 +206,9 @@ FR-5 (データ分離) と FR-13 (サジェスト) は全ユースケースに�
 - 推測の結果を利用者の確認なしに保存すること
 - 外部 (Cloudflare 以外) の AI サービスへの写真の送信
 - 1 購入への複数枚の写真
-- iOS ネイティブアプリの配布 (配布形態は未確定論点)
+- iOS 向けのビルドと配布 (所有者が 2026-10-01 に要件から落とした。ADR-0017)
 - Android 向けのビルドと配布
-- 独自ドメインの取得 (workers.dev のホスト名を使う。管理者 Worker に Cloudflare Access を掛けられない場合の代替案は「## 未確定論点」)
+- 独自ドメインの取得 (workers.dev のホスト名を使う)
 - 管理者用の CLI
 - 管理者 Worker での Cloudflare Access の JWT 検証
 
@@ -217,7 +226,7 @@ FR-5 (データ分離) と FR-13 (サジェスト) は全ユースケースに�
 | 400 | 入力が不正 (必須の欠落、型や範囲の違反、形式の違反) |
 | 401 | 未認証 (セッションが無いか無効) |
 | 403 | `Origin` ヘッダが同一オリジンでない |
-| 404 | 指定した ID の記録が存在しないか他の利用者に属する。または指定した登録用トークンが存在しない |
+| 404 | 指定した ID の記録が存在しないか他の利用者に属する。指定した登録用トークンが存在しない。または指定した購入に写真が無い (FR-10) |
 | 409 | 状態の矛盾 (アーカイブ済みの参照、最後のパスキーの削除、使用済みトークンの再使用、署名カウンタの後退) |
 | 410 | 期限切れ (登録用トークン、チャレンジ) |
 | 500 | サーバーの内部エラー (写真からの推測の失敗を含む。FR-19) |
@@ -233,7 +242,7 @@ FR-5 (データ分離) と FR-13 (サジェスト) は全ユースケースに�
 
 受け入れ基準は次の通りとする。
 
-- `/register?token=<トークン>` を開くと、パスキー登録の画面が表示される (ウィジェットテストで判定する)。
+- `/register?token=<トークン>` を開くと、パスキー登録の画面が表示される (Frontend の自動テストで判定する)。
 - 存在しないトークンでは登録の API が 404、使用済みのトークンでは 409、期限切れのトークンでは 410 を返し、パスキーは登録されない。
 - 登録が成功すると、トークンは使用済みになり、同じトークンで 2 回目の登録を試みると 409 を返す。
 - 登録が成功した時点でセッションが発行され、以後の API 呼び出しが認証済みとして扱われる。
@@ -389,8 +398,8 @@ FR-5 (データ分離) と FR-13 (サジェスト) は全ユースケースに�
 
 - 上の 4 つの API は、購入 ID が存在しないか他の利用者に属するとき 404 を返す (FR-5)。
 - 差し替えは、既に写真がある購入に対して URL の発行と完了の通知を行うことで実現する。
-- クライアントは、端末が復号できる画像 (Web では JPEG、PNG、WebP) を JPEG に変換し、長辺 2048 px 以下に縮小してからアップロードする。
-  Flutter 側の自動テストで、長辺 4,000 px の PNG と JPEG の入力から、JPEG かつ長辺 2048 px 以下の出力が得られることを検証する。
+- クライアントは、ブラウザが復号できる画像 (JPEG、PNG、WebP) を JPEG に変換し、長辺 2048 px 以下に縮小してからアップロードする。
+  Frontend の自動テストで、長辺 4,000 px の PNG と JPEG の入力から、JPEG かつ長辺 2048 px 以下の出力が得られることを検証する。
 - クライアントは、アップロード前に変換後のサイズをサーバーへ申告する。
   申告サイズが 5 MB (5,000,000 バイト) を超えると、サーバーは 400 を返し URL を発行しない。
 - サーバーは、Content-Type が `image/jpeg`、Content-Length が申告サイズ、有効期限が 5 分の条件で署名した PUT 用の URL を返す。
@@ -404,7 +413,10 @@ FR-5 (データ分離) と FR-13 (サジェスト) は全ユースケースに�
   他の利用者の購入の写真は 404 になる。
 - 写真を差し替えると古いオブジェクトは削除される。
   写真を削除すると購入の写真参照は NULL になり、オブジェクトは削除される。
-- 有効期限の秒数は設定値とし、テストでは短い値を注入して、期限切れの URL への PUT を R2 (ローカルでは wrangler のローカル R2) が 4xx で拒否することを検証する。
+- 写真が無い購入の写真の取得は 404 を返す。
+- 有効期限の秒数は設定値とし、署名に含まれる有効期限の値は自動テストで確認する。
+  期限切れの URL への PUT を R2 が 403 で拒否することは、有効期限の設定値を短くして発行した URL への実リクエストで確認し、結果を issue に記録する (ローカルの wrangler は R2 の S3 互換のエンドポイントを提供しない。docs/issues/pending/0009-feat-photo-r2-presigned-upload.md)。
+  この点は、自動テストで判定する原則の例外とする (FR-17 の Access のポリシーと、成功指標の FR-19 の正常系も同じ例外である)。
   期限の判定は R2 が行い、Backend は関与しない。
 
 ### 抽出
@@ -494,7 +506,7 @@ FR-5 (データ分離) と FR-13 (サジェスト) は全ユースケースに�
   webauthn_challenges のログイン用の行は `user_id` を持たないため削除の対象外とし、有効期限で失効する (ADR-0006)。
 - 削除後、その利用者の全セッションは無効になり、API 呼び出しは 401 を返す。
 - 削除は元に戻せないため、クライアントは確認ダイアログで明示的な確認ボタンを押させる。
-  確認ボタンを押さずに削除 API が呼ばれないことを Flutter の自動テストで検証する。
+  確認ボタンを押さずに削除 API が呼ばれないことを Frontend の自動テストで検証する。
 
 #### FR-16 UI の日本語と英語の対応 (Should)
 
@@ -503,12 +515,13 @@ UI の文言は日本語と英語で表示できる。
 受け入れ基準は次の通りとする。
 
 - 端末またはブラウザの言語設定が日本語のとき日本語、それ以外のとき英語で UI が表示される。
-- UI の文言は全て翻訳ファイル (ARB) に置く。
-  `lib/` 以下の UI コードで、Text、TextSpan、InputDecoration の labelText と hintText と helperText と errorText、Tooltip の message、SnackBar の content、AppBar の title に文字列リテラルを直接渡していないことを静的検査で検証する。
-  ログ、テストコード、翻訳キー、URL は検査の対象外とする。
+- UI の文言は全て翻訳ファイル (Frontend の型付きのキーと日本語と英語の表) に置く。
+  Frontend の UI のコード (`frontend/src/ui/` と `frontend/src/screens/` の `.rs`) の `rsx!` で、次の位置に文字列リテラルを直接書いていないことを静的検査で検証する。
+  対象は (1) 要素の本文、(2) `placeholder`、`title`、`aria-label`、`alt` の属性の値、(3) デザインの部品 10 種の `label` と `title` の prop の値とする。
+  対象外は、上記以外の属性の値 (Tailwind の `class`、`type`、`id`、`name`、`for`、`href`、`src`、`rel`、`role`、`value`、`kind`、`accept`、`autocomplete`、`inputmode`、`pattern`、`min`、`max`、`step`、`maxlength`、`method`、`action`、`target`)、ログ、テストコード、翻訳の表、URL とする。
 - 項目名は日本語 UI では日本語で表示する。
   対応は Producer が生産者、Origin が生産国、Region が地域、Process が精製方法、Variety が品種、Roast が焙煎度、Roast Date が焙煎日、Flavor Notes がフレーバーノートとする。
-  日本語の ARB ファイルにこの 8 つの訳語が値として存在することを CI の静的検査で確認する。
+  日本語の翻訳 (型付きのキーの表の日本語の値) にこの 8 つの訳語が存在することを CI の静的検査で確認する。
 
 #### FR-17 管理者画面による利用者の作成とトークンの発行 (Must)
 
@@ -523,11 +536,11 @@ UI の文言は日本語と英語で表示できる。
   ポリシーの内容は自動では検証できないため、デプロイ手順のチェック項目として管理者が Access の管理画面で確認する。
 - 管理者 Worker は Access の JWT を検証しない (所有者の決定)。
   デプロイ後の確認タスク (mise のタスク。ADR-0009) で、認証なしで管理者画面の URL を取得すると Access のログイン画面へリダイレクトされる (302) ことを検証する。
-- 管理者画面は管理者 Worker がサーバー側で生成する HTML のフォームとし、Flutter と JavaScript を使わない (ADR-0008)。
+- 管理者画面は管理者 Worker がサーバー側で生成する HTML のフォームとし、Frontend のコードと JavaScript を使わない (ADR-0008)。
   フォームの送信先の経路を管理者 API と呼ぶ。
   管理者 API は利用者向けの Worker のセッション認証を使わず、Cloudflare Access だけで保護する。
 - 管理者画面で、利用者の一覧 (表示名、作成日時、パスキーの数) を見られる。
-  `wrangler dev` に対する結合テストで、利用者を作成した後の一覧の HTML にその表示名が含まれることを検証する。
+  `wrangler dev` に対する結合テストで、利用者を作成した後の一覧の HTML にその表示名、作成日時、パスキーの数が含まれることを検証する。
 - 管理者画面で、表示名 (1 文字以上 50 文字以下) を入力して利用者を作成できる。
   範囲外の表示名は 400 を返す。
   表示名は管理者が利用者を識別するためだけに使い、利用者向けの Worker のどの API の応答にも含めない (自動テストで検証する)。
@@ -581,11 +594,11 @@ API は次の 4 つとする。
 
 受け入れ基準は次の通りとする。
 
-- 開始日と終了日は `YYYY-MM-DD` の文字列で、どちらも省略できる。
+- 開始日と終了日は `YYYY-MM-DD` の文字列で、どちらも省略できる。片方だけを省略したときは、省略した側に制限を設けない。
   開始日が終了日より後のときは 400 を返す。
   開始日は端末のローカル時刻での日付として扱い、抽出の API では UTC オフセットを使って UTC の範囲に変換する。
-- 粒度は `day` または `month` の文字列で必須とし、それ以外は 400 を返す。
-- UTC オフセットは -840 から 840 の整数 (分) で必須とし、それ以外は 400 を返す。
+- 粒度は `day` または `month` の文字列で必須とし、それ以外は 400 を返す (対象は `GET /api/stats/brews` と `GET /api/stats/purchases` の 2 つ)。
+- UTC オフセットは -840 から 840 の整数 (分) で必須とし、それ以外は 400 を返す (対象は `GET /api/stats/brews` と `GET /api/stats/brew-ratings` の 2 つ)。
 - `GET /api/stats/brews` は、区間ごとに区間のキー、抽出の件数 (整数)、豆の量の合計 (小数第 1 位までの数値) を返す。
   区間のキーは日別なら `YYYY-MM-DD`、月別なら `YYYY-MM` の文字列とし、区間はキーの昇順で並べる。
   記録の無い区間は返さない。
@@ -598,7 +611,8 @@ API は次の 4 つとする。
   アーカイブ済みの購入も指定できる (単件取得と同じ扱い。FR-12)。
 - 既知の記録を投入した自動テストで、上の 4 つの API の応答が期待値と一致し、他の利用者の記録とアーカイブ済みの記録が含まれない。
   日と月の境界をまたぐ抽出日時と、オフセット +540 と -300 の組み合わせを期待値に含める。
-- 統計画面は、初期状態で当月の日別の棒グラフを表示し、3 か月、6 か月、12 か月、全期間、任意の期間に切り替えられる (ウィジェットテストで判定する)。
+- 統計画面は、初期状態で当月の日別の棒グラフを表示し、3 か月、6 か月、12 か月、全期間、任意の期間に切り替えられる (Frontend のブラウザで動く自動テストで、グラフの要素に含まれる区間のキーと件数を確認する)。
+- 期間の切り替えは、API に渡す開始日、終了日、粒度が規則どおりであることを Frontend の自動テストで確認する (当月は日別、3 か月、6 か月、12 か月は月別、任意の期間は 62 日以下なら日別でそれ以外は月別、全期間は開始日と終了日を省略する)。
 - 集計の SQL は、アーカイブの条件と `user_id` の条件を含めて 1 か所で組み立てる (ADR-0006)。
 
 ### 写真からの推測
@@ -623,17 +637,18 @@ API は次の 4 つとする。
   写真のアップロード (FR-10) の扱いは変えない。
 - 応答は対象の項目を持ち、商品の項目は `product` の入れ子にする (購入の応答と同じ形)。
   推測できない項目は null とする。
+  商品の項目が 1 つも推測できないときは `product` を null にする。
   Roast Date は `YYYY-MM-DD`、価格と重量は 0 以上の整数、Flavor Notes は文字列の配列とする。
 - サーバーはモデルの出力を検証し、形式に合わない項目は null にして返す。
   推測の生の出力は保存せず、ログにも出さない。
 - AI の呼び出しに失敗したとき (無料枠の超過を含む) は 500 を返す。
-  クライアントは推測の失敗を表示し、手入力を続けられる。
+  クライアントは購入のフォームに推測の失敗のバナーを表示し、手入力を続けられる。
 - 推測はどの記録も変更しない。
-  適用はクライアントで行い、保存するまで記録に反映されない (ウィジェットテストで判定する)。
-- クライアントは、空の入力欄にだけ推測を反映し、入力済みの値を上書きしない (ウィジェットテストで判定する)。
+  適用はクライアントで行い、保存するまで記録に反映されない (Frontend の自動テストで判定する)。
+- クライアントは、空の入力欄にだけ推測を反映し、入力済みの値を上書きしない (Frontend の自動テストで判定する)。
 - クライアントは、商品が未選択のときだけ、推測した商品名と前後の空白を除いて一致する (大文字と小文字を区別しない) アーカイブされていない商品を選択する。
   選択済みの商品は上書きしない。
-  一致する商品が無いときは、推測値を引き継いだ商品の登録の導線を表示し、登録した商品を選択する (ウィジェットテストで判定する)。
+  一致する商品が無いときは、推測値を引き継いだ商品の登録の導線を表示し、登録した商品を選択する (Frontend の自動テストで判定する)。
 - 商品の一覧の API は、名前の完全一致の絞り込み (`name`) を受け付ける。
   照合は前後の空白を除いて大文字と小文字を区別せず、既定ではアーカイブ済みの商品を含めない (FR-12)。
   この絞り込みは推測の適用のために追加する。
@@ -653,7 +668,9 @@ API は次の 4 つとする。
   統計の API の p95 は 500 ms 以内とし (2026-09-21 に所有者が決定)、成功指標の API の応答時間と同じログで測る。
   上の想定規模で全期間の集計が Workers の CPU 時間の上限に収まることを設計時に確認する。
 - リリースの前に、ローカルの wrangler dev に対して k6 で VU 50 の負荷試験を実行する (ADR-0012)。
-  対象は認証が不要な経路 (静的アセット 3 つとログインのチャレンジ発行) とし、失敗率 1% 未満、応答時間の p95 500 ms 未満を目安にする。
+  対象は認証が不要な経路 (Frontend の静的アセット (index.html、JavaScript のローダー、WebAssembly) とログインのチャレンジ発行) とする。
+  ADR-0012 と k6 のシナリオは Flutter の成果物を指したままであるため、移行の issue 0045 がこの対象に合わせて更新する。
+  失敗率 1% 未満、応答時間の p95 500 ms 未満を満たすことを確認する。
   結果 (実行日時、p95、失敗率) は記録する。
   本番の p95 の判定は Workers Logs の集計で行い、負荷試験の結果では代用しない。
   `mise run check` には含めない。
@@ -666,7 +683,7 @@ API は次の 4 つとする。
   課金が発生する構成 (Workers Paid への加入、有料のモデル) は取らない (ADR-0015、ADR-0016)。
 - 1 回の推測の消費は、採用するモデルと画像の大きさで決まる。
   想定規模 (利用者 20 人) では無料枠に収まる見込みである。
-  1 回あたりの消費の推定は ADR-0016 に置き、実測は実装で行う。
+  1 回あたりの消費の推定と実測は ADR-0016 の追記と issue 0034 にある。
 
 ### 可用性
 
@@ -712,15 +729,20 @@ API は次の 4 つとする。
 
 ## 制約と前提
 
-- アプリ名は brewbook とし、Flutter のパッケージ名は brew_book とする。
-  Rust は 3 つのクレート (利用者向けの Worker の brew_book、管理者 Worker の brew_book_admin、共有ライブラリの brew_book_core) のワークスペースとする (ADR-0001、ADR-0010)。
-- Frontend は Flutter で書く。
-  Web を先行し、iOS ネイティブは同じコードからビルドできる状態を保つ (ADR-0007)。
-  ルーティングは go_router、グラフは fl_chart を使い、状態管理のライブラリは追加せず Flutter 標準の ChangeNotifier と ValueNotifier で扱う。
-  Web のレンダラは CanvasKit とする (ADR-0007)。
+- アプリ名は brewbook とする。
+  Backend は 3 つのクレート (利用者向けの Worker の brew_book、管理者 Worker の brew_book_admin、共有ライブラリの brew_book_core) と PBT のクレート (brew_book_pbt) のワークスペースとする (ADR-0001、ADR-0010)。
+  Frontend のクレート名は brew_book_frontend とする (ADR-0017)。
+- Frontend は Rust で書き、Dioxus で組む。
+  Web だけを対象とし、iOS 向けのビルドと配布は行わない (ADR-0017)。
+  ビルドは Dioxus CLI (`dx`)、スタイルは Tailwind CSS を使い、`docs/design/` のデザインを原本とする。
+  ルーティングは Dioxus のルーターを使い、経路は 1 か所の台帳に置く。
+  グラフ (FR-18) は Frontend で描画し、集計は Backend の API が行う。
+  UI の文言は型付きのキーと日本語と英語の表で持ち、画面のコードに表示する文字列を直接書かない (ADR-0017)。
+  ADR-0004 (iOS のパスキー) は 0040、ADR-0013 (Flutter の PBT とウィジェットテスト) は 0044、ADR-0014 (Flutter のフォント) は 0039、ADR-0005 (Flutter のルーティングとビルドと iOS 向けの配信)、ADR-0008 (管理者画面の Flutter の記述)、ADR-0009 (Flutter の版の固定)、ADR-0010 (Flutter と iOS の名前)、ADR-0012 (Flutter の成果物) は 0045 が、それぞれ ADR-0017 に合わせて改訂する。
+  ADR-0003 は改訂しない (iOS と Flutter の記述が無い)。ADR-0007 は ADR-0017 が置き換える。
 - Backend は Rust で書き、workers-rs で Cloudflare Workers 上の wasm32 として動かす (ADR-0001)。
 - 依存クレートの追加は、理由を ADR または issue に記録した上で行う (ADR-0001)。
-- Flutter、Rust、wrangler のバージョンはリポジトリのルートの `mise.toml` で管理し、`latest` ではなく版を固定する (ADR-0009)。
+- Rust、wrangler、Frontend のビルドツールのバージョンはリポジトリのルートの `mise.toml` で管理し、`latest` ではなく版を固定する (ADR-0009)。
   ビルド、デプロイ、テスト、ローカル開発の起動、D1 のマイグレーション、デプロイ後の確認のコマンドラインは `mise.toml` のタスクに定義し、別のスクリプトや Makefile を置かない (ADR-0009)。
 - データベースは Cloudflare D1 を使い、ローカル開発では wrangler のローカル D1 を使う (ADR-0002)。
 - 写真は Cloudflare R2 に保存し、アップロード用の署名付き URL は shiguredo/s3-rs (`shiguredo_s3`) で生成する (ADR-0003)。
@@ -742,15 +764,16 @@ API は次の 4 つとする。
   - WebAuthn の検証ロジックは、公開されているテストベクタを使った単体テストと、CBOR と COSE のパーサに対する PBT と Fuzzing を持つ。
   - WebAuthn のチャレンジ、登録用トークン、セッション、パスキーの状態遷移は、TLA+ の仕様と TLC のモデル検査で検証する (FR-1、FR-2、FR-3、FR-4。ADR-0013)。
   - Frontend も PBT を持ち、値の変換、統計の期間、API の入力と応答の対応を検証する (ADR-0013)。
+    Frontend のテストも Rust のテスト規約に従い、native の `cargo test` で実行する (ADR-0017)。
   - Fuzzing の実行は nightly を要するため手元で行い、CI では対象の型検査を行う (ADR-0013)。
-  - パスキーを伴う統合テストは、Chrome DevTools Protocol の仮想認証器で行う。
+  - パスキーを伴う E2E テストは、仮想認証器で行う (現在は Chrome DevTools Protocol、移行後は ChromeDriver の WebAuthn の拡張コマンド。ADR-0013 を移行の issue 0044 で改訂する)。
   - 有効期限などの時間に依存する検証は、設定値で短縮できるようにしてテストする。
-  - Frontend は Flutter のウィジェットテストと統合テストを持つ。
+  - Frontend は native の `cargo test` (単体と PBT)、`wasm-bindgen-test` (ブラウザの API に依存する検証)、E2E (実 Worker と仮想認証器) を持つ (ADR-0017)。
   - 全ての自動テストは CI で実行し、全て通過するまでマージしない (所有者の共通規約)。
 
 ## 未確定論点
 
-2026-09-21 に筆者が Cloudflare のドキュメントと手元の SQLite で確認し、未確定論点から外した項目は次の通りとする (出典は「## 関連資料」)。
+2026-09-21 に筆者が Cloudflare のドキュメント、手元の SQLite、ローカルのビルドとツールの確認で確かめ、未確定論点から外した項目は次の通りとする (出典は「## 関連資料」)。
 
 - Workers Static Assets は 1 つの Worker で静的ファイルと `/api/*` を同じホスト名から配信でき、`run_worker_first` は `["/api/*", "!/api/docs/*"]` のようなパターンの配列を受け付け、`not_found_handling` の `single-page-application` は該当ファイルの無いパスに `index.html` を 200 で返す (ADR-0005)。
 - Workers Routes はアカウントの有効なゾーンと Cloudflare でプロキシした DNS レコードが前提で、`pages.dev` には設定できない (ADR-0005)。
@@ -761,14 +784,18 @@ API は次の 4 つとする。
 - Workers Logs の保持期間は Workers Free プランで 3 日、Workers Paid プランで 7 日で、Free プランの取り込み上限は 1 日 200,000 件である (成功指標)。
 - D1 (workerd) の SQLite 関数の許可リストに `date`、`datetime`、`strftime` などの日時関数が含まれ、ISO 8601 の UTC 文字列 (末尾 `Z`、小数秒付きを含む) に `'+540 minutes'` のような分の修飾子を与えて日と月に切れることを SQLite 3.51.0 で確認した (ADR-0006)。
 - `shiguredo_s3` 2026.1.0-canary.7 は、所有者が mise で入れた Rust 1.98.1 で `cargo build --target wasm32-unknown-unknown` が成功する。依存 (base64ct、crc-fast、hmac、md-5、sha1、sha2、xml と digest 系) は全て純 Rust で、OpenSSL や ring を含まない。`put_object` のビルダーに `content_type` と `content_length` を与えて `presigned` を呼ぶと、`X-Amz-SignedHeaders=content-length;content-type;host` の PUT 用 URL が得られることを手元の実行で確認した (ADR-0003)。
-- リポジトリのルートの `mise.toml` が Flutter 3.47.5、Rust 1.98.1 (wasm32-unknown-unknown ターゲット付き)、wrangler 4.135.0 を固定し、`mise ls --current` でその版に解決されることを確認した (ADR-0009)。
+- リポジトリのルートの `mise.toml` が Rust 1.98.1 (wasm32-unknown-unknown ターゲット付き) と wrangler 4.135.0 を固定し、`mise ls --current` でその版に解決されることを確認した (ADR-0009)。
+  Flutter 3.47.5 の固定は、移行の issue 0037 から 0045 で外す (ADR-0017)。
+
+2026-09-30 以降に確認し、未確定論点から外した項目は次の通りとする。
+
+- Dioxus 0.7.10 が 2026-07-30 時点の最新の安定版で、0.8.0-alpha.1 が 2026-07-31 に公開されている (2026-10-01 に GitHub のリリースで確認。ADR-0017)。
+- 推測に使うモデルは、実写真 3 枚と合成ラベルでの比較で `@cf/meta/llama-4-scout-17b-16e-instruct` に決めた (2026-09-30 に確認。ADR-0016 の追記、issue 0034)。
+- AI バインディングを持つ `wrangler.toml` では、認証情報の無い CI で `wrangler dev` が起動しない。結合テストのハーネスは `wrangler dev --local` で起動する (2026-09-30 に確認。ADR-0016 の追記)。
 
 | 論点 | 未確定の内容 | 解消の方法 |
 | --- | --- | --- |
-| iOS の配布形態 | 自分の端末だけか App Store 公開かが決まっていない。どの形態でもネイティブでパスキーを使うには Apple Developer Program への加入と Associated Domains の設定が必要になる。App Store 公開なら審査対応が加わる。iOS での Cookie と Bearer トークンの扱いも決まっていない (ADR-0005、ADR-0007) | 所有者は iOS の実装に着手するときに、Apple Developer Program に加入するかを決め、加入するなら配布形態 (TestFlight の内部テスト、Ad Hoc、App Store) を決める (2026-09-21 に所有者が保留を確認)。決まるまで iOS はビルドできる状態を保つだけとする。Cookie と Bearer トークンの扱いも同じ時点で決める |
-| 署名付き URL の Content-Length 条件 | FR-10 は、アップロード用 URL の署名対象に Content-Type と Content-Length を含め、申告と異なるサイズの PUT を R2 が保存前に 403 で拒否することを狙う。R2 のドキュメントは Content-Type を署名対象に含めると異なる Content-Type の PUT が 403 になることを明記するが、Content-Length については触れていない (2026-09-21 に確認)。`shiguredo_s3` が Content-Length を署名対象に含めた URL を生成できることは確認済み (上の確認項目) で、未確認なのは R2 が Content-Length の不一致を拒否するかだけである | 実装者が実装の最初に、Content-Length を署名対象に含めた URL に対して申告と異なるサイズの PUT を R2 に送り、403 になることを確認する。拒否されない場合は、サイズの上限をアップロード完了後の確認 (FR-10 の完了通知) だけで強制する案を ADR-0003 の改訂として所有者に提案する |
-| 推測に使うモデルと費用 | FR-19 の推測に使う vision モデルが決まっていない。無料枠で使える候補 (`@cf/meta/llama-3.2-11b-vision-instruct`、`@cf/meta/llama-4-scout-17b-16e-instruct`、`@cf/mistralai/mistral-small-3.1-24b-instruct`、`@cf/moondream/moondream3.1-9B-A2B`、`@cf/qwen/qwen3.8-27b`) の、日本語のラベルの写真での精度と 1 回あたりの Neurons の消費が未比較である (ADR-0016) | 実装の最初に実写真 (日本語のラベル) で候補を比較し、1 回あたりの Neurons を実測して、vars の既定値を決める。結果を issue に記録する |
-| AI バインディングと結合テスト | Workers AI のバインディングは、ローカルの `wrangler dev` ではリモートの推論に接続する。ログインの無い CI でバインディングを持つ `wrangler dev` が起動できるかと、AI を呼ぶ経路の自動テストの扱いが未確認である (ADR-0016) | 実装の最初に、AI バインディングを追加した `wrangler.toml` でログインなしの `wrangler dev` と既存の結合テストが動くことを確認する。動かない場合はバインディングの定義の場所 (トップレベルと環境) や CI の起動方法を決め、ADR-0016 に追記する |
+| 署名付き URL の Content-Length 条件と有効期限の拒否 | FR-10 は、アップロード用 URL の署名対象に Content-Type と Content-Length を含め、申告と異なるサイズの PUT を R2 が保存前に 403 で拒否することを狙う。R2 のドキュメントは Content-Type を署名対象に含めると異なる Content-Type の PUT が 403 になることを明記するが、Content-Length については触れていない (2026-09-21 に確認)。`shiguredo_s3` が Content-Length を署名対象に含めた URL を生成できることは確認済み (上の確認項目) である。期限切れの URL への PUT の拒否も未確認である (ローカルの wrangler は R2 の S3 互換のエンドポイントを提供しない。docs/issues/pending/0009-feat-photo-r2-presigned-upload.md) | 実装者が、Content-Length を署名対象に含めた URL に対して申告と異なるサイズの PUT を R2 に送り、403 になることと、期限切れの URL への PUT が拒否されることを、開発用のバケットへの実リクエストで確認する。拒否されない場合は、サイズの上限をアップロード完了後の確認 (FR-10 の完了通知) だけで強制する案を、期限切れの拒否が確認できない場合は確認の方法 (開発用のバケットの用意を含む) を、それぞれ ADR-0003 の改訂として所有者に提案する |
 
 ## 関連資料
 
@@ -778,7 +805,7 @@ API は次の 4 つとする。
 - ADR-0004: 認証をパスキーだけにし、WebAuthn の検証を自前で最小実装する (`docs/adr/0004-passkey-only-authentication.md`)
 - ADR-0005: Frontend と Backend を 1 つの Worker から同一オリジンで配信する (`docs/adr/0005-same-origin-deployment.md`)
 - ADR-0006: データモデルを店、商品、購入、抽出の 4 つで構成し、論理削除を採用する (`docs/adr/0006-data-model-and-archive.md`)
-- ADR-0007: Frontend を Flutter で書き、Web を先行して iOS を後にする (`docs/adr/0007-frontend-flutter-web-first.md`)
+- ADR-0007: Frontend を Flutter で書き、Web を先行して iOS を後にする (`docs/adr/0007-frontend-flutter-web-first.md`。ADR-0017 が置き換えた)
 - ADR-0008: 管理者画面を別の Worker に置き、Cloudflare Access で保護する (`docs/adr/0008-admin-worker-cloudflare-access.md`)
 - ADR-0009: ツールチェーンのバージョン管理とコマンドラインを mise で管理する (`docs/adr/0009-mise-toolchain-and-tasks.md`)
 - ADR-0010: アプリ名と名前空間を brewbook に変更する (`docs/adr/0010-app-name-and-namespace-brewbook.md`)
@@ -788,6 +815,7 @@ API は次の 4 つとする。
 - ADR-0014: デザインのフォントを Google Fonts から読む (`docs/adr/0014-google-fonts-for-the-design.md`)
 - ADR-0015: 環境をローカル、staging、production に分ける (`docs/adr/0015-environment-separation.md`)
 - ADR-0016: 写真からの購入と商品の推測に Cloudflare Workers AI を使う (`docs/adr/0016-photo-inference-with-workers-ai.md`)
+- ADR-0017: Frontend を Rust (Dioxus) で書き、Web だけを対象にする (`docs/adr/0017-frontend-rust-dioxus-web-only.md`)
 - workers-rs: https://github.com/cloudflare/workers-rs
 - shiguredo/s3-rs: https://github.com/shiguredo/s3-rs
 - Cloudflare Workers の Rust 対応: https://developers.cloudflare.com/workers/languages/rust/
@@ -816,5 +844,14 @@ API は次の 4 つとする。
 - mise のドキュメント: https://mise.jdx.dev/
 - mise のタスク: https://mise.jdx.dev/tasks/
 - mise の Rust の設定 (targets など): https://mise.jdx.dev/lang/rust.html
-- Flutter の stable リリース一覧 (macOS): https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json
+- Dioxus: https://dioxuslabs.com/
+- Dioxus のリリース: https://github.com/DioxusLabs/dioxus/releases
+- Dioxus の Tailwind の自動検出: https://dioxuslabs.com/learn/0.7/essentials/ui/styling
+- Dioxus の hot-patching: https://dioxuslabs.com/learn/0.7/essentials/ui/hotreload
+- Dioxus の Web のガイド: https://dioxuslabs.com/learn/0.7/guides/platforms/web
+- Dioxus のテストのガイド: https://dioxuslabs.com/learn/0.7/guides/testing/web
+- Tailwind CSS: https://tailwindcss.com/
+- wasm-bindgen-test: https://rustwasm.github.io/docs/wasm-bindgen/wasm-bindgen-test/index.html
+- proptest: https://crates.io/crates/proptest
+- Dioxus Labs の Cognition への参画 (2026-09-10): https://dioxuslabs.com/blog/joining-cognition
 - W3C Web Authentication Level 3: https://www.w3.org/TR/webauthn-3/

@@ -89,5 +89,5 @@ Workers AI は無料枠 (1 日 10,000 Neurons) を持ち、顧客コンテンツ
   この環境ではリモートのプロキシのセッションの起動が、アカウントの選択 (複数のアカウント) や workers.dev のサブドメインの条件で失敗し、`wrangler dev` が起動しなくなる。
 - 推論の入力は `messages` の content に `text` と `image_url` (data URL) を並べる形とし、`max_tokens` 512 と `temperature` 0 を付ける。
 - モデルは vars の `AI_SUGGEST_MODEL` とし、既定値は 2026-09-30 の実写真 (3 枚) と合成ラベルでの比較で `@cf/meta/llama-4-scout-17b-16e-instruct` に決めた (名前の抽出の精度、所要 約 4 秒、1 回あたり 約 62 Neurons。他は mistral-small-3.1 が約 89 Neurons、qwen3.8 が約 277 Neurons で不安定、llama-3.2-11b-vision は商品名が null、moondream3.1 は messages 形式に非対応。issue 0034)。
-- 2026-09-30 の実装環境では、Workers AI の呼び出しがアカウント側の `internal error` で失敗した (テキストのモデルでも同じ)。
-  実写真での候補モデルの比較と、手元の `wrangler dev` での推測の確認はできなかった (issue 0034 の調査タスク)。
+- 2026-09-30 の実装環境では、ローカルの `wrangler dev` の AI 呼び出しがアカウント側の `internal error` で失敗した (テキストのモデルでも同じ)。
+  このため、実写真での候補モデルの比較はデプロイした使い捨ての Worker (probe) で行い、アプリの経路の確認は staging で行った (issue 0034)。

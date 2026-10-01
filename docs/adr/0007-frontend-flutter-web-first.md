@@ -2,7 +2,10 @@
 
 Created: 2026-09-21
 Model: Claude Fable 5.1
-Status: Accepted
+Status: Superseded by ADR-0017 (2026-10-02)
+
+ADR-0017 (Frontend を Rust (Dioxus) で書き、Web だけを対象にする) が本 ADR を置き換えた (2026-10-02)。
+iOS 対応を要件から落とし、Frontend を Flutter から Rust に置き換えた。
 
 ## 背景
 
