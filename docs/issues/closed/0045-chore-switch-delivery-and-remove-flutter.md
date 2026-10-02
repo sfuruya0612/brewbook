@@ -88,7 +88,7 @@ CI は Flutter のセットアップと、`mise.toml` と `ci.yml` に Flutter �
 - README、`docs/design/README.md`、`docs/design/components/*/README.md` の Flutter の記述が Dioxus の記述に置き換わっている: 上記のとおり。
 - ADR-0005、ADR-0008、ADR-0009、ADR-0010、ADR-0012 の Flutter の記述の改訂: 上記のとおり (ADR-0014 は 0039 が改訂済みで、0045 が残りの記述を合わせた)。
 - `CHANGES.md` の `## develop` に移行の変更が追記されている: 0045 のエントリを `## develop` の `### misc` に追記した (0037 から 0044 のエントリは移行の各 issue が追記済み)。
-- `mise run check` が通過する (Flutter の無い状態で、全ての自動テストが CI と同じ入口で動く): 作業ツリーで `mise run check` を既定の並列で実行し、通過した (2026-10-02、約 23 分)。内訳: fmt、lint (clippy と絵文字の検査)、formal (TLA+)、frontend:build、frontend:lint、frontend:test (native 230 件)、frontend:test-web (40 件)、frontend:test-same-origin (E2E)、backend:test (359 件)、backend:test-integration。1 回目の実行では `wrangler_account_api` の R2 のカーソルの検査が並列の負荷でタイムアウトした (単体では通過。0036 の解決方法にも記録した) が、2 回目で全て通過した。
+- `mise run check` が通過する (Flutter の無い状態で、全ての自動テストが CI と同じ入口で動く): 作業ツリーで `mise run check` を既定の並列で実行し、通過した (2026-10-02、約 23 分)。内訳: fmt、lint (clippy と絵文字の検査)、formal (TLA+)、frontend:build、frontend:lint、frontend:test (native 230 件)、frontend:test-web (40 件)、frontend:test-same-origin (E2E)、backend:test (359 件)、backend:test-integration。1 回目の実行では `wrangler_account_api` の R2 のカーソルの検査が並列の負荷でタイムアウトした (既知のフレーク 0030 と同じ症状。単体では通過。0036 の解決方法にも記録した) が、2 回目で全て通過した。
 
 方針を保った実装詳細の乖離:
 

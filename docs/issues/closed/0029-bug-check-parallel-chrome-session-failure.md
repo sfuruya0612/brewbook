@@ -2,6 +2,7 @@
 
 Created: 2026-09-26
 Model: deepseek-v4p1-flash
+Completed: 2026-10-03
 
 ## 症状
 
@@ -44,3 +45,11 @@ Model: deepseek-v4p1-flash
 
 - 上の完了条件にある解決方法の節への言及は文中の参照であり、見出しではない。この issue は未実装で、close の成果物を持たない。
 - 完了条件の 2 行目は条件付きで、そのままでは close の判定に使えない。実装の回で原因を特定して修正した場合の記録の指示であり、close の判定は 1 行目と 3 行目で行う。
+
+## 解決方法
+
+Flutter の統合テストを 0045 で削除したため、この失敗は再現しなくなった (2026-10-03 の所有者の決定)。
+
+- 失敗していた `frontend:test-integration` (Flutter の `flutter drive` の統合テスト) と `flutter` のツールを 0045 が消した。Chrome のセッションを作る Flutter の処理自体が無くなり、ブラウザのテストは Dioxus の wasm-bindgen-test (`frontend:test-web`) と E2E (`frontend:test-same-origin`。ChromeDriver を Rust のハーネスが起動する) になった。
+- 完了条件の 1 行目 (既定の並列で 3 回連続) は、対象の Flutter のタスクが無くなったため実施しない。代わりに、Flutter の無い状態で `mise run check` を既定の並列で実行し、通過することを確認した (2026-10-02 と 2026-10-03。約 23 分と約 27 分。ログの要約は 0045 の解決方法に記録した)。3 回の実行のうち 1 回目は、別の既知のフレーク (0030。`wrangler_account_api` の R2 のカーソルの検査が並列の負荷でタイムアウトする) で失敗したが、2 回目と 3 回目は全て通過した。
+- 原因の特定と修正は行っていない (対象のタスクが無くなったため)。
