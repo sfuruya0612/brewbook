@@ -7,9 +7,13 @@ use std::rc::Rc;
 use dioxus::prelude::*;
 
 use brew_book_frontend::records::values::LocalDateTime;
-use brew_book_frontend::records::{PickedPhoto, RecordServices, MAX_PHOTO_LONG_SIDE};
+use brew_book_frontend::records::{
+    PhotoUploader, PickedPhoto, RecordServices, RecordsApi, MAX_PHOTO_LONG_SIDE,
+};
 
-use support::{block_on, client, FakeClock, FakeImageConverter, FakePhotoPicker};
+use support::{
+    block_on, client, FakeClock, FakeImageConverter, FakePhotoPicker, FakeUploadTransport,
+};
 
 /// 画面の prop として受け取れることを型で確認する (Dioxus の prop は Clone + PartialEq を要求する)。
 #[component]
@@ -34,8 +38,12 @@ fn services() -> (RecordServices, Rc<dyn brew_book_frontend::records::Clock>) {
         }),
     });
     let converter = Rc::new(FakeImageConverter);
+    let uploader = Rc::new(PhotoUploader::new(
+        RecordsApi::new(api.clone()),
+        Rc::new(FakeUploadTransport::new()),
+    ));
     (
-        RecordServices::new(api, clock.clone(), picker, converter),
+        RecordServices::new(api, clock.clone(), picker, converter, uploader),
         clock,
     )
 }

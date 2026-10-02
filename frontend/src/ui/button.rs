@@ -140,13 +140,21 @@ pub fn IconButton(
     /// 押したときの動き。
     #[props(default)]
     onclick: EventHandler<MouseEvent>,
+    /// 押せるか (実行中は二重に送らない)。
+    #[props(default = false)]
+    disabled: bool,
 ) -> Element {
     rsx! {
         button {
             class: "iconbtn",
             r#type: "button",
             "aria-label": "{label}",
-            onclick: move |event| onclick.call(event),
+            disabled,
+            onclick: move |event| {
+                if !disabled {
+                    onclick.call(event);
+                }
+            },
             Icon { name }
         }
     }

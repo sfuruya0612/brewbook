@@ -20,7 +20,8 @@ use brew_book_frontend::auth::{
 };
 use brew_book_frontend::records::values::LocalDateTime;
 use brew_book_frontend::records::{
-    Clock, ConvertedImage, ImageConverter, PhotoFuture, PhotoPicker, PickedPhoto,
+    Clock, ConvertedImage, ImageConverter, PhotoFuture, PhotoPicker, PickedPhoto, UploadFuture,
+    UploadRequest, UploadTransport,
 };
 use serde_json::{Map, Value};
 
@@ -203,5 +204,54 @@ pub struct FakeImageConverter;
 impl ImageConverter for FakeImageConverter {
     fn convert_jpeg(&self, bytes: Vec<u8>, _max_long_side: u32) -> PhotoFuture<ConvertedImage> {
         Box::pin(std::future::ready(Ok(ConvertedImage { bytes })))
+    }
+}
+
+/// 署名付き URL への PUT の偽の実装。送った要求を記録し、決まった状態コードを返す。
+pub struct FakeUploadTransport {
+    requests: RefCell<Vec<UploadRequest>>,
+    status: u16,
+}
+
+impl FakeUploadTransport {
+    /// 常に成功 (200) を返す偽の実装を作る。
+    pub fn new() -> Self {
+        Self::with_status(200)
+    }
+
+    /// 決まった状態コードを返す偽の実装を作る。
+    pub fn with_status(status: u16) -> Self {
+        Self {
+            requests: RefCell::new(Vec::new()),
+            status,
+        }
+    }
+
+    /// 記録した要求。
+    pub fn requests(&self) -> Vec<UploadRequest> {
+        self.requests.borrow().clone()
+    }
+
+    /// 記録した最後の要求。1 件も送られていなければ panic する。
+    pub fn last_request(&self) -> UploadRequest {
+        self.requests
+            .borrow()
+            .last()
+            .cloned()
+            .expect("an upload request must be sent")
+    }
+}
+
+impl Default for FakeUploadTransport {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl UploadTransport for FakeUploadTransport {
+    fn put(&self, request: UploadRequest) -> UploadFuture {
+        self.requests.borrow_mut().push(request);
+        let status = self.status;
+        Box::pin(std::future::ready(Ok(status)))
     }
 }

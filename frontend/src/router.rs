@@ -10,7 +10,12 @@ use dioxus::prelude::*;
 use dioxus_router::Routable;
 
 use crate::app::AppShell;
-use crate::screens::{LoginScreen, NotFound, Placeholder, RegisterScreen};
+use crate::screens::{
+    BrewDetailScreen, BrewEditScreen, BrewFormScreen, HomeScreen, LoginScreen, NotFound,
+    Placeholder, ProductEditScreen, ProductFormScreen, ProductListScreen, PurchaseDetailScreen,
+    PurchaseEditScreen, PurchaseFormScreen, PurchaseListScreen, RegisterScreen, ShopEditScreen,
+    ShopFormScreen, ShopListScreen,
+};
 
 /// 画面の経路の台帳 (ADR-0017)。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -68,49 +73,49 @@ pub enum Route {
     #[route("/register?:token", RegisterScreen)]
     Register { token: Option<String> },
     /// ホーム (抽出の一覧。FR-11)。
-    #[route("/", Placeholder)]
+    #[route("/", HomeScreen)]
     Home {},
     /// 設定 (パスキーの管理、エクスポート、アカウントの削除、ログアウト。FR-3、FR-4、FR-14、FR-15)。
     #[route("/settings", Placeholder)]
     Settings {},
     /// 抽出の登録 (FR-11)。
-    #[route("/brews/new", Placeholder)]
+    #[route("/brews/new", BrewFormScreen)]
     BrewNew {},
     /// 抽出の詳細 (FR-11)。
-    #[route("/brews/:id", Placeholder)]
+    #[route("/brews/:id", BrewDetailScreen)]
     BrewDetail { id: String },
     /// 抽出の編集 (FR-11)。
-    #[route("/brews/:id/edit", Placeholder)]
+    #[route("/brews/:id/edit", BrewEditScreen)]
     BrewEdit { id: String },
     /// 購入の一覧 (FR-9)。
-    #[route("/purchases", Placeholder)]
+    #[route("/purchases", PurchaseListScreen)]
     Purchases {},
     /// 購入の登録 (FR-9)。
-    #[route("/purchases/new", Placeholder)]
+    #[route("/purchases/new", PurchaseFormScreen)]
     PurchaseNew {},
     /// 購入の詳細 (FR-9、FR-10、FR-18)。
-    #[route("/purchases/:id", Placeholder)]
+    #[route("/purchases/:id", PurchaseDetailScreen)]
     PurchaseDetail { id: String },
     /// 購入の編集 (FR-9)。
-    #[route("/purchases/:id/edit", Placeholder)]
+    #[route("/purchases/:id/edit", PurchaseEditScreen)]
     PurchaseEdit { id: String },
     /// 商品の一覧 (FR-7)。
-    #[route("/products", Placeholder)]
+    #[route("/products", ProductListScreen)]
     Products {},
     /// 商品の登録 (FR-7)。
-    #[route("/products/new", Placeholder)]
+    #[route("/products/new", ProductFormScreen)]
     ProductNew {},
     /// 商品の編集 (FR-7)。
-    #[route("/products/:id/edit", Placeholder)]
+    #[route("/products/:id/edit", ProductEditScreen)]
     ProductEdit { id: String },
     /// 店の一覧 (FR-6)。
-    #[route("/shops", Placeholder)]
+    #[route("/shops", ShopListScreen)]
     Shops {},
     /// 店の登録 (FR-6)。
-    #[route("/shops/new", Placeholder)]
+    #[route("/shops/new", ShopFormScreen)]
     ShopNew {},
     /// 店の編集 (FR-6)。
-    #[route("/shops/:id/edit", Placeholder)]
+    #[route("/shops/:id/edit", ShopEditScreen)]
     ShopEdit { id: String },
     /// 統計 (FR-18)。
     #[route("/stats", Placeholder)]

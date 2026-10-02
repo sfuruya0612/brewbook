@@ -33,6 +33,10 @@ pub fn App() -> Element {
     let _auth = use_context_provider(|| AuthServices::web(api));
     // 起動時のセッション確認の結果。画面はこれを見て遷移を決める。
     let _session = use_context_provider(|| Signal::new(SessionStatus::Checking));
+    // 記録の変更の通知 (0041)。一覧はこれを受けて先頭から読み直す。
+    let _revision = use_context_provider(|| Signal::new(0_u64));
+    // 保存などの通知 (スナックバー)。画面が文言を入れ、数秒後に消える。
+    let _notice = use_context_provider(|| Signal::new(None::<String>));
 
     rsx! {
         Router::<Route> {}

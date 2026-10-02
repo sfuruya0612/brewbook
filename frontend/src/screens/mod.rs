@@ -1,7 +1,7 @@
-//! 画面 (0038、0040)。
+//! 画面 (0038、0040、0041)。
 //!
-//! 0040 が認証の画面 (ログイン、登録) を入れ、それ以外の経路は仮の画面 ([`Placeholder`]) の
-//! ままにする。残りの画面は 0041 以降が入れる。
+//! 認証の画面 (ログイン、登録) と、記録の画面 (ホーム、抽出、購入、商品、店) を入れる。
+//! 統計と設定の画面は 0042 と 0043 が入れるまで仮の画面 ([`Placeholder`]) にする。
 
 use dioxus::prelude::*;
 use dioxus_router::{navigator, use_route};
@@ -12,20 +12,30 @@ use crate::router::{fallback_destination, Route};
 mod login;
 mod register;
 
+pub mod records;
+
 pub use login::LoginScreen;
+pub use records::{
+    brew_detail::BrewDetailScreen,
+    brew_form::{BrewEditScreen, BrewFormScreen},
+    home::HomeScreen,
+    product_form::{ProductEditScreen, ProductFormScreen},
+    product_list::ProductListScreen,
+    purchase_detail::PurchaseDetailScreen,
+    purchase_form::{PurchaseEditScreen, PurchaseFormScreen},
+    purchase_list::PurchaseListScreen,
+    shop_form::{ShopEditScreen, ShopFormScreen},
+    shop_list::ShopListScreen,
+};
 pub use register::{register_submit, RegisterScreen, RegisterSubmit};
 
 /// 画面の実装が入るまでの仮の画面。経路の題を表示する。
 ///
-/// 経路の動的な値 (`id`、`token`、`segments`) は、Dioxus のルーターが経路の型から渡すために
-/// prop として持つ。0040 以降の画面が経路ごとの実装に置き換える。
+/// 統計と設定の経路 (0042、0043 が入れる) だけが使う。経路の動的な値 (`segments`) は、
+/// Dioxus のルーターが経路の型から渡すために prop として持つ。
 #[component]
-pub fn Placeholder(
-    #[props(default)] id: String,
-    #[props(default)] token: Option<String>,
-    #[props(default)] segments: Vec<String>,
-) -> Element {
-    let _ = (id, token, segments);
+pub fn Placeholder(#[props(default)] segments: Vec<String>) -> Element {
+    let _ = segments;
     let route = use_route::<Route>();
     let title = t(title_key(&route));
     rsx! {

@@ -1,0 +1,604 @@
+//! `records::api` と `records::upload` の単体テスト (0041)。
+//!
+//! 経路、クエリ、本文、応答の型への変換を、偽の送信の実装で確かめる。記録の登録、閲覧、編集、
+//! アーカイブ、アーカイブ解除 (完了条件 1) と、写真のアップロードの 3 回の呼び出し (FR-10)、
+//! サジェスト (FR-13)、推測 (FR-19) を覆う。
+
+mod support;
+
+use std::rc::Rc;
+
+use brew_book_frontend::api::Method;
+use brew_book_frontend::records::{
+    inputs::{BrewInput, ProductInput, PurchaseInput, ShopInput},
+    ConvertedImage, PhotoUpload, PhotoUploader, RecordError, RecordsApi, SuggestionTarget,
+};
+use serde_json::{json, Value};
+
+use support::{block_on, client, FakeUploadTransport};
+
+/// 店の応答の JSON。
+fn shop_json(id: &str, name: &str) -> Value {
+    json!({
+        "id": id,
+        "user_id": "user",
+        "name": name,
+        "address": null,
+        "created_at": "2026-10-01T00:00:00.000Z",
+        "updated_at": "2026-10-01T00:00:00.000Z",
+        "archived_at": null,
+    })
+}
+
+/// 商品の応答の JSON。
+fn product_json(id: &str, name: &str) -> Value {
+    json!({
+        "id": id,
+        "user_id": "user",
+        "name": name,
+        "producer": null,
+        "origin": null,
+        "region": null,
+        "process": null,
+        "variety": null,
+        "flavor_notes": [],
+        "created_at": "2026-10-01T00:00:00.000Z",
+        "updated_at": "2026-10-01T00:00:00.000Z",
+        "archived_at": null,
+    })
+}
+
+/// 購入の応答の JSON (商品と店をネストする。FR-9)。
+fn purchase_json(id: &str, product_id: &str, shop_id: Option<&str>) -> Value {
+    json!({
+        "id": id,
+        "user_id": "user",
+        "product_id": product_id,
+        "shop_id": shop_id,
+        "purchased_on": "2026-10-01",
+        "roast": null,
+        "roast_date": null,
+        "price_amount": null,
+        "price_currency": null,
+        "weight_grams": null,
+        "photo_key": null,
+        "created_at": "2026-10-01T00:00:00.000Z",
+        "updated_at": "2026-10-01T00:00:00.000Z",
+        "archived_at": null,
+        "product": product_json(product_id, "豆"),
+        "shop": shop_id.map(|id| shop_json(id, "店")),
+    })
+}
+
+/// 抽出の応答の JSON (購入をネストする。FR-11)。
+fn brew_json(id: &str, purchase_id: &str) -> Value {
+    json!({
+        "id": id,
+        "user_id": "user",
+        "purchase_id": purchase_id,
+        "brewed_at": "2026-10-01T09:00:00.000Z",
+        "dose_grams": 15.0,
+        "water_grams": null,
+        "water_temp_c": null,
+        "brew_time_seconds": null,
+        "method": null,
+        "grind_setting": null,
+        "rating": 4,
+        "notes": null,
+        "created_at": "2026-10-01T00:00:00.000Z",
+        "updated_at": "2026-10-01T00:00:00.000Z",
+        "archived_at": null,
+        "purchase": purchase_json(purchase_id, "product", None),
+    })
+}
+
+/// 応答を 1 つだけ返す API クライアントを作る。
+fn with_response(body: Value) -> (RecordsApi, Rc<support::FakeTransport>) {
+    let (client, transport) = client(vec![support::FakeTransport::response(
+        200,
+        &body.to_string(),
+    )]);
+    (RecordsApi::new(client), transport)
+}
+
+#[test]
+fn the_shops_list_sends_the_paging_query_and_reads_the_page() {
+    let (api, transport) =
+        with_response(json!({"shops": [shop_json("s1", "店")], "next_cursor": "cur"}));
+    let page = block_on(api.shops(None, false)).expect("the page must be read");
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items[0].name, "店");
+    assert_eq!(page.next_cursor.as_deref(), Some("cur"));
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Get);
+    assert_eq!(request.path, "/api/shops?limit=50");
+
+    let (api, transport) = with_response(json!({"shops": [], "next_cursor": null}));
+    let page = block_on(api.shops(Some("cur"), true)).expect("the page must be read");
+    assert!(page.items.is_empty());
+    assert_eq!(page.next_cursor, None);
+    assert_eq!(
+        transport.last_request().path,
+        "/api/shops?limit=50&include_archived=true&cursor=cur"
+    );
+}
+
+#[test]
+fn a_shop_is_read_created_updated_and_archived() {
+    let (api, transport) = with_response(shop_json("s1", "店"));
+    let shop = block_on(api.shop("s1")).expect("the shop must be read");
+    assert_eq!(shop.id, "s1");
+    assert_eq!(transport.last_request().path, "/api/shops/s1");
+
+    let (api, transport) = with_response(shop_json("s1", "店"));
+    let input = ShopInput {
+        name: "店".to_string(),
+        address: Some("住所".to_string()),
+    };
+    let _ = block_on(api.create_shop(&input)).expect("the shop must be created");
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Post);
+    assert_eq!(request.path, "/api/shops");
+    let body: Value = serde_json::from_slice(&request.body).expect("the body must be JSON");
+    assert_eq!(body, json!({"name": "店", "address": "住所"}));
+
+    let (api, transport) = with_response(shop_json("s1", "店"));
+    let _ = block_on(api.update_shop("s1", &input)).expect("the shop must be updated");
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Patch);
+    assert_eq!(request.path, "/api/shops/s1");
+
+    let (api, transport) = with_response(shop_json("s1", "店"));
+    let _ = block_on(api.set_shop_archived("s1", true)).expect("the shop must be archived");
+    assert_eq!(transport.last_request().path, "/api/shops/s1/archive");
+    let (api, transport) = with_response(shop_json("s1", "店"));
+    let _ = block_on(api.set_shop_archived("s1", false)).expect("the shop must be unarchived");
+    assert_eq!(transport.last_request().path, "/api/shops/s1/unarchive");
+}
+
+#[test]
+fn the_products_list_sends_the_name_filter_and_reads_the_page() {
+    let (api, transport) =
+        with_response(json!({"products": [product_json("p1", "豆")], "next_cursor": null}));
+    let page = block_on(api.products(None, false, Some("豆 山"))).expect("the page must be read");
+    assert_eq!(page.items[0].name, "豆");
+    assert_eq!(
+        transport.last_request().path,
+        "/api/products?limit=50&name=%E8%B1%86%20%E5%B1%B1"
+    );
+}
+
+#[test]
+fn a_product_is_read_created_updated_and_archived() {
+    let (api, transport) = with_response(product_json("p1", "豆"));
+    let product = block_on(api.product("p1")).expect("the product must be read");
+    assert_eq!(product.id, "p1");
+    assert_eq!(transport.last_request().path, "/api/products/p1");
+
+    let input = ProductInput {
+        name: "豆".to_string(),
+        producer: Some("生産者".to_string()),
+        origin: None,
+        region: None,
+        process: None,
+        variety: None,
+        flavor_notes: vec!["甘い".to_string()],
+    };
+    let (api, transport) = with_response(product_json("p1", "豆"));
+    let _ = block_on(api.create_product(&input)).expect("the product must be created");
+    let body: Value =
+        serde_json::from_slice(&transport.last_request().body).expect("the body must be JSON");
+    assert_eq!(
+        body,
+        json!({
+            "name": "豆",
+            "producer": "生産者",
+            "origin": null,
+            "region": null,
+            "process": null,
+            "variety": null,
+            "flavor_notes": ["甘い"],
+        })
+    );
+
+    let (api, transport) = with_response(product_json("p1", "豆"));
+    let _ = block_on(api.update_product("p1", &input)).expect("the product must be updated");
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Patch);
+    assert_eq!(request.path, "/api/products/p1");
+
+    let (api, transport) = with_response(product_json("p1", "豆"));
+    let _ = block_on(api.set_product_archived("p1", true)).expect("the product must be archived");
+    assert_eq!(transport.last_request().path, "/api/products/p1/archive");
+
+    // アーカイブ解除も同じ経路の逆向きの操作で行う (完了条件 1)。
+    let (api, transport) = with_response(product_json("p1", "豆"));
+    let _ =
+        block_on(api.set_product_archived("p1", false)).expect("the product must be unarchived");
+    assert_eq!(transport.last_request().path, "/api/products/p1/unarchive");
+}
+
+#[test]
+fn a_purchase_is_read_created_updated_and_archived() {
+    let (api, transport) = with_response(purchase_json("b1", "p1", Some("s1")));
+    let purchase = block_on(api.purchase("b1")).expect("the purchase must be read");
+    assert_eq!(purchase.product.name, "豆");
+    assert_eq!(
+        purchase.shop.as_ref().map(|shop| shop.name.as_str()),
+        Some("店")
+    );
+    assert_eq!(transport.last_request().path, "/api/purchases/b1");
+
+    let input = PurchaseInput {
+        product_id: "p1".to_string(),
+        shop_id: None,
+        purchased_on: "2026-10-01".to_string(),
+        roast: None,
+        roast_date: None,
+        price_amount: Some(1200),
+        price_currency: Some("JPY".to_string()),
+        weight_grams: Some(200),
+    };
+    let (api, transport) = with_response(purchase_json("b1", "p1", None));
+    let _ = block_on(api.create_purchase(&input)).expect("the purchase must be created");
+    let request = transport.last_request();
+    assert_eq!(request.path, "/api/purchases");
+    let body: Value = serde_json::from_slice(&request.body).expect("the body must be JSON");
+    assert_eq!(body["price_amount"], json!(1200));
+    assert_eq!(body["price_currency"], json!("JPY"));
+    assert_eq!(body["weight_grams"], json!(200));
+
+    let (api, transport) = with_response(purchase_json("b1", "p1", None));
+    let _ = block_on(api.update_purchase("b1", &input)).expect("the purchase must be updated");
+    assert_eq!(transport.last_request().path, "/api/purchases/b1");
+
+    let (api, transport) = with_response(purchase_json("b1", "p1", None));
+    let _ = block_on(api.set_purchase_archived("b1", true)).expect("the purchase must be archived");
+    assert_eq!(transport.last_request().path, "/api/purchases/b1/archive");
+    let (api, transport) = with_response(purchase_json("b1", "p1", None));
+    let _ =
+        block_on(api.set_purchase_archived("b1", false)).expect("the purchase must be unarchived");
+    assert_eq!(transport.last_request().path, "/api/purchases/b1/unarchive");
+}
+
+#[test]
+fn the_purchases_and_brews_lists_send_the_paging_query() {
+    let (api, transport) =
+        with_response(json!({"purchases": [purchase_json("b1", "p1", None)], "next_cursor": null}));
+    let page = block_on(api.purchases(None, false)).expect("the page must be read");
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(transport.last_request().path, "/api/purchases?limit=50");
+
+    let (api, transport) =
+        with_response(json!({"brews": [brew_json("w1", "b1")], "next_cursor": "c"}));
+    let page = block_on(api.brews(None, true)).expect("the page must be read");
+    assert_eq!(page.items[0].purchase.product.name, "豆");
+    assert_eq!(page.next_cursor.as_deref(), Some("c"));
+    assert_eq!(
+        transport.last_request().path,
+        "/api/brews?limit=50&include_archived=true"
+    );
+}
+
+#[test]
+fn a_brew_is_read_created_updated_and_archived() {
+    let (api, transport) = with_response(brew_json("w1", "b1"));
+    let brew = block_on(api.brew("w1")).expect("the brew must be read");
+    assert_eq!(brew.id, "w1");
+    assert_eq!(brew.rating, Some(4));
+    assert_eq!(transport.last_request().path, "/api/brews/w1");
+
+    let input = BrewInput {
+        purchase_id: "b1".to_string(),
+        brewed_at: "2026-10-01T09:00:00.000Z".to_string(),
+        dose_grams: Some(15.0),
+        water_grams: None,
+        water_temp_c: None,
+        brew_time_seconds: None,
+        method: None,
+        grind_setting: None,
+        rating: Some(4),
+        notes: None,
+    };
+    let (api, transport) = with_response(brew_json("w1", "b1"));
+    let _ = block_on(api.create_brew(&input)).expect("the brew must be created");
+    let request = transport.last_request();
+    assert_eq!(request.path, "/api/brews");
+    let body: Value = serde_json::from_slice(&request.body).expect("the body must be JSON");
+    assert_eq!(body["brewed_at"], json!("2026-10-01T09:00:00.000Z"));
+    assert_eq!(body["rating"], json!(4));
+
+    let (api, transport) = with_response(brew_json("w1", "b1"));
+    let _ = block_on(api.update_brew("w1", &input)).expect("the brew must be updated");
+    assert_eq!(transport.last_request().path, "/api/brews/w1");
+
+    let (api, transport) = with_response(brew_json("w1", "b1"));
+    let _ = block_on(api.set_brew_archived("w1", true)).expect("the brew must be archived");
+    assert_eq!(transport.last_request().path, "/api/brews/w1/archive");
+
+    // アーカイブ解除も同じ経路の逆向きの操作で行う (完了条件 1)。
+    let (api, transport) = with_response(brew_json("w1", "b1"));
+    let _ = block_on(api.set_brew_archived("w1", false)).expect("the brew must be unarchived");
+    assert_eq!(transport.last_request().path, "/api/brews/w1/unarchive");
+}
+
+#[test]
+fn the_photo_urls_are_requested_completed_and_deleted() {
+    let (api, transport) =
+        with_response(json!({"url": "https://r2.example/put", "key": "pending/u/1.jpg"}));
+    let target =
+        block_on(api.request_photo_upload_url("b1", 1234)).expect("the upload url must be issued");
+    assert_eq!(target.url, "https://r2.example/put");
+    assert_eq!(target.key, "pending/u/1.jpg");
+    let request = transport.last_request();
+    assert_eq!(request.path, "/api/purchases/b1/photo/upload-url");
+    let body: Value = serde_json::from_slice(&request.body).expect("the body must be JSON");
+    assert_eq!(body, json!({"size": 1234}));
+
+    let (api, transport) = with_response(purchase_json("b1", "p1", None));
+    let _ = block_on(api.complete_photo("b1", "pending/u/1.jpg", 1234))
+        .expect("the completion must be accepted");
+    let request = transport.last_request();
+    assert_eq!(request.path, "/api/purchases/b1/photo");
+    let body: Value = serde_json::from_slice(&request.body).expect("the body must be JSON");
+    assert_eq!(body, json!({"key": "pending/u/1.jpg", "size": 1234}));
+
+    let (api, transport) = with_response(purchase_json("b1", "p1", None));
+    let _ = block_on(api.delete_photo("b1")).expect("the photo must be deleted");
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Delete);
+    assert_eq!(request.path, "/api/purchases/b1/photo");
+}
+
+#[test]
+fn the_photo_get_url_is_built_from_the_base_path() {
+    let (api, _) = with_response(json!({}));
+    assert_eq!(api.photo_url("b1"), "/api/purchases/b1/photo");
+}
+
+#[test]
+fn the_purchase_suggestion_sends_the_jpeg_and_reads_the_response() {
+    let (api, transport) = with_response(json!({
+        "product": {"name": "豆", "flavor_notes": ["甘い"]},
+        "roast": "中煎り",
+        "price_amount": 1200,
+    }));
+    let suggestion =
+        block_on(api.suggest_purchase(&[1, 2, 3])).expect("the suggestion must be read");
+    assert_eq!(
+        suggestion
+            .product
+            .as_ref()
+            .and_then(|product| product.name.as_deref()),
+        Some("豆")
+    );
+    assert_eq!(suggestion.roast.as_deref(), Some("中煎り"));
+    assert_eq!(suggestion.price_amount, Some(1200));
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Post);
+    assert_eq!(request.path, "/api/purchase-suggestions");
+    assert_eq!(request.content_type.as_deref(), Some("image/jpeg"));
+    assert_eq!(request.body, vec![1, 2, 3]);
+}
+
+#[test]
+fn the_suggestions_query_is_encoded_and_the_values_are_read() {
+    let (api, transport) = with_response(json!({"values": ["中煎り", "深煎り"]}));
+    let values = block_on(api.suggestions(SuggestionTarget::Roast, "中 煎"))
+        .expect("the suggestions must be read");
+    assert_eq!(values, vec!["中煎り".to_string(), "深煎り".to_string()]);
+    assert_eq!(
+        transport.last_request().path,
+        "/api/suggestions/roast?q=%E4%B8%AD%20%E7%85%8E"
+    );
+
+    // 対象の 8 つは API の経路の名前と同じ。
+    for (target, name) in [
+        (SuggestionTarget::Producer, "producer"),
+        (SuggestionTarget::Origin, "origin"),
+        (SuggestionTarget::Region, "region"),
+        (SuggestionTarget::Process, "process"),
+        (SuggestionTarget::Variety, "variety"),
+        (SuggestionTarget::Roast, "roast"),
+        (SuggestionTarget::Method, "method"),
+        (SuggestionTarget::GrindSetting, "grind_setting"),
+    ] {
+        assert_eq!(target.as_str(), name);
+    }
+    assert_eq!(SuggestionTarget::ALL.len(), 8);
+}
+
+#[test]
+fn a_broken_response_is_a_format_error() {
+    let (api, _) = with_response(json!({"shops": "not an array"}));
+    let error = block_on(api.shops(None, false)).expect_err("the response must be rejected");
+    assert!(matches!(error, RecordError::Format(_)), "{error:?}");
+}
+
+#[test]
+fn the_uploader_requests_the_url_puts_the_jpeg_and_completes() {
+    let transport = Rc::new(FakeUploadTransport::new());
+    let (client, api_transport) = client(vec![
+        support::FakeTransport::response(
+            200,
+            &json!({"url": "https://r2.example/put", "key": "pending/u/1.jpg"}).to_string(),
+        ),
+        support::FakeTransport::response(200, &purchase_json("b1", "p1", None).to_string()),
+    ]);
+    let uploader = PhotoUploader::new(RecordsApi::new(client), transport.clone());
+
+    let purchase = block_on(uploader.upload(
+        "b1".to_string(),
+        ConvertedImage {
+            bytes: vec![9, 8, 7],
+        },
+    ))
+    .expect("the upload must complete");
+    assert_eq!(purchase.id, "b1");
+
+    // 3 回の呼び出し: URL の発行、R2 への PUT、完了の通知 (ADR-0003)。
+    let requests = api_transport.requests();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0].path, "/api/purchases/b1/photo/upload-url");
+    assert_eq!(requests[1].path, "/api/purchases/b1/photo");
+    let upload = transport.last_request();
+    assert_eq!(upload.url, "https://r2.example/put");
+    assert_eq!(upload.content_type, "image/jpeg");
+    assert_eq!(upload.body, vec![9, 8, 7]);
+}
+
+#[test]
+fn a_failed_upload_is_a_retryable_upload_error() {
+    let transport = Rc::new(FakeUploadTransport::with_status(403));
+    let (client, _) = client(vec![support::FakeTransport::response(
+        200,
+        &json!({"url": "https://r2.example/put", "key": "pending/u/1.jpg"}).to_string(),
+    )]);
+    let uploader = PhotoUploader::new(RecordsApi::new(client), transport);
+
+    let error = block_on(uploader.upload("b1".to_string(), ConvertedImage { bytes: vec![1] }))
+        .expect_err("the upload must fail");
+    assert!(matches!(error, RecordError::Upload(_)), "{error:?}");
+    assert!(brew_book_frontend::records::record_error_retry(&error));
+}
+
+/// 失敗を画面に出す文言のキーに変換する (FR-16。0041 のレビューの指摘)。
+#[test]
+fn the_error_keys_follow_the_shared_mapping() {
+    use brew_book_frontend::api::{ApiCallError, ApiError, NetworkError};
+    use brew_book_frontend::i18n::Key;
+    use brew_book_frontend::records::record_error_key;
+
+    let api_error = |status: u16| {
+        RecordError::Api(ApiCallError::Api(ApiError {
+            status,
+            code: "code".to_string(),
+            message: "message".to_string(),
+        }))
+    };
+    for (error, expected) in [
+        (api_error(401), Key::ErrorUnauthorized),
+        (api_error(400), Key::ErrorValidation),
+        (api_error(404), Key::ErrorNotFound),
+        (api_error(409), Key::ErrorConflict),
+        (api_error(410), Key::ErrorGone),
+        (api_error(500), Key::ErrorUnexpected),
+        (
+            RecordError::Api(ApiCallError::Network(NetworkError::new("Failed to fetch"))),
+            Key::ErrorNetwork,
+        ),
+        (
+            RecordError::Upload("the PUT failed".to_string()),
+            Key::ErrorNetwork,
+        ),
+        (
+            RecordError::Format("broken".to_string()),
+            Key::ErrorUnexpected,
+        ),
+        (
+            RecordError::Validation(Key::ValidationRequired),
+            Key::ValidationRequired,
+        ),
+    ] {
+        assert_eq!(record_error_key(&error), expected, "{error:?}");
+    }
+}
+
+/// 再試行の案内を出す失敗の判定 (0041 のレビューの指摘)。
+///
+/// 通信の失敗と、401 以外の API エラー (500 など) は再試行を出す。401 (ログイン画面へ戻す)、
+/// 入力の誤り (400 など)、形式の違反と写真の失敗は出さない。
+#[test]
+fn the_retry_notice_follows_the_shared_rule() {
+    use brew_book_frontend::api::{ApiCallError, ApiError, NetworkError};
+    use brew_book_frontend::i18n::Key;
+    use brew_book_frontend::records::record_error_retry;
+
+    let api_error = |status: u16| {
+        RecordError::Api(ApiCallError::Api(ApiError {
+            status,
+            code: "code".to_string(),
+            message: "message".to_string(),
+        }))
+    };
+    for (error, expected) in [
+        (api_error(500), true),
+        (api_error(503), true),
+        // 入力の誤りでも、401 以外の API エラーは再試行を出す (デザインの Feedback の指示)。
+        (api_error(400), true),
+        (api_error(401), false),
+        (
+            RecordError::Api(ApiCallError::Network(NetworkError::new("Failed to fetch"))),
+            true,
+        ),
+        (RecordError::Upload("the PUT failed".to_string()), true),
+        (RecordError::Format("broken".to_string()), false),
+        (RecordError::Validation(Key::ValidationRequired), false),
+    ] {
+        assert_eq!(record_error_retry(&error), expected, "{error:?}");
+    }
+}
+
+/// モデルの項目の型の違反が形式の失敗になる (0041 のレビューの指摘)。
+#[test]
+fn a_broken_model_field_is_a_format_error() {
+    use brew_book_frontend::records::models::{Product, Purchase, Shop};
+    use serde_json::Map;
+
+    let cases: Vec<(Map<String, Value>, &str)> = vec![
+        (
+            json!({"id": 1, "name": "x"}).as_object().unwrap().clone(),
+            "the id must be a string",
+        ),
+        (
+            json!({"id": "s1", "name": 2}).as_object().unwrap().clone(),
+            "the name must be a string",
+        ),
+        (
+            json!({"id": "p1", "name": "x", "flavor_notes": "not an array"})
+                .as_object()
+                .unwrap()
+                .clone(),
+            "the flavor_notes must be an array",
+        ),
+    ];
+    for (json, what) in &cases {
+        assert!(
+            matches!(Shop::from_json(json), Err(RecordError::Format(_))),
+            "the shop must reject {what}"
+        );
+    }
+
+    // 必須の項目が無い応答も形式の失敗にする。
+    let missing = json!({"id": "p1"}).as_object().unwrap().clone();
+    assert!(matches!(
+        Product::from_json(&missing),
+        Err(RecordError::Format(_))
+    ));
+    assert!(matches!(
+        Purchase::from_json(&missing),
+        Err(RecordError::Format(_))
+    ));
+}
+
+/// 完了通知が失敗したときは、その失敗を返す (写真が紐づかないまま残るため)。
+#[test]
+fn a_failed_completion_is_reported() {
+    let transport = Rc::new(FakeUploadTransport::new());
+    let (client, _) = client(vec![
+        support::FakeTransport::response(
+            200,
+            &json!({"url": "https://r2.example/put", "key": "pending/u/1.jpg"}).to_string(),
+        ),
+        support::FakeTransport::response(
+            500,
+            &json!({"error": {"code": "internal", "message": "boom"}}).to_string(),
+        ),
+    ]);
+    let uploader = PhotoUploader::new(RecordsApi::new(client), transport);
+
+    let error = block_on(uploader.upload("b1".to_string(), ConvertedImage { bytes: vec![1] }))
+        .expect_err("the upload must fail");
+    assert!(matches!(error, RecordError::Api(_)), "{error:?}");
+    // 応答の形式が違う応答も失敗にする (完了通知の 200 が JSON でない場合)。
+}

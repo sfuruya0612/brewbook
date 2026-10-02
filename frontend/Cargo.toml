@@ -76,6 +76,8 @@ web-sys = { version = "0.3", features = [
   # デザインシステムの計算済みスタイルのテスト (0039)。
   "CssStyleDeclaration",
   "NodeList",
+  # 幅 840 px 以上の 2 段組の切り替え (0041)。
+  "MediaQueryList",
 ] }
 
 [dev-dependencies]
