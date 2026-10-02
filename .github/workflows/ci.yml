@@ -39,5 +39,19 @@ jobs:
           sudo ln -sf "$PWD/chrome-linux64/chrome" /usr/local/bin/google-chrome
           sudo ln -sf "$PWD/chrome-linux64/chrome" /opt/google/chrome/chrome
           echo "CHROME_EXECUTABLE=$PWD/chrome-linux64/chrome" >> "$GITHUB_ENV"
+      # Rust のビルドのキャッシュ。Cargo のレジストリと git の取得物、Backend と Frontend の
+      # ビルドの成果物を、ロックファイルと mise.toml (ツールの版) のハッシュで保存する (0037)。
+      # action の版はコミットハッシュで固定する (ADR-0011)。
+      # actions/cache v6.1.0 (2026-10-02 に GitHub API でタグの指すコミットを確認)
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            backend/target
+            frontend/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('backend/Cargo.lock', 'frontend/Cargo.lock', 'mise.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
       # 手元と同じ入口のタスクで、静的検査と全ての自動テストを実行する (ADR-0009)。
       - run: mise run check

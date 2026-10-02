@@ -1,0 +1,13 @@
+# Dioxus CLI (dx) の設定。既定値と違う点だけを書く。
+# ツールの版とコマンドラインは mise.toml に集約する (ADR-0009)。
+
+[application]
+# Tailwind CLI の出力を public/ に置き、index.html から静的アセットとして参照する。
+# 既定の assets/tailwind.css に出力して asset! で参照する方法は、manganis の asset! が
+# コンパイル時に対象のファイルの存在を検査するため、生成前の cargo clippy と cargo test が失敗する。
+# 生成の順に依存しないよう、public/ の静的アセットとして配信する。
+tailwind_output = "public/tailwind.css"
+
+[web.app]
+# index.html の {app_title} に展開する。Flutter の index.html の <title> を引き継ぐ (ADR-0017)。
+title = "brewbook"

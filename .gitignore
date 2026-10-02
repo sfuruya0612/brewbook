@@ -11,6 +11,11 @@
 /frontend/build/
 /frontend/.dart_tool/
 
+# Dioxus のビルド成果物 (ADR-0017)。target/dx/ を含む。
+/frontend/target/
+# dx が Tailwind CLI で生成する CSS (public/ に置き、index.html から参照する)。
+/frontend/public/tailwind.css
+
 # wrangler のローカル状態と、開発用の環境変数 (環境ごとの .dev.vars.<名前> も含める)
 .wrangler/
 .dev.vars*

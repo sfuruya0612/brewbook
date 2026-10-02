@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="brewbook の Frontend (ADR-0017)">
+
+  <!-- 表示名と favicon と manifest は Flutter の frontend/web/index.html から引き継ぐ (ADR-0017)。 -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="brewbook">
+
+  <!-- favicon、icons、manifest は public/ の静的アセットとして配信する。 -->
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+  <!-- Tailwind CLI の出力 (dx が tailwind.css から生成して public/ に置く)。 -->
+  <link rel="stylesheet" href="tailwind.css">
+
+  <title>{app_title}</title>
+</head>
+<body>
+  <div id="main"></div>
+</body>
+</html>

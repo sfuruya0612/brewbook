@@ -12,7 +12,20 @@ wrangler = { version = "4.135.0", allow_builds = ["esbuild", "sharp", "workerd"]
 ripgrep = "15.2.0"
 # Flutter の統合テスト (flutter drive) が使う。版は手元の Chrome と CI の Chrome for Testing に
 # 揃える (ブラウザ本体はリポジトリのツールチェーンに含められないため、CI はワークフローで同じ版を入れる)。
+# Dioxus のブラウザテスト (dioxus:test-web、wasm-bindgen-test) も同じ chromedriver を使う (0037)。
 chromedriver = "154.0.8037.57"
+# Dioxus CLI (dx)。Frontend のビルドに使う (ADR-0017)。mise registry に dioxus の項目が無いため、
+# GitHub のリリースのバイナリ (dx-aarch64-apple-darwin.tar.gz など) を github バックエンドで入れる。
+# 2026-10-02 の手元の計測では、バイナリの取得が 4.1 秒 (30.7 MB) で、ソースからのビルド
+# (cargo:dioxus-cli。10 分以上かかる見込み) より速い。CI もダウンロードだけで済む。
+# dx は Tailwind CLI、esbuild、wasm-bindgen、wasm-opt を自身の固定した版で ~/.dx/tools に取得して使う。
+# mise で Tailwind CLI だけを dx に渡す方法は無く、NO_DOWNLOADS=1 は 4 ツールすべてを PATH から
+# 要求するため、それらの版は dx の版が決める (ADR-0009 の例外。0037)。
+"github:DioxusLabs/dioxus" = "0.7.10"
+# wasm-bindgen-test のテストランナー (wasm-bindgen-test-runner)。dioxus:test-web が使う (0037)。
+# 版は frontend/Cargo.lock の wasm-bindgen と揃える。wasm-bindgen-test-runner は、テストの wasm を
+# 作った wasm-bindgen と版が一致しないと実行できない (一致しないとエラーになる)。
+"github:wasm-bindgen/wasm-bindgen" = "0.2.129"
 # ローカルの負荷試験のクライアント (issue 0025、ADR-0012)。
 k6 = "2.3.0"
 # TLA+ の TLC を動かす JDK (ADR-0013)。
@@ -56,11 +69,13 @@ depends = [
   "frontend:test-web",
   "frontend:test-integration",
   "frontend:test-same-origin",
+  "dioxus:test",
+  "dioxus:test-web",
 ]
 
 [tasks.check]
 description = "静的検査と全ての自動テストを実行する (CI と手元の共通の入口)"
-depends = ["fmt", "lint", "frontend:build", "frontend:analyze", "formal", "test"]
+depends = ["fmt", "lint", "frontend:build", "frontend:analyze", "dioxus:build", "dioxus:lint", "formal", "test"]
 
 [tasks.formal]
 description = "認証の状態遷移の TLA+ 仕様を TLC でモデル検査する"
@@ -276,6 +291,71 @@ dir = "backend"
 # Rust のハーネスが wrangler dev と chromedriver を起動し、テストコード入りの Web ビルドを
 # Static Assets として配信して、実際の画面を chrome で操作する (0017)。
 run = "export BREWBOOK_SKIP_WORKER_BUILD=1 && cargo test -p brew_book --test wrangler_same_origin_e2e"
+
+# Dioxus の Frontend のタスク (0037)。移行の間だけ dioxus:* の名前を使い、Flutter の frontend:* は
+# 触らない。0045 が dioxus:* を frontend:* に改名し、Flutter のタスクとツールを消す (ADR-0017)。
+
+[tasks."dioxus:build"]
+description = "Dioxus の Frontend を Web 向けにリリースビルドする"
+dir = "frontend"
+# 成果物は target/dx/brew_book_frontend/release/web/public (2026-10-02 に確認。0037)。
+# mise exec を挟むのは、Homebrew の deno が dx という名前のバイナリを入れており、
+# /opt/homebrew/bin が mise のツールより先に PATH にある環境では deno の dx が選ばれるため。
+run = """
+set -e
+mise exec -- dx build --release --platform web
+# 成果物の検査 (0037)。dx の出力のファイル名は版で変わり得るため、期待するパスをここで固定して、
+# ビルドの成功だけでなく成果物の中身 (index.html、Tailwind の出力、wasm、JS のローダー、静的アセット)
+# も確認する。set -e で dx と cd の失敗を止める (CI のキャッシュで古い成果物が残っていても、
+# ビルドの失敗を成功と誤判定しない)。test -s で空のファイルも弾く。
+cd target/dx/brew_book_frontend/release/web/public
+test -s index.html
+test -s tailwind.css
+test -s favicon.png
+test -s manifest.json
+test -s icons/Icon-192.png
+test -s icons/Icon-512.png
+test -s icons/Icon-maskable-192.png
+test -s icons/Icon-maskable-512.png
+ls assets/*.wasm > /dev/null
+ls assets/*.js > /dev/null
+"""
+
+[tasks."dioxus:build-e2e"]
+description = "テスト用の feature を有効にした Web ビルドを作る (0044 の E2E が使う)"
+dir = "frontend"
+# 実バックエンドの E2E はテストコード入りのビルドを配信する (0044)。check が作る配布用のビルドと
+# 同じ成果物のディレクトリを使うため、E2E の直前に実行する。
+# mise exec を挟む理由は dioxus:build と同じ。
+run = "mise exec -- dx build --release --platform web --features e2e"
+
+[tasks."dioxus:lint"]
+description = "Dioxus の Frontend の Rust の lint と整形を検査する"
+run = [
+  "cargo clippy --manifest-path frontend/Cargo.toml --workspace --all-targets -- -D warnings",
+  "cargo fmt --manifest-path frontend/Cargo.toml --all --check",
+]
+
+[tasks."dioxus:test"]
+description = "Dioxus の Frontend のネイティブテスト (単体と PBT) を実行する"
+run = "cargo test --manifest-path frontend/Cargo.toml --workspace"
+
+[tasks."dioxus:test-web"]
+description = "ブラウザで動かすテストを headless の Chrome (mise の chromedriver) で実行する"
+# wasm-bindgen-test-runner は mise の wasm-bindgen が入れる (mise.toml の [tools])。
+# CHROMEDRIVER を明示して、PATH 上の他の WebDriver (geckodriver など) を使わせない。
+run = """
+# chromedriver が見つからない場合は、原因の分かるメッセージで先に失敗させる (0037 のレビューの指摘。
+# コマンド置換の失敗は export の終了状態に伝わらないため)。
+if ! command -v chromedriver > /dev/null 2>&1; then
+  echo "chromedriver is required to run dioxus:test-web but was not found" >&2
+  exit 1
+fi
+export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner
+export CHROMEDRIVER="$(command -v chromedriver)"
+# テストのファイルを列挙せず、wasm の全テストを実行する (0038 以降に増えたテストを取りこぼさない)。
+cargo test --manifest-path frontend/Cargo.toml --workspace --target wasm32-unknown-unknown
+"""
 
 [tasks."r2-create-staging"]
 description = "検証用の R2 バケット (brewbook-photos-staging) を作成する (初回だけ)"

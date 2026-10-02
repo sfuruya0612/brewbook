@@ -1,0 +1,4 @@
+@import "tailwindcss";
+
+/* Rust のソースと index.html を走査して、使われているクラスだけを出力する。 */
+@source "./src/**/*.{rs,html,css}";
