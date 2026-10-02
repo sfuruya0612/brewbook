@@ -177,6 +177,28 @@ async fn the_data_theme_switches_between_paper_and_night() {
 }
 
 #[component]
+fn DisabledIconButtonProbe() -> Element {
+    rsx! {
+        IconButton { name: "delete".to_string(), label: "x".to_string(), disabled: true }
+    }
+}
+
+/// 無効なアイコンボタンの文字が --ink-faint に落ちることを検査する (0043)。
+///
+/// docs/design/components/Settings の「1 つしか無いときは削除を ink-faint で無効化し」に対応する。
+#[wasm_bindgen_test]
+async fn the_disabled_icon_button_is_faint() {
+    install_styles();
+    set_theme("paper");
+    let root = mount(DisabledIconButtonProbe).await;
+    assert_eq!(count(&root, ".iconbtn[disabled]"), 1);
+    // 実際に描かれるのは Icon の span のため、グリフの色を見る (0043 のレビューの指摘)。
+    let icon = select(&root, ".iconbtn[disabled] .icon");
+    // --ink-faint #6f5f4e。
+    assert_eq!(computed(&icon, "color"), "rgb(111, 95, 78)");
+}
+
+#[component]
 fn FieldProbe() -> Element {
     rsx! {
         Field { label: "x", required: true,

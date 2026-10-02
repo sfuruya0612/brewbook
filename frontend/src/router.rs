@@ -12,9 +12,9 @@ use dioxus_router::Routable;
 use crate::app::AppShell;
 use crate::screens::{
     BrewDetailScreen, BrewEditScreen, BrewFormScreen, HomeScreen, LoginScreen, NotFound,
-    Placeholder, ProductEditScreen, ProductFormScreen, ProductListScreen, PurchaseDetailScreen,
-    PurchaseEditScreen, PurchaseFormScreen, PurchaseListScreen, RegisterScreen, ShopEditScreen,
-    ShopFormScreen, ShopListScreen, StatsScreen,
+    ProductEditScreen, ProductFormScreen, ProductListScreen, PurchaseDetailScreen,
+    PurchaseEditScreen, PurchaseFormScreen, PurchaseListScreen, RegisterScreen, SettingsScreen,
+    ShopEditScreen, ShopFormScreen, ShopListScreen, StatsScreen,
 };
 
 /// 画面の経路の台帳 (ADR-0017)。
@@ -61,8 +61,7 @@ pub const APP_ROUTES: [AppRoute; 18] = [
 
 /// 画面の経路 (Dioxus のルーター)。
 ///
-/// 画面の実装は 0040 以降が入れる。0038 では全ての経路を仮の画面 ([`Placeholder`]) に割り当て、
-/// 経路の台帳とルーターの配線を確かめる。
+/// 全ての経路を実装済みの画面に割り当てる (0038、0040、0041、0042、0043)。
 #[derive(Routable, Clone, PartialEq, Debug)]
 pub enum Route {
     #[layout(AppShell)]
@@ -76,7 +75,7 @@ pub enum Route {
     #[route("/", HomeScreen)]
     Home {},
     /// 設定 (パスキーの管理、エクスポート、アカウントの削除、ログアウト。FR-3、FR-4、FR-14、FR-15)。
-    #[route("/settings", Placeholder)]
+    #[route("/settings", SettingsScreen)]
     Settings {},
     /// 抽出の登録 (FR-11)。
     #[route("/brews/new", BrewFormScreen)]

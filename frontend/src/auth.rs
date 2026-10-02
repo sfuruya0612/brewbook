@@ -16,7 +16,7 @@ pub mod passkey_web;
 
 use std::rc::Rc;
 
-use serde_json::json;
+use serde_json::{json, Map, Value};
 
 use crate::api::{ApiCallError, ApiClient};
 use crate::i18n::Key;
@@ -79,6 +79,77 @@ impl AuthServices {
     }
 }
 
+/// 登録済みのパスキー (FR-3)。
+///
+/// 日時は API の形式 (ISO 8601 の UTC) の文字列のまま保持し、表示の直前に端末の
+/// タイムゾーンへ変換する (Flutter の `Passkey` と同じ扱い)。
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Passkey {
+    /// パスキーの ID。
+    pub id: String,
+
+    /// 利用者が付けた名前。
+    pub name: String,
+
+    /// 登録日時 (ISO 8601 の UTC)。
+    pub created_at: String,
+
+    /// 最終使用日時 (ISO 8601 の UTC)。まだ使われていなければ None。
+    pub last_used_at: Option<String>,
+}
+
+impl Passkey {
+    /// JSON のオブジェクト (`GET /api/passkeys` の 1 件) から組み立てる。
+    pub fn from_json(json: &Map<String, Value>) -> Result<Self, AuthError> {
+        Ok(Self {
+            id: string_field(json, "id")?,
+            name: string_field(json, "name")?,
+            created_at: string_field(json, "created_at")?,
+            last_used_at: optional_string_field(json, "last_used_at")?,
+        })
+    }
+}
+
+/// パスキーの一覧の応答から、パスキーの配列を読む (FR-3)。
+pub fn passkeys_from_json(json: &Map<String, Value>) -> Result<Vec<Passkey>, AuthError> {
+    let items = json
+        .get("passkeys")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format_error("the passkeys field must be an array"))?;
+    items
+        .iter()
+        .map(|item| match item {
+            Value::Object(object) => Passkey::from_json(object),
+            _ => Err(format_error("a passkey must be a JSON object")),
+        })
+        .collect()
+}
+
+/// 文字列の項目を読む。無い場合と文字列でない場合は失敗にする。
+fn string_field(json: &Map<String, Value>, key: &str) -> Result<String, AuthError> {
+    json.get(key)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| format_error(format!("the {key} field must be a string")))
+}
+
+/// 文字列の項目を読む。無い場合と `null` は None にする。
+fn optional_string_field(
+    json: &Map<String, Value>,
+    key: &str,
+) -> Result<Option<String>, AuthError> {
+    match json.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value)) => Ok(Some(value.clone())),
+        Some(_) => Err(format_error(format!("the {key} field must be a string"))),
+    }
+}
+
+/// 応答の形が規約と違う失敗を作る。
+fn format_error(message: impl Into<String>) -> AuthError {
+    AuthError::Format(message.into())
+}
+
 /// 認証の操作の失敗。
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum AuthError {
@@ -87,6 +158,9 @@ pub enum AuthError {
 
     /// パスキーの操作の失敗。
     Passkey(PasskeyError),
+
+    /// 応答の形が規約と違う失敗 (パスキーの一覧など)。
+    Format(String),
 }
 
 impl From<ApiCallError> for AuthError {
@@ -106,6 +180,7 @@ impl std::fmt::Display for AuthError {
         match self {
             Self::Api(error) => write!(formatter, "{error}"),
             Self::Passkey(error) => write!(formatter, "{error}"),
+            Self::Format(message) => write!(formatter, "FormatError({message})"),
         }
     }
 }
@@ -158,6 +233,61 @@ pub async fn logout(services: &AuthServices) -> Result<(), AuthError> {
     Ok(())
 }
 
+/// 登録済みのパスキーの一覧を返す (FR-3)。
+pub async fn passkeys(services: &AuthServices) -> Result<Vec<Passkey>, AuthError> {
+    passkeys_from_json(&services.api.get_json("/passkeys").await?)
+}
+
+/// パスキーを追加する (FR-3)。追加したパスキーを返す。
+///
+/// 追加は登録 (FR-1) と同じ流れで行い、作成のオプションはセッションの利用者に対して発行される。
+/// 名前は [`passkey_name_for_request`] で検証した後の値を渡す。
+pub async fn add_passkey(services: &AuthServices, name: &str) -> Result<Passkey, AuthError> {
+    let options = services
+        .api
+        .post_json("/passkeys/begin", &json!({}))
+        .await?;
+    let options = CreationOptions::from_json(&options)?;
+    let credential = services.passkeys.create_credential(options).await?;
+    let json = services
+        .api
+        .post_json(
+            "/passkeys/complete",
+            &json!({ "name": name, "credential": credential }),
+        )
+        .await?;
+    Passkey::from_json(&json)
+}
+
+/// パスキーの名前を変更する (FR-3)。変更したパスキーを返す。
+///
+/// 名前は [`passkey_name_for_request`] で検証した後の値を渡す。
+pub async fn rename_passkey(
+    services: &AuthServices,
+    id: &str,
+    name: &str,
+) -> Result<Passkey, AuthError> {
+    let json = services
+        .api
+        .patch_json(&format!("/passkeys/{id}"), &json!({ "name": name }))
+        .await?;
+    Passkey::from_json(&json)
+}
+
+/// パスキーを削除する (FR-3)。最後の 1 つはサーバーが 409 を返す。
+pub async fn delete_passkey(services: &AuthServices, id: &str) -> Result<(), AuthError> {
+    services.api.delete_json(&format!("/passkeys/{id}")).await?;
+    Ok(())
+}
+
+/// アカウントと全データを削除する (FR-15)。成功してもセッションの状態は変えない。
+///
+/// 画面が [`SessionStatus::SignedOut`] にし、遷移の判定がログイン画面へ戻す。
+pub async fn delete_account(services: &AuthServices) -> Result<(), AuthError> {
+    services.api.delete_json("/account").await?;
+    Ok(())
+}
+
 /// パスキーの名前の上限 (ADR-0004)。
 pub const PASSKEY_NAME_MAX_CHARS: usize = 50;
 
@@ -193,6 +323,19 @@ pub fn message_key(error: &AuthError) -> Key {
             PasskeyErrorKind::Unsupported => Key::PasskeyUnsupported,
             PasskeyErrorKind::Failed => Key::ErrorUnexpected,
         },
+        AuthError::Format(_) => Key::ErrorUnexpected,
+    }
+}
+
+/// パスキーの削除の文言のキー (FR-3)。
+///
+/// 409 は最後の 1 つを消せないことを表すため、追加を促す文言にする (ADR-0004)。
+pub fn delete_passkey_error_key(error: &AuthError) -> Key {
+    match error {
+        AuthError::Api(ApiCallError::Api(error)) if error.status == 409 => {
+            Key::PasskeyLastDeleteError
+        }
+        _ => message_key(error),
     }
 }
 

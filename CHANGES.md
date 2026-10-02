@@ -60,6 +60,8 @@
   - @sfuruya0612
 - [ADD] Frontend の統計の画面 (期間の切り替えと棒グラフと散布図) と購入の詳細の評価の推移を追加する
   - @sfuruya0612
+- [ADD] Frontend の設定の画面 (パスキーの管理、エクスポート、アカウントの削除、ログアウト) を追加する
+  - @sfuruya0612
 - [CHANGE] アプリ名と名前空間を brewbook に変更する
   - @sfuruya0612
 

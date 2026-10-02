@@ -12,9 +12,10 @@ use std::rc::Rc;
 use brew_book_frontend::api::{ApiCallError, ApiError, Method, NetworkError};
 use brew_book_frontend::app::guard_destination;
 use brew_book_frontend::auth::{
-    check_session, is_invalid_registration_token, login, login_error_key, logout, message_key,
-    passkey_name_for_request, register, register_error_key, AuthError, AuthServices, PasskeyError,
-    SessionStatus, PASSKEY_NAME_MAX_CHARS,
+    add_passkey, check_session, delete_account, delete_passkey, delete_passkey_error_key,
+    is_invalid_registration_token, login, login_error_key, logout, message_key,
+    passkey_name_for_request, passkeys, register, register_error_key, rename_passkey, AuthError,
+    AuthServices, PasskeyError, SessionStatus, PASSKEY_NAME_MAX_CHARS,
 };
 use brew_book_frontend::i18n::Key;
 use brew_book_frontend::router::Route;
@@ -306,4 +307,137 @@ fn the_check_and_the_unknown_states_do_not_navigate() {
             assert_eq!(guard_destination(&route, status), None, "{route:?}");
         }
     }
+}
+
+#[test]
+fn the_passkey_list_is_read_with_the_timestamps() {
+    let (client, transport) = client(vec![FakeTransport::response(
+        200,
+        r#"{"passkeys":[{"id":"p1","name":"自宅の Mac","created_at":"2026-09-01T01:00:00.000Z","last_used_at":null},{"id":"p2","name":"iPhone","created_at":"2026-09-02T02:00:00.000Z","last_used_at":"2026-09-10T10:00:00.000Z"}]}"#,
+    )]);
+    let services = AuthServices::new(client, Rc::new(FakePasskeyClient::new()));
+
+    let list = block_on(passkeys(&services)).expect("the list must load");
+
+    assert_eq!(transport.last_request().method, Method::Get);
+    assert_eq!(transport.last_request().path, "/api/passkeys");
+    assert_eq!(list.len(), 2);
+    assert_eq!(list[0].id, "p1");
+    assert_eq!(list[0].name, "自宅の Mac");
+    assert_eq!(list[0].created_at, "2026-09-01T01:00:00.000Z");
+    assert_eq!(list[0].last_used_at, None);
+    assert_eq!(
+        list[1].last_used_at.as_deref(),
+        Some("2026-09-10T10:00:00.000Z")
+    );
+}
+
+#[test]
+fn a_malformed_passkey_list_is_a_format_error() {
+    for body in [
+        r#"{}"#,
+        r#"{"passkeys":{}}"#,
+        r#"{"passkeys":[{"id":"p1"}]}"#,
+        r#"{"passkeys":[{"id":"p1","name":"x","created_at":"y","last_used_at":1}]}"#,
+        r#"{"passkeys":["x"]}"#,
+    ] {
+        let (client, _) = client(vec![FakeTransport::response(200, body)]);
+        let services = AuthServices::new(client, Rc::new(FakePasskeyClient::new()));
+
+        let error = block_on(passkeys(&services)).expect_err("the list must fail");
+
+        // 応答の形の違反は Format になる (0043 のレビューの指摘)。
+        assert!(matches!(error, AuthError::Format(_)), "{body}: {error:?}");
+        assert_eq!(message_key(&error), Key::ErrorUnexpected, "{body}");
+    }
+}
+
+#[test]
+fn a_successful_passkey_add_sends_the_name_and_the_credential() {
+    let (client, transport) = client(vec![
+        FakeTransport::response(
+            200,
+            r#"{"challenge":"AQID","rp":{"id":"localhost","name":"brewbook"},"user":{"id":"AQ","name":"u1"},"pubKeyCredParams":[{"type":"public-key","alg":-7}]}"#,
+        ),
+        FakeTransport::response(
+            200,
+            r#"{"id":"p2","name":"iPhone","created_at":"2026-09-02T02:00:00.000Z","last_used_at":null}"#,
+        ),
+    ]);
+    let passkeys_client = Rc::new(FakePasskeyClient::new());
+    let services = AuthServices::new(client, passkeys_client.clone());
+
+    let added = block_on(add_passkey(&services, "iPhone")).expect("the add must succeed");
+
+    let requests = transport.requests();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0].method, Method::Post);
+    assert_eq!(requests[0].path, "/api/passkeys/begin");
+    assert_eq!(requests[1].method, Method::Post);
+    assert_eq!(requests[1].path, "/api/passkeys/complete");
+    let body: Value = serde_json::from_slice(&requests[1].body).expect("the body must be JSON");
+    assert_eq!(body["name"], "iPhone");
+    assert_eq!(body["credential"]["id"], "ZmFrZQ");
+    assert_eq!(added.id, "p2");
+    assert_eq!(added.name, "iPhone");
+    assert_eq!(passkeys_client.created().len(), 1);
+}
+
+#[test]
+fn a_rename_patches_the_name_of_the_passkey() {
+    let (client, transport) = client(vec![FakeTransport::response(
+        200,
+        r#"{"id":"p1","name":"Desktop","created_at":"2026-09-01T01:00:00.000Z","last_used_at":null}"#,
+    )]);
+    let services = AuthServices::new(client, Rc::new(FakePasskeyClient::new()));
+
+    let renamed =
+        block_on(rename_passkey(&services, "p1", "Desktop")).expect("the rename must succeed");
+
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Patch);
+    assert_eq!(request.path, "/api/passkeys/p1");
+    let body: Value = serde_json::from_slice(&request.body).expect("the body must be JSON");
+    assert_eq!(body["name"], "Desktop");
+    assert_eq!(renamed.name, "Desktop");
+}
+
+#[test]
+fn a_delete_sends_the_request_for_the_passkey() {
+    let (client, transport) = client(vec![FakeTransport::response(200, r#"{"id":"p1"}"#)]);
+    let services = AuthServices::new(client, Rc::new(FakePasskeyClient::new()));
+
+    block_on(delete_passkey(&services, "p1")).expect("the delete must succeed");
+
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Delete);
+    assert_eq!(request.path, "/api/passkeys/p1");
+}
+
+#[test]
+fn the_delete_error_uses_the_last_passkey_message_for_409() {
+    assert_eq!(
+        delete_passkey_error_key(&api_error(409)),
+        Key::PasskeyLastDeleteError
+    );
+    assert_eq!(
+        delete_passkey_error_key(&api_error(401)),
+        Key::ErrorUnauthorized
+    );
+    assert_eq!(
+        delete_passkey_error_key(&api_error(500)),
+        Key::ErrorUnexpected
+    );
+}
+
+#[test]
+fn an_account_delete_sends_the_request() {
+    let (client, transport) = client(vec![FakeTransport::response(204, "")]);
+    let services = AuthServices::new(client, Rc::new(FakePasskeyClient::new()));
+
+    block_on(delete_account(&services)).expect("the account delete must succeed");
+
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Delete);
+    assert_eq!(request.path, "/api/account");
 }

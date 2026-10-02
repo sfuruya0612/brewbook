@@ -26,6 +26,7 @@ use brew_book_frontend::records::{
     Clock, ConvertedImage, ImageConverter, PhotoFuture, PhotoPicker, PickedPhoto, UploadFuture,
     UploadRequest, UploadTransport,
 };
+use brew_book_frontend::settings::{DownloadedFile, FileDownload};
 use serde_json::{Map, Value};
 
 /// 未来を完了まで進める。
@@ -167,6 +168,37 @@ impl PasskeyClient for FakePasskeyClient {
             None => Ok(self.credential.clone()),
         };
         Box::pin(std::future::ready(result))
+    }
+}
+
+/// ダウンロードの偽の実装 (0043)。保存したファイルを記録する。
+pub struct FakeFileDownload {
+    saved: RefCell<Vec<DownloadedFile>>,
+}
+
+impl FakeFileDownload {
+    /// 何も保存していない偽の実装を作る。
+    pub fn new() -> Self {
+        Self {
+            saved: RefCell::new(Vec::new()),
+        }
+    }
+
+    /// 保存したファイル。
+    pub fn saved(&self) -> Vec<DownloadedFile> {
+        self.saved.borrow().clone()
+    }
+}
+
+impl Default for FakeFileDownload {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FileDownload for FakeFileDownload {
+    fn save(&self, file: DownloadedFile) {
+        self.saved.borrow_mut().push(file);
     }
 }
 

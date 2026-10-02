@@ -15,6 +15,8 @@ use crate::auth::{check_session, SessionStatus};
 use crate::i18n::{browser_language, resolve_language, set_language};
 use crate::records::RecordServices;
 use crate::router::Route;
+#[cfg(target_arch = "wasm32")]
+use crate::settings::SettingsServices;
 
 /// 画面のルート。言語を決め、画面の依存を束ねて配り、ルーターを組み立てる (ADR-0017)。
 ///
@@ -29,6 +31,8 @@ pub fn App() -> Element {
     // 記録の依存を束ねて画面に配る (0041 が使う)。
     let api = crate::api::create_client();
     let _services = use_context_provider(|| RecordServices::web(api.clone()));
+    // 設定の依存を束ねて画面に配る (0043 が使う)。
+    let _settings = use_context_provider(|| SettingsServices::web(api.clone()));
     // 認証の依存を束ねて画面に配る (0040 が使う)。
     let _auth = use_context_provider(|| AuthServices::web(api));
     // 起動時のセッション確認の結果。画面はこれを見て遷移を決める。

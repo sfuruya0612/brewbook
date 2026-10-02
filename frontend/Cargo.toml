@@ -73,6 +73,10 @@ web-sys = { version = "0.3", features = [
   "HtmlCanvasElement",
   "HtmlImageElement",
   "Url",
+  # エクスポートのダウンロード (FR-14)。Blob をオブジェクト URL にして、ダウンロードの
+  # リンク (HTMLAnchorElement) を押す。Flutter の BrowserFileDownload と同じ経路 (0043)。
+  "BlobPropertyBag",
+  "HtmlAnchorElement",
   # デザインシステムの計算済みスタイルのテスト (0039)。
   "CssStyleDeclaration",
   "NodeList",

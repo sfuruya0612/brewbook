@@ -17,6 +17,8 @@
  *   (docs/design/components/Stats)。
  * - レールの項目は button で組むため、地と枠を消す規則を足した。
  * - 写真は img で表示するため、.photo img と .thumb img の規則を足した。
+ * - 無効なアイコンボタン (.iconbtn[disabled]) の文字を ink-faint に落とす規則を足した
+ *   (docs/design/components/Settings の「1 つしか無いときは削除を ink-faint で無効化し」)。
  */
 
 @layer base {
@@ -50,6 +52,11 @@
   .appbar .ttl.wordmark { font-family: var(--font-serif); font-size: 24px; font-weight: 500; letter-spacing: -0.01em; }
   .appbar .lead { width: 40px; height: 40px; margin: 0 var(--space-1) 0 calc(-1 * var(--space-2)); display: flex; align-items: center; justify-content: center; color: var(--ink); }
   .iconbtn { width: 40px; height: 40px; border-radius: var(--radius-full); display: inline-flex; align-items: center; justify-content: center; color: var(--ink); background: transparent; }
+  /* 無効なアイコンボタンは押せないことを色で示す (docs/design/components/Settings の
+   * 「1 つしか無いときは削除を ink-faint で無効化し」。0043)。 */
+  .iconbtn[disabled] { color: var(--ink-faint); }
+  /* 実際に描かれるのは Icon の span のため、グリフの色も落とす (0043 のレビューの指摘)。 */
+  .iconbtn[disabled] .icon { color: var(--ink-faint); }
   .iconbtn svg, .lead svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .iconbtn .icon, .lead .icon { font-size: 24px; }
   .appbar .textbtn { color: var(--crema-ink); font-size: 15px; font-weight: 500; padding: 0 var(--space-3); height: 40px; display: inline-flex; align-items: center; border-radius: var(--radius-md); }

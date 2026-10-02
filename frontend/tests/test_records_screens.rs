@@ -134,9 +134,8 @@ fn the_record_routes_are_wired_to_the_record_screens() {
         let route = format!("#[route(\"{pattern}\", {screen})]");
         assert!(source.contains(&route), "the router must have {route}");
     }
-    // 統計は 0042 が入れた。設定は 0043 が入れるまで仮の画面のままにする。
+    // 統計は 0042 が入れた。設定の経路の配線は 0043 のテスト (test_settings.rs) が確かめる。
     assert!(source.contains("#[route(\"/stats\", StatsScreen)]"));
-    assert!(source.contains("#[route(\"/settings\", Placeholder)]"));
 }
 
 /// 購入の詳細が、評価の推移の折れ線を 0041 の画面に足していることを確かめる (FR-18)。
