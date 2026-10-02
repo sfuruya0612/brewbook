@@ -1,12 +1,12 @@
 # brewbook
 
 コーヒーの購入と抽出を記録するアプリ。
-Frontend は Flutter、Backend は Rust の Cloudflare Worker、データベースは Cloudflare D1、写真は Cloudflare R2 を使う。
+Frontend は Rust (Dioxus) の Web アプリ、Backend は Rust の Cloudflare Worker、データベースは Cloudflare D1、写真は Cloudflare R2 を使う (ADR-0017)。
 全体の要求は `docs/prd/brewbook.md`、設計の決定は `docs/adr/` にある。
 
 ## 開発の前提
 
-- mise を入れ、リポジトリのルートで `mise install` を実行して `mise.toml` のツール (Flutter、Rust、wrangler、worker-build) を入れる。
+- mise を入れ、リポジトリのルートで `mise install` を実行して `mise.toml` のツール (Rust、Dioxus CLI、wrangler、worker-build など) を入れる。
 - コマンドラインは `mise.toml` のタスクに集約する (ADR-0009)。静的検査と全ての自動テストは `mise run check` で実行する。
 
 ## 環境
@@ -26,9 +26,9 @@ Frontend は Flutter、Backend は Rust の Cloudflare Worker、データベー�
 
 - ローカルの D1 にマイグレーションを適用する: `mise run db-migrate`
 - 画面と API を同じオリジンから配信する: `mise run dev`
-  タスクは `flutter build web` を実行してから `wrangler dev` を起動する。表示された `http://localhost:8787/` を開く。
+  タスクは Frontend (Dioxus) の Web ビルド (`dx build --release --platform web`) を実行してから `wrangler dev` を起動する。表示された `http://localhost:8787/` を開く。
   ローカルは `wrangler.toml` のトップレベルを使い、`RP_ID` と `ORIGIN` は `localhost` の既定値である (ADR-0004)。
-- Flutter の開発サーバー (ホットリロード) は使わない。
+- Dioxus の開発サーバー (`dx serve`) は使わない。
   別オリジンになり、CORS を許可しない決定と `Origin` の検証に反するためである (ADR-0005)。
 - 写真のアップロードを使うときは、ステージングの R2 の値を `backend/brew_book/.dev.vars` (git 管理外) に置く。
   必要な名前は `R2_ENDPOINT`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_BUCKET` (`brewbook-photos-staging`) である。
@@ -38,7 +38,8 @@ Frontend は Flutter、Backend は Rust の Cloudflare Worker、データベー�
   登録用リンクが指す利用者向けのオリジンは `mise run dev` の `http://localhost:8787` になる。
 - 負荷試験を行う: `mise run db-migrate` と `mise run dev` を実行した状態で `mise run load`
   ローカルの API と静的アセットに VU 50 で 1 分間の負荷をかける (ADR-0012)。
-  対象は認証が不要な経路 (画面、`main.dart.js`、`flutter_bootstrap.js`、ログインのチャレンジ発行) だけである。
+  対象は認証が不要な経路 (画面 (`/`)、JavaScript のローダー、WebAssembly、ログインのチャレンジ発行) だけである。
+  静的アセットのパスはビルドのたびに変わるため、k6 が `index.html` から実際のパスを解決する。
   閾値は失敗率 1% 未満と応答時間の p95 500 ms 未満で、満たさない場合は終了コードが 0 以外になる。
   結果は k6 のサマリで確認し、リリースの記録として残す。
   本番は対象にせず、`mise run check` にも含めない。
@@ -83,7 +84,7 @@ CI では実行せず、対象の型検査だけを行う。
 管理者 (`deploy-admin-*`) のデプロイのタスクをまとめて実行する。
 利用者向けだけをデプロイするときは `mise run deploy-app-staging` / `mise run deploy-app-production`、
 管理者だけのときは `mise run deploy-admin-staging` / `mise run deploy-admin-production` を使う。
-利用者向けのデプロイは Flutter のビルドを先に実行する。
+利用者向けのデプロイは Frontend (Dioxus) のビルドを先に実行する。
 デプロイのタスクは `mise run check` に含めない (0002 の規則)。
 
 ### staging の初回の設定
@@ -124,7 +125,7 @@ production の初回の設定 (D1、R2、Secrets、Access) は済んでいる。
 2. デプロイする: `mise run deploy-production` (利用者向けと管理者の Worker)
 3. デプロイ後の確認を行う。
    - `https://brewbook.<サブドメイン>.workers.dev/` を開くと画面が表示される。
-   - Flutter のルーティングのパス (`/register` など) を直接開くと `index.html` が 200 で返り、画面が表示される。
+   - 画面のルーティングのパス (`/register` など) を直接開くと `index.html` が 200 で返り、画面が表示される。
    - 登録用リンクからパスキーを登録し、ログインして抽出を保存できる。
    - 購入の画面から写真をアップロードできる (ブラウザから R2 へ直接 PUT する)。
    - 管理者画面が Cloudflare Access で保護されていることを確認する (下の「管理者画面と Cloudflare Access」)。

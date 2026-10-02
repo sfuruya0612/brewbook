@@ -451,7 +451,9 @@ pub fn manifest_dir() -> PathBuf {
 
 /// `wrangler dev` は Static Assets のディレクトリが無いと起動しないため、先に作る。
 pub fn ensure_app_assets_dir() -> Result<(), String> {
-    let dir = manifest_dir().join("../frontend/build/web");
+    // クレートのルートは backend/brew_book_admin のため、リポジトリ直下の frontend へは 2 段上る
+    // (0045 のレビューの指摘)。
+    let dir = manifest_dir().join("../../frontend/target/dx/brew_book_frontend/release/web/public");
     std::fs::create_dir_all(&dir)
         .map_err(|error| format!("failed to create {}: {error}", dir.display()))
 }

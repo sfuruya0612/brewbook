@@ -10,15 +10,16 @@ compatibility_date = "2026-09-21"
 # workers.dev のホスト名で配信する (ADR-0005)。独自ドメインは取得しない。
 workers_dev = true
 
-# Flutter のビルド成果物を、同じ Worker の Static Assets として同一オリジンで配信する
-# (ADR-0005)。`directory` はこの設定ファイルのあるディレクトリからの相対で解決される。
+# Dioxus のビルド成果物 (frontend/target/dx/brew_book_frontend/release/web/public) を、
+# 同じ Worker の Static Assets として同一オリジンで配信する (ADR-0005、ADR-0017)。
+# `directory` はこの設定ファイルのあるディレクトリからの相対で解決される。
 # `/api/*` は Rust の処理に渡し (run_worker_first)、一致する静的ファイルの無いパスには
-# `index.html` を 200 で返して Flutter のルーティングを扱う (not_found_handling)。
-# 除外パターンは置かない。iOS 向けの `/.well-known/*` は iOS 対応時に Static Assets から返す。
+# `index.html` を 200 で返して画面のルーティングを扱う (not_found_handling)。
+# 除外パターンは置かない (iOS は対象外である。ADR-0017)。
 # assets、build、observability はトップレベルの設定を全ての環境が継承する。vars とバインディング
 # (D1、R2) は継承されないため、環境ごとに定義する。
 [assets]
-directory = "../../frontend/build/web"
+directory = "../../frontend/target/dx/brew_book_frontend/release/web/public"
 run_worker_first = ["/api/*"]
 not_found_handling = "single-page-application"
 

@@ -1,5 +1,4 @@
 [tools]
-flutter = { version = "3.47.5", checksum_expr = '"sha256:" + filter(fromJSON(body).releases, { #.archive endsWith filename })[0].sha256', platforms = { linux-x64 = { checksum_url = "https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json", url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_{{ version }}-stable.tar.xz" }, macos-arm64 = { checksum_url = "https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json", url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_{{ version }}-stable.zip" }, macos-x64 = { checksum_url = "https://storage.googleapis.com/flutter_infra_release/releases/releases_macos.json", url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_{{ version }}-stable.zip" }, windows-x64 = { checksum_url = "https://storage.googleapis.com/flutter_infra_release/releases/releases_windows.json", url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_{{ version }}-stable.zip" } }, version_expr = 'fromJSON(body).releases | filter({ #.channel == "stable" }) | map({ replace(#.version, "-stable", "") }) | sortVersions()', version_list_url = "https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json" }
 # GitHub Actions の runner image の rustup は minimal プロファイルで入り、clippy と rustfmt は
 # stable ツールチェーンにだけ追加される (images/ubuntu/scripts/build/install-rust.sh)。
 # profile を書かないと mise は runner の rustup のプロファイルを引き継ぐため、mise が入れる
@@ -10,9 +9,9 @@ rust = { version = "1.98.1", profile = "minimal", components = ["clippy", "rustf
 "cargo:worker-build" = "0.8.6"
 wrangler = { version = "4.135.0", allow_builds = ["esbuild", "sharp", "workerd"] }
 ripgrep = "15.2.0"
-# Flutter の統合テスト (flutter drive) が使う。版は手元の Chrome と CI の Chrome for Testing に
-# 揃える (ブラウザ本体はリポジトリのツールチェーンに含められないため、CI はワークフローで同じ版を入れる)。
-# Dioxus のブラウザテスト (dioxus:test-web、wasm-bindgen-test) も同じ chromedriver を使う (0037)。
+# Frontend のブラウザテスト (frontend:test-web、wasm-bindgen-test) と、実バックエンドの
+# E2E (frontend:test-same-origin) が使う。版は CI の Chrome for Testing に揃える
+# (ブラウザ本体はリポジトリのツールチェーンに含められないため、CI はワークフローで同じ版を入れる)。
 chromedriver = "154.0.8037.57"
 # Dioxus CLI (dx)。Frontend のビルドに使う (ADR-0017)。mise registry に dioxus の項目が無いため、
 # GitHub のリリースのバイナリ (dx-aarch64-apple-darwin.tar.gz など) を github バックエンドで入れる。
@@ -22,7 +21,7 @@ chromedriver = "154.0.8037.57"
 # mise で Tailwind CLI だけを dx に渡す方法は無く、NO_DOWNLOADS=1 は 4 ツールすべてを PATH から
 # 要求するため、それらの版は dx の版が決める (ADR-0009 の例外。0037)。
 "github:DioxusLabs/dioxus" = "0.7.10"
-# wasm-bindgen-test のテストランナー (wasm-bindgen-test-runner)。dioxus:test-web が使う (0037)。
+# wasm-bindgen-test のテストランナー (wasm-bindgen-test-runner)。frontend:test-web が使う (0037)。
 # 版は frontend/Cargo.lock の wasm-bindgen と揃える。wasm-bindgen-test-runner は、テストの wasm を
 # 作った wasm-bindgen と版が一致しないと実行できない (一致しないとエラーになる)。
 "github:wasm-bindgen/wasm-bindgen" = "0.2.129"
@@ -67,15 +66,12 @@ depends = [
   "backend:test-integration",
   "frontend:test",
   "frontend:test-web",
-  "frontend:test-integration",
   "frontend:test-same-origin",
-  "dioxus:test",
-  "dioxus:test-web",
 ]
 
 [tasks.check]
 description = "静的検査と全ての自動テストを実行する (CI と手元の共通の入口)"
-depends = ["fmt", "lint", "frontend:build", "frontend:analyze", "dioxus:build", "dioxus:lint", "formal", "test"]
+depends = ["fmt", "lint", "frontend:build", "frontend:lint", "formal", "test"]
 
 [tasks.formal]
 description = "認証の状態遷移の TLA+ 仕様を TLC でモデル検査する"
@@ -114,19 +110,22 @@ run = "cargo test --workspace -- --skip wrangler_"
 [tasks."backend:test-integration"]
 description = "wrangler dev を起動する結合テストを実行する"
 dir = "backend"
-# wrangler dev は Static Assets のディレクトリが無いと起動しないため、先に Flutter をビルドする (0017)。
+# 配信する成果物のディレクトリを E2E のビルドと共有する (Dioxus のビルドは 1 つの出力に集約
+# されるため。0045)。frontend:build-e2e が出力を消してから作るので、先に済ませておき、実行中の
+# 削除と競合させない (0045 のレビューの指摘)。
+# wrangler dev は Static Assets のディレクトリが無いと起動しないため、先に Frontend をビルドする (0017)。
 # wrangler dev の [build] command は起動のたびに worker-build を実行するため、テストの起動ごとに
 # wasm のリリースビルドが重複し、build/.tmp の競合で失敗もする (0020)。先に backend:build で
 # 1 回だけビルドし、ハーネスには環境変数でそのビルドを再利用させる。
-depends = ["frontend:build", "backend:build"]
+depends = ["frontend:build-e2e", "backend:build"]
 run = "export BREWBOOK_SKIP_WORKER_BUILD=1 && cargo test -p brew_book --test dev_server --test d1_binding --test wrangler_auth_api --test wrangler_passkey_flow --test wrangler_records_api --test wrangler_purchases_brews_api --test wrangler_suggestions_api --test wrangler_purchase_suggestions_api --test wrangler_photos_api --test wrangler_stats_api --test wrangler_export_api --test wrangler_account_api --test wrangler_records_scale --test wrangler_stats_scale --test wrangler_same_origin_api --test wrangler_display_name && cargo test -p brew_book_admin --test wrangler_admin_api"
 
 [tasks.dev]
 description = "ローカル開発の画面と API を同じオリジンから配信する"
 depends = ["frontend:build"]
 dir = "backend/brew_book"
-# Flutter の開発サーバーは使わない (別オリジンになり、CORS を許可しない決定と Origin の検証に反する)。
-# 画面は wrangler dev の Static Assets から返し、http://localhost:8787/ で開く (ADR-0005)。
+# Dioxus の開発サーバー (dx serve) は使わない (別オリジンになり、CORS を許可しない決定と
+# Origin の検証に反する)。画面は wrangler dev の Static Assets から返し、http://localhost:8787/ で開く (ADR-0005)。
 # RP_ID と ORIGIN はトップレベル (ローカル) の [vars] の値 (ADR-0004 の既定値) をそのまま使う (ADR-0015)。
 run = "wrangler dev"
 
@@ -224,81 +223,16 @@ verify POST /users
 """
 
 [tasks."frontend:setup"]
-description = "Frontend の依存を取得する (Flutter のツールの初回ビルドもここで済ませる)"
+description = "Frontend の依存を取得する"
 dir = "frontend"
-# Flutter のコマンドは、初回の起動時に起動ランチャー (bin/internal/shared.sh) が startup lock を取り、
-# Dart SDK の取得とツールのビルドを行う。並列で起動すると 1 つがロックを持ち、他はロックを待つ。
-# 2026-09-27 の CI では lint の失敗でロックを持つプロセスが SIGTERM を受けた後に待ちが解けず、
-# mise が 1 時間終了しなかった (issue 0032)。Flutter を使うタスクはこのタスクに依存させて、
-# 初回のビルドを並列の前に直列で済ませる。
-run = "flutter pub get"
+# 依存の取得だけを行う。ビルドとテストは cargo が必要な依存を自動で取得するため、
+# このタスクは CI と手元で依存を先に揃えるために置く。
+run = "cargo fetch"
 
 [tasks."frontend:build"]
-description = "Frontend を Web 向けにビルドする (CanvasKit)"
-# 初回の Flutter のツールのビルドを先に済ませる (frontend:setup、issue 0032)。
+description = "Frontend (Dioxus) を Web 向けにリリースビルドする"
+# 依存を先に取得する (frontend:setup)。
 depends = ["frontend:setup"]
-dir = "frontend"
-# Flutter 3.47.5 の CLI にレンダラの指定は無く、JavaScript のビルドは CanvasKit を使う
-# (skwasm は --wasm のときだけ使う)。よって指定は付けない (ADR-0007)。
-run = "flutter build web"
-
-[tasks."frontend:build-e2e"]
-description = "実バックエンドの統合テスト (0017) が配信する、テストコード入りの Web ビルドを作る"
-depends = ["frontend:setup"]
-dir = "frontend"
-# テストのブラウザは Worker の Static Assets から画面を読むため、テストの本体を
-# ビルドに含める必要がある。check が作る配布用のビルド (build/web) とは混ぜない。
-run = 'flutter build web -t integration_test/same_origin_test.dart -o "$PWD/build/e2e-web"'
-
-[tasks."frontend:analyze"]
-description = "Frontend の静的検査を実行する"
-depends = ["frontend:setup"]
-dir = "frontend"
-run = "flutter analyze"
-
-[tasks."frontend:test"]
-description = "Widget テストを実行する (VM)"
-depends = ["frontend:setup"]
-dir = "frontend"
-run = "flutter test"
-
-[tasks."frontend:test-web"]
-description = "ブラウザで動かすテストを実行する (Canvas を使うテストを含む)"
-depends = ["frontend:setup"]
-dir = "frontend"
-run = "flutter test --platform chrome"
-
-[tasks."frontend:test-integration"]
-description = "統合テストを chromedriver で実行する"
-depends = ["frontend:setup"]
-dir = "frontend"
-# flutter drive は chromedriver を起動しないため、同じ版の chromedriver を先に起動する (issue 0013)。
-# 版は mise.toml の [tools] が持ち、統合テストの間だけ 4444 で待ち受ける。
-# ブラウザの寸法は携帯の幅 (390x844) にする。幅 840 px 未満の 1 列の配置で、ホームから保存までの
-# 画面数の成功指標を検証するためである (デザインの WideLayout は 840 px 以上で 2 段組にする)。
-run = """
-chromedriver --port=4444 &
-chromedriver_pid=$!
-trap 'kill "$chromedriver_pid"' EXIT
-flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d web-server --browser-name=chrome --headless --browser-dimension=390x844@1
-"""
-
-[tasks."frontend:test-same-origin"]
-description = "実バックエンドと仮想認証器で、Dioxus の画面の登録から抽出の保存までを検証する"
-# 事前ビルドの理由は backend:test-integration と同じ (0020)。
-depends = ["dioxus:build-e2e", "backend:build"]
-dir = "backend"
-# Rust のハーネスが wrangler dev と chromedriver を起動し、テスト用の feature `e2e` を有効に
-# した Dioxus の Web ビルドを Static Assets として配信して、実際の画面を Chrome で操作する
-# (0044)。仮想認証器は ChromeDriver の WebAuthn の拡張コマンドで付ける。スクリーンショットの
-# 比較の結果は frontend/target/e2e-screenshots/ に残す。
-run = "export BREWBOOK_SKIP_WORKER_BUILD=1 && cargo test -p brew_book --test wrangler_same_origin_e2e"
-
-# Dioxus の Frontend のタスク (0037)。移行の間だけ dioxus:* の名前を使い、Flutter の frontend:* は
-# 触らない。0045 が dioxus:* を frontend:* に改名し、Flutter のタスクとツールを消す (ADR-0017)。
-
-[tasks."dioxus:build"]
-description = "Dioxus の Frontend を Web 向けにリリースビルドする"
 dir = "frontend"
 # 成果物は target/dx/brew_book_frontend/release/web/public (2026-10-02 に確認。0037)。
 # mise exec を挟むのは、Homebrew の deno が dx という名前のバイナリを入れており、
@@ -323,37 +257,43 @@ ls assets/*.wasm > /dev/null
 ls assets/*.js > /dev/null
 """
 
-[tasks."dioxus:build-e2e"]
+[tasks."frontend:build-e2e"]
 description = "テスト用の feature を有効にした Web ビルドを作る (0044 の E2E が使う)"
-# 配布用のビルドと同じ成果物のディレクトリを使うため、dioxus:build に依存させて必ず後に
+# 配布用のビルドと同じ成果物のディレクトリを使うため、frontend:build に依存させて必ず後に
 # 実行する。mise は依存関係の無いタスクを並列に実行するため、check の中で同時に走ると
 # 成果物が混ざり、ハーネスの e2e のマーカーの検査が失敗し得る。
-depends = ["dioxus:build"]
+depends = ["frontend:build"]
 dir = "frontend"
 # 実バックエンドの E2E はテストコード入りのビルドを配信する (0044)。dx は出力の public/ を
 # 消さずに追記するため、古い成果物 (wasm と JS) が残る。ハーネスは assets/*.wasm の全てに
 # e2e のマーカーがあることを確かめるので、配布用のビルドと混ざらないように、先に消してから
 # 作る。
-# mise exec を挟む理由は dioxus:build と同じ。
+# mise exec を挟む理由は frontend:build と同じ。
 run = """
 set -e
 rm -rf target/dx/brew_book_frontend/release/web/public
 mise exec -- dx build --release --platform web --features e2e
 """
 
-[tasks."dioxus:lint"]
-description = "Dioxus の Frontend の Rust の lint と整形を検査する"
+[tasks."frontend:lint"]
+description = "Frontend の Rust の lint と整形を検査する"
+# 依存を先に取得する (frontend:setup)。
+depends = ["frontend:setup"]
 run = [
   "cargo clippy --manifest-path frontend/Cargo.toml --workspace --all-targets -- -D warnings",
   "cargo fmt --manifest-path frontend/Cargo.toml --all --check",
 ]
 
-[tasks."dioxus:test"]
-description = "Dioxus の Frontend のネイティブテスト (単体と PBT) を実行する"
+[tasks."frontend:test"]
+description = "Frontend のネイティブテスト (単体と PBT) を実行する"
+# 依存を先に取得する (frontend:setup)。
+depends = ["frontend:setup"]
 run = "cargo test --manifest-path frontend/Cargo.toml --workspace"
 
-[tasks."dioxus:test-web"]
+[tasks."frontend:test-web"]
 description = "ブラウザで動かすテストを headless の Chrome (mise の chromedriver) で実行する"
+# 依存を先に取得する (frontend:setup)。
+depends = ["frontend:setup"]
 # wasm-bindgen-test-runner は mise の wasm-bindgen が入れる (mise.toml の [tools])。
 # CHROMEDRIVER を明示して、PATH 上の他の WebDriver (geckodriver など) を使わせない。
 # ブラウザの画面の大きさは frontend/webdriver.json の --window-size で 1280 px にする
@@ -362,7 +302,7 @@ run = """
 # chromedriver が見つからない場合は、原因の分かるメッセージで先に失敗させる (0037 のレビューの指摘。
 # コマンド置換の失敗は export の終了状態に伝わらないため)。
 if ! command -v chromedriver > /dev/null 2>&1; then
-  echo "chromedriver is required to run dioxus:test-web but was not found" >&2
+  echo "chromedriver is required to run frontend:test-web but was not found" >&2
   exit 1
 fi
 export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner
@@ -370,6 +310,17 @@ export CHROMEDRIVER="$(command -v chromedriver)"
 # テストのファイルを列挙せず、wasm の全テストを実行する (0038 以降に増えたテストを取りこぼさない)。
 cargo test --manifest-path frontend/Cargo.toml --workspace --target wasm32-unknown-unknown
 """
+
+[tasks."frontend:test-same-origin"]
+description = "実バックエンドと仮想認証器で、Dioxus の画面の登録から抽出の保存までを検証する"
+# 事前ビルドの理由は backend:test-integration と同じ (0020)。
+depends = ["frontend:build-e2e", "backend:build"]
+dir = "backend"
+# Rust のハーネスが wrangler dev と chromedriver を起動し、テスト用の feature `e2e` を有効に
+# した Dioxus の Web ビルドを Static Assets として配信して、実際の画面を Chrome で操作する
+# (0044)。仮想認証器は ChromeDriver の WebAuthn の拡張コマンドで付ける。スクリーンショットの
+# 比較の結果は frontend/target/e2e-screenshots/ に残す。
+run = "export BREWBOOK_SKIP_WORKER_BUILD=1 && cargo test -p brew_book --test wrangler_same_origin_e2e"
 
 [tasks."r2-create-staging"]
 description = "検証用の R2 バケット (brewbook-photos-staging) を作成する (初回だけ)"

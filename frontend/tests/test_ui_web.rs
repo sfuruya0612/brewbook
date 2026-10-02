@@ -2,7 +2,7 @@
 //!
 //! `docs/design/tokens.css` と `src/ui/design.css` をテストのページに注入し、部品を実際に
 //! 描いて計算済みスタイルを取り、原本の値 (docs/design/tokens.css) と比べる。ブラウザで動かす
-//! ため `dioxus:test-web` (wasm-bindgen-test) で実行する。
+//! ため `frontend:test-web` (wasm-bindgen-test) で実行する。
 //!
 //! 画面の幅は `frontend/webdriver.json` の `--window-size` で 1280 px にし、2 段組の
 //! メディアクエリ (840 px 以上) を効かせる。

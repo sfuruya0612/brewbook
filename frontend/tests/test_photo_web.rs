@@ -1,7 +1,7 @@
 //! 写真の変換のブラウザテスト (0041、FR-10)。
 //!
 //! 長辺 4,000 px の PNG と JPEG から、JPEG かつ長辺 2048 px 以下の出力が得られることを
-//! 確かめる (FR-10 の受け入れ基準)。ブラウザで動かすため `dioxus:test-web`
+//! 確かめる (FR-10 の受け入れ基準)。ブラウザで動かすため `frontend:test-web`
 //! (wasm-bindgen-test) で実行する。
 
 #![cfg(target_arch = "wasm32")]

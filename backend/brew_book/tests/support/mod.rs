@@ -943,7 +943,7 @@ pub fn free_port() -> Result<u16, String> {
 /// `wrangler dev` が読む Static Assets のディレクトリを用意する。
 ///
 /// `wrangler.toml` の `[assets]` のディレクトリが無いと `wrangler dev` は起動しない。
-/// `check` は先に Flutter をビルドするが、単体のテストの実行でも起動できるように、
+/// `check` は先に Frontend をビルドするが、単体のテストの実行でも起動できるように、
 /// 無ければ空のディレクトリを作る。
 fn ensure_assets_dir(manifest_dir: &Path, assets_dir: Option<&Path>) -> Result<(), String> {
     let dir = assets_dir.map_or_else(|| manifest_dir.join(DEFAULT_ASSETS_DIR), Path::to_path_buf);
@@ -951,8 +951,8 @@ fn ensure_assets_dir(manifest_dir: &Path, assets_dir: Option<&Path>) -> Result<(
         .map_err(|error| format!("failed to create {}: {error}", dir.display()))
 }
 
-/// `wrangler.toml` の `[assets]` が指す、既定の Web ビルドのディレクトリ。
-const DEFAULT_ASSETS_DIR: &str = "../../frontend/build/web";
+/// `wrangler.toml` の `[assets]` が指す、既定の Dioxus の Web ビルドのディレクトリ (0037)。
+const DEFAULT_ASSETS_DIR: &str = "../../frontend/target/dx/brew_book_frontend/release/web/public";
 
 /// テストの `DevServer` が使う worker を、プロセスごとに 1 回だけビルドする。
 ///
@@ -1039,7 +1039,7 @@ fn override_config(
     )?;
     replace_once(
         &mut text,
-        "directory = \"../../frontend/build/web\"",
+        "directory = \"../../frontend/target/dx/brew_book_frontend/release/web/public\"",
         &format!("directory = \"{}\"", assets.display()),
     )?;
     replace_once(

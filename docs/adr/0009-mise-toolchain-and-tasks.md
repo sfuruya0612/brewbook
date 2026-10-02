@@ -3,25 +3,27 @@
 Created: 2026-09-21
 Model: Claude Fable 5.1
 Status: Accepted
+改訂: 2026-10-02 (issue 0045。Frontend を Dioxus の Web だけにする決定 (ADR-0017) に合わせて、Flutter の版の固定と Flutter を前提にした記述を改めた)
 
 ## 背景
 
-Backend は Rust (ADR-0001)、Frontend は Flutter (ADR-0007) で書き、デプロイとローカル開発には wrangler を使う (ADR-0002、ADR-0005)。
+Frontend は Rust の Dioxus (ADR-0017。ADR-0007 を置き換えた)、Backend は Rust (ADR-0001) で書き、デプロイとローカル開発には wrangler を使う (ADR-0002、ADR-0005)。
 `shiguredo_s3` の MSRV は 1.93 で (ADR-0003)、所有者の手元に元から入っていた Rust 1.76 では満たせなかった。
 2026-09-21 に所有者が mise で Rust の最新版 (rustc 1.98.1) を入れ、リポジトリのルートに `mise.toml` を置いた。
 同日、所有者は次を決めた。
 
 - ツールのバージョン管理と、ビルド、デプロイ、テストなどのコマンドラインは、今後 mise のタスクで管理する。
-- Flutter と Rust のバージョンは `latest` ではなく版を固定する。
+- ツールのバージョンは `latest` ではなく版を固定する。
 - wrangler も mise で管理する (同日に所有者が追加で決定)。
 
 同日に所有者が `mise.toml` を書き換え、Flutter を 3.47.5、Rust を 1.98.1、wrangler を 4.135.0 に固定した (「## 結果」)。
+Flutter の固定は、Frontend を Dioxus に置き換えた 2026-10-02 に外した (ADR-0017、issue 0045)。
 
 ## 決定
 
 - ツールのバージョンはリポジトリのルートの `mise.toml` の `[tools]` で管理する。
-  Flutter、Rust、wrangler (npm パッケージ) は具体的な版で固定し、`latest` を使わない。
-  2026-09-21 時点の版は Flutter 3.47.5、Rust 1.98.1、wrangler 4.135.0 とする。
+  Rust、wrangler (npm パッケージ)、Dioxus CLI、chromedriver などのツールは具体的な版で固定し、`latest` を使わない。
+  2026-09-21 時点の版は Flutter 3.47.5、Rust 1.98.1、wrangler 4.135.0 とし、Frontend を Dioxus にした後 (2026-10-02) の版は Rust 1.98.1、wrangler 4.135.0、Dioxus CLI 0.7.10 とする。
   Rust の版は `shiguredo_s3` の MSRV (1.93) 以上とする。
 - Rust の wasm32-unknown-unknown ターゲットは、`mise.toml` の Rust の設定 (`targets`) で入れる。
   mise は Rust を rustup 経由で入れ、`targets` にターゲットの配列を書けることを 2026-09-21 に mise のドキュメント (https://mise.jdx.dev/lang/rust.html) で確認した。
@@ -30,8 +32,8 @@ Backend は Rust (ADR-0001)、Frontend は Flutter (ADR-0007) で書き、デプ
   リポジトリに別のシェルスクリプトや Makefile を置かず、README とドキュメントはタスク名で手順を示す。
 - CI は同じ `mise.toml` で mise を使ってツールを入れ、同じタスクを実行する。
   CI と手元でコマンドラインを二重に持たない。
-- タスクの内容は Flutter と Rust の標準のコマンド (`flutter build web`、`cargo test`、`wrangler deploy` など) の組み合わせに留め、タスクの中に独自のロジックを書かない。
-  ロジックが必要になる場合は Rust か Dart のコードにして、タスクからはそれを呼ぶだけにする。
+- タスクの内容は Rust と Dioxus の標準のコマンド (`cargo test`、`dx build --release --platform web`、`wrangler deploy` など) の組み合わせに留め、タスクの中に独自のロジックを書かない。
+  ロジックが必要になる場合は Rust のコードにして、タスクからはそれを呼ぶだけにする。
 
 ## 検討した選択肢
 
@@ -44,11 +46,12 @@ Backend は Rust (ADR-0001)、Frontend は Flutter (ADR-0007) で書き、デプ
 
 ## 結果
 
-- 手元と CI の Flutter、Rust、wrangler の版が `mise.toml` の 1 か所で決まる。
+- 手元と CI のツール (Rust、wrangler、Dioxus CLI、chromedriver など) の版が `mise.toml` の 1 か所で決まる。
   wrangler をリポジトリの `package.json` や全体インストールで別に持たない。
 - 版を上げるときは `mise.toml` の変更をコミットし、CI で全テストが通ることを確認してからマージする (PRD の「制約と前提」)。
 - 開発者は mise を入れていることが前提になる。
   mise を入れずに標準のコマンドを直接叩いても動くが、版の保証は無い。
 - 2026-09-21 の書き換え後の `mise.toml` は、Flutter 3.47.5 (同日時点の stable の最新。2026-09-18 公開)、Rust 1.98.1 (`targets = ["wasm32-unknown-unknown"]` 付き)、wrangler 4.135.0 を固定しており、本 ADR の決定と一致する。
   筆者が同日に `mise ls --current` と `rustup target list --installed` で、3 つの版と wasm32 ターゲットが `mise.toml` から解決されることを確認した。
+- Frontend を Dioxus にした後 (2026-10-02、issue 0045) の `mise.toml` は Flutter を外し、Dioxus CLI 0.7.10、wasm-bindgen 0.2.129、chromedriver 154.0.8037.57 などを固定している。
 - 本 ADR は版を上げる時期を定めない。

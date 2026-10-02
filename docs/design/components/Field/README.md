@@ -8,4 +8,4 @@
 - 自由記述の 8 項目 (生産者、生産国、地域、精製方法、品種、焙煎度、抽出方法、挽き目) は入力中に候補を最大 20 件、枠の直下に `paper-raised` の一覧で出し、一致した先頭部分を `crema-ink` の 600 で示す (FR-13)。候補に無い値もそのまま入力できる。
 - フォーカスは枠を `crema-ink` にして `focus-ring` を付ける。エラーは枠を `signal` にし、下に理由を `caption` の `signal` で書く (ARB の `validation*`)。
 - 感想 (複数行) は最小 88 px で、行数に合わせて伸ばす。
-- Flutter では `InputDecorationTheme` に `filled: true`、`fillColor` を `paper-sunken`、`OutlineInputBorder` の色を `line-strong`、角を `radius-sm`、`contentPadding` を 12 px にする。`labelText` は使わず、項目名は上に別の `Text` で置く (浮動ラベルにしない)。
+- Dioxus では `frontend/src/ui/field.rs` の `Field` で `.field` と `.box` のクラスを組む。地は `paper-sunken`、枠は `line-strong`、角は `radius-sm`、内側は 12 px。項目名は上に別に置く (浮動ラベルにしない)。フォーカスは `.focus`、エラーは `.error` を付ける。

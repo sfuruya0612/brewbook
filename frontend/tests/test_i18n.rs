@@ -4,7 +4,7 @@
 //! - 日本語の 8 つの訳語
 //! - 言語の決定 (端末またはブラウザの言語が日本語なら日本語、それ以外は英語)
 //! - `src/ui/` と `src/screens/` の `rsx!` に表示する文字列の直書きが無いこと
-//!   (Flutter の `test/l10n_check_test.dart` の検査を Rust に写す)
+//!   (移行前の Flutter 版の `test/l10n_check_test.dart` の検査を写したもの)
 
 use std::collections::HashSet;
 use std::fs;
@@ -13,64 +13,6 @@ use std::path::{Path, PathBuf};
 use brew_book_frontend::i18n::{
     resolve_language, set_language, t, t_args, text, Key, Language, KEY_COUNT,
 };
-
-/// ARB (翻訳の原本) のメッセージの値をファイルの順に読む。
-///
-/// 1 行 1 キーの整形を前提にし、`@` で始まるメタデータのブロックは読み飛ばす。
-fn arb_messages(file_name: &str) -> Vec<String> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("lib/l10n")
-        .join(file_name);
-    let source = fs::read_to_string(&path).expect("the ARB must be readable");
-    let mut values = Vec::new();
-    let mut metadata_depth = 0_u32;
-    for line in source.lines() {
-        let line = line.trim();
-        if metadata_depth > 0 {
-            metadata_depth += line.matches('{').count() as u32;
-            metadata_depth -= line.matches('}').count() as u32;
-            continue;
-        }
-        let Some(rest) = line.strip_prefix('"') else {
-            continue;
-        };
-        let Some((key, value)) = rest.split_once("\": ") else {
-            continue;
-        };
-        if key.starts_with('@') {
-            if value.trim_end_matches(',').trim_end().ends_with('{') {
-                metadata_depth = 1;
-            }
-            continue;
-        }
-        let value: String = serde_json::from_str(value.trim_end_matches(','))
-            .expect("the ARB value must be a JSON string");
-        values.push(value);
-    }
-    values
-}
-
-/// キーの列挙と 2 つの言語の表が、ARB (原本) の全件と順序どおりに一致することを検査する (FR-16)。
-///
-/// キーの順序は ARB と同じにする (`keys.rs`)。順序どおりに比べるため、値の入れ替えも検出する。
-/// 0045 で ARB を消すまで原本と照合できる。
-#[test]
-fn the_tables_match_the_arb_values() {
-    for (file_name, language) in [
-        ("app_ja.arb", Language::Japanese),
-        ("app_en.arb", Language::English),
-    ] {
-        let expected = arb_messages(file_name);
-        assert_eq!(
-            expected.len(),
-            KEY_COUNT,
-            "{file_name} must have {KEY_COUNT} messages"
-        );
-        for (key, expected_value) in Key::ALL.into_iter().zip(expected.iter()) {
-            assert_eq!(text(language, key), expected_value, "{file_name}: {key:?}");
-        }
-    }
-}
 
 #[test]
 fn the_japanese_table_has_the_eight_words() {

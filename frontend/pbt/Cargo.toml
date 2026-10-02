@@ -8,7 +8,7 @@ publish = false
 brew_book_frontend = { path = ".." }
 
 # PBT は native だけで動かす (ADR-0013)。proptest は wasm を対象にしないため、
-# wasm のテスト (dioxus:test-web) のビルドに含めない。テストのファイルは
+# wasm のテスト (frontend:test-web) のビルドに含めない。テストのファイルは
 # `#![cfg(not(target_arch = "wasm32"))]` で wasm では空になる。
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 proptest = "1"

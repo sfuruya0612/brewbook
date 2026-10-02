@@ -1,4 +1,4 @@
-//! ブラウザで動かすテスト (dioxus:test-web) の配線と、ブラウザの API を使うコードを検査する (0037、0038)。
+//! ブラウザで動かすテスト (frontend:test-web) の配線と、ブラウザの API を使うコードを検査する (0037、0038)。
 //!
 //! wasm-bindgen-test を headless の Chrome (mise の chromedriver) で実行する。
 

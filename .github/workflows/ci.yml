@@ -14,7 +14,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     # 外部プロセス (wrangler dev) を起動するテストがハングした場合に runner を占有し続けないようにする。
-    # check は 0017 の e2e (flutter drive) を含めて手元で 27 分前後かかるため、ハングしたテストが
+    # check は 0017 の e2e (wrangler dev と Chrome) を含めて時間がかかるため、ハングしたテストが
     # 後続の検査を巻き込まない余裕として 60 分にする。
     # 2026-09-27 は lint の失敗後に mise が終了せず、この timeout で止まった (issue 0032)。
     # ハングの最終的な歯止めとして残す。
@@ -33,12 +33,10 @@ jobs:
           curl -fsSL -o chrome-for-testing.zip \
             "https://storage.googleapis.com/chrome-for-testing-public/154.0.8037.57/linux64/chrome-linux64.zip"
           unzip -q chrome-for-testing.zip
-          # chromedriver が探す名前 (google-chrome) で PATH の先頭に置き、Flutter には
-          # CHROME_EXECUTABLE で同じ実体を指す。Runner 上の ChromeDriver は
+          # chromedriver が探す名前 (google-chrome) で PATH の先頭に置く。Runner 上の ChromeDriver は
           # /opt/google/chrome/chrome も直接使うため、そのパスも同じ実体にする。
           sudo ln -sf "$PWD/chrome-linux64/chrome" /usr/local/bin/google-chrome
           sudo ln -sf "$PWD/chrome-linux64/chrome" /opt/google/chrome/chrome
-          echo "CHROME_EXECUTABLE=$PWD/chrome-linux64/chrome" >> "$GITHUB_ENV"
       # Rust のビルドのキャッシュ。Cargo のレジストリと git の取得物、Backend と Frontend の
       # ビルドの成果物を、ロックファイルと mise.toml (ツールの版) のハッシュで保存する (0037)。
       # action の版はコミットハッシュで固定する (ADR-0011)。

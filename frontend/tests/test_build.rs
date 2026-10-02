@@ -54,7 +54,7 @@ fn strip_comments(html: &str) -> String {
     stripped
 }
 
-/// Flutter の frontend/web/ から引き継いだ静的アセットが public/ にあることを検査する (ADR-0017)。
+/// 移行前の Flutter 版の frontend/web/ から引き継いだ静的アセットが public/ にあることを検査する (ADR-0017)。
 #[test]
 fn public_dir_has_the_static_assets() {
     let public_dir = crate_dir().join("public");

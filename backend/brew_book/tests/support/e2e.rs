@@ -113,8 +113,9 @@ impl E2eBrowser {
 
     /// ChromeDriver の WebAuthn の拡張コマンドで仮想認証器を 1 つ付ける (ADR-0004、0044)。
     ///
-    /// 設定は現在の Chrome DevTools Protocol のもの (0005、`test_driver/same_origin_test.dart`) を
-    /// 写す。Backend は `userVerification: required` を要求するため、既定値に依存しない。
+    /// 設定は移行前の Flutter 版の Chrome DevTools Protocol のもの (0005、
+    /// `frontend/test_driver/same_origin_test.dart`。0045 で削除) を写す。Backend は
+    /// `userVerification: required` を要求するため、既定値に依存しない。
     pub async fn add_virtual_authenticator(&self) -> Result<(), String> {
         let options = json!({
             "protocol": "ctap2",

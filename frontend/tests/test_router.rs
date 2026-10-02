@@ -1,12 +1,13 @@
 //! 経路の台帳とルーターの単体テスト (ADR-0017)。
 //!
-//! 台帳の一覧は Flutter の `frontend/lib/router/app_router.dart` の `AppRoutes` と照合する。
+//! 台帳の一覧は、移行前の Flutter 版 (frontend/lib/router/app_router.dart。0045 で削除) の
+//! `AppRoutes` と同じ内容を固定した期待値と照合する。
 
 use std::str::FromStr;
 
 use brew_book_frontend::router::{fallback_destination, route_name, AppRoute, Route, APP_ROUTES};
 
-/// Flutter の `AppRoutes` と同じ 18 経路 (名前、パターン)。名前はパターンと同じ。
+/// 移行前の Flutter 版と同じ 18 経路 (名前、パターン)。名前はパターンと同じ。
 const FLUTTER_ROUTES: [(&str, &str); 18] = [
     ("/login", "/login"),
     ("/register", "/register"),

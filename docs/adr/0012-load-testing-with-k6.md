@@ -3,6 +3,7 @@
 Created: 2026-09-26
 Model: DeepSeek V4.1 Flash
 Status: Accepted
+改訂: 2026-10-02 (issue 0045。Frontend を Dioxus の Web だけにする決定 (ADR-0017) に合わせて、対象を Dioxus のビルド成果物に改めた)
 
 ## 背景
 
@@ -23,10 +24,12 @@ k6 は mise のレジストリから取得でき、同日時点の版は 2.3.0 �
   誤って本番に負荷をかけることを防ぐ。
 - 負荷は VU 50 の定常 1 分とし、認証が不要な経路だけを叩く。
   対象は次の 4 つとする。
-  - `GET /` (Flutter のビルド成果物の index.html)
-  - `GET /main.dart.js`
-  - `GET /flutter_bootstrap.js`
+  - `GET /` (Dioxus のビルド成果物の index.html)
+  - `GET /assets/*.js` (JavaScript のローダー)
+  - `GET /assets/*.wasm` (WebAssembly)
   - `POST /api/auth/login/begin` (入力を持たず、D1 への書き込みを含む経路)
+- 静的アセットのファイル名には dx がハッシュを付けるため、ビルドのたびに変わる。
+  k6 の `setup` が index.html と JavaScript のローダーを 1 回だけ読み、実際のパスを解決してから負荷をかける (2026-10-02、issue 0045)。
 - 認証が不要な 4 経路のうち、登録の開始と完了、ログインの完了は有効な入力 (登録用トークン、クレデンシャル) の組み立てを要する。
   この 3 経路は対象外とし、入力を持たないログインの開始だけを対象にする。
 - 状態を変更する API は `Origin` ヘッダを検証する (0017)。k6 は `Origin` を自動で付けないため、`POST` には `Origin: http://localhost:8787` (既定の `BASE_URL` と同じオリジン) を付ける。

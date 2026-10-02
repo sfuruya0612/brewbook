@@ -6,4 +6,4 @@
 - 未設定の項目は行を消さず、「未設定」を `ink-faint` で出す (ARB の `unsetLabel`)。表の行数が画面ごとに変わらないようにする。
 - 抽出の詳細: 豆の量、湯量、湯の温度、時間、抽出方法、挽き目、評価。購入の詳細: 購入日、焙煎度、焙煎日、価格、重量、写真 (差し替えと削除の文字ボタン)。
 - 感想は表に入れず、表の下に「感想」の `label` と `body` の段落で置く。
-- Flutter では `Table` か 2 列の `Row` を `Column` に並べ、間に `Divider`。値の `Text` に `textAlign: TextAlign.end` と `FontFeature.tabularFigures()`。
+- Dioxus では `frontend/src/ui/ledger.rs` で `.ledger` の grid (`max-content 1fr`) を組み、`.k` と `.v` の行に `line` の罫線を引く。値は右揃えで `tabular-nums` にする。

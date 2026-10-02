@@ -10,4 +10,4 @@
 - アーカイブ済みは名前と 2 行目を `ink-muted` に落とし、右端に「アーカイブ済み」のバッジ (`paper-sunken`)。既定では一覧に出さず、上部の「アーカイブ済みを含める」の切り替えで出す (FR-12)。
 - 広い画面で選択中の行は `roast-soft` の地。
 - 末尾までスクロールしたら次の 50 件を読む。読み込み中は最後の行の下に「読み込み中」を `caption` で。
-- Flutter では `ListTile` (`minTileHeight: 64`、`contentPadding` 16) と `Divider`。写真は `ClipRRect` (`radius-sm`)。
+- Dioxus では `frontend/src/ui/list_row.rs` で `.list` と `.row` のクラスを組む。行の高さは 64 px 以上、内側は `space-3` と `space-4`、下端に `line` の罫線。写真は `.thumb` (`radius-sm` で切り抜く)。

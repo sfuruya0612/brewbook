@@ -123,7 +123,7 @@ fn header(response: &Response, name: &str) -> Option<String> {
 
 /// 画面と API が同じオリジンから配信されることを確かめる。
 ///
-/// Flutter のルーティングのパス (`/register` など) を直接開くと `index.html` が 200 で返り、
+/// 画面のルーティングのパス (`/register` など) を直接開くと `index.html` が 200 で返り、
 /// 一致する静的ファイルは Static Assets から返る。`/api/*` は Worker が処理して JSON を返す
 /// (run_worker_first と not_found_handling の設定。ADR-0005)。
 #[test]
@@ -149,14 +149,22 @@ fn wrangler_spa_routes_return_index_html_200() {
             "the path {path} must return HTML but was {content_type}"
         );
         assert!(
-            body.contains("flutter_bootstrap.js"),
-            "the path {path} must return the Flutter bootstrap: {body}"
+            body.contains("assets/brew_book_frontend"),
+            "the path {path} must return the Dioxus app HTML with the JavaScript loader: {body}"
         );
     }
 
-    // 一致する静的ファイルは Static Assets からそのまま返る。
+    // 一致する静的ファイルは Static Assets からそのまま返る。JavaScript のローダーの
+    // ファイル名には dx がハッシュを付けるため、index.html から実際のパスを取り出して取得する。
+    let index = client
+        .get(format!("{base_url}/"))
+        .send()
+        .expect("the request must reach the dev server")
+        .text()
+        .expect("the response body must be readable");
+    let loader = loader_path(&index);
     let response = client
-        .get(format!("{base_url}/main.dart.js"))
+        .get(format!("{base_url}{loader}"))
         .send()
         .expect("the request must reach the dev server");
     assert_eq!(response.status().as_u16(), 200);
@@ -177,6 +185,22 @@ fn wrangler_spa_routes_return_index_html_200() {
         content_type.starts_with("application/json"),
         "the API must answer JSON but was {content_type}"
     );
+}
+
+/// `index.html` から JavaScript のローダーのパスを取り出す。
+///
+/// dx の成果物のファイル名にはハッシュが付いてビルドのたびに変わるため、固定の名前を
+/// 書かずに index.html の参照から解決する。
+fn loader_path(html: &str) -> String {
+    let start = html
+        .find("assets/")
+        .expect("index.html must reference the JavaScript loader under assets/");
+    let rest = &html[start..];
+    let end = rest
+        .find(".js")
+        .expect("the JavaScript loader reference must end with .js")
+        + ".js".len();
+    format!("/{}", &rest[..end])
 }
 
 #[test]

@@ -1,6 +1,6 @@
 # Charts
 
-fl_chart で描く統計のグラフ。色は `chart-count` (件数と金額。`roast`) と `chart-grams` (グラム。`crema`) の 2 つだけ。
+SVG で描く統計のグラフ (座標は `frontend/src/records/chart.rs`、描画は `frontend/src/ui/charts.rs`)。色は `chart-count` (件数と金額。`roast`) と `chart-grams` (グラム。`crema`) の 2 つだけ。
 
 - 棒グラフ: 抽出回数と豆の消費量、購入金額と購入重量。系列ごとに別のグラフにし、1 つの軸に単位の違う系列を混ぜない。通貨はグラフを分けて題に「(JPY)」と付け、色で分けない (FR-18)。
 - 軸は `line-strong` の 1 px、目盛は `line` の横罫 2 本 (最大と半分)。目盛の数字とラベルは `mono` の 11 px、`ink-muted`。日別は先頭、中央、末尾の 3 つだけラベルを出す。

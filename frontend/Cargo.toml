@@ -1,6 +1,4 @@
-# Frontend のクレートとワークスペース (ADR-0017)。
-# 移行の間は Flutter のファイル (lib/、test/、web/ など) と同じディレクトリに置き、
-# Flutter の削除は 0045 で行う。
+# Frontend のクレートとワークスペース (ADR-0017)。Web だけを対象にする。
 
 [package]
 name = "brew_book_frontend"
@@ -85,7 +83,7 @@ web-sys = { version = "0.3", features = [
 ] }
 
 [dev-dependencies]
-# ブラウザで動かすテスト (dioxus:test-web) に使う (ADR-0017)。
+# ブラウザで動かすテスト (frontend:test-web) に使う (ADR-0017)。
 wasm-bindgen-test = "0.3"
 # manifest.json を JSON として検査する (0037 のレビューの指摘。文字列の一致では整形の変更や
 # 壊れた JSON を検出できないため、値を比較する)。

@@ -4,7 +4,7 @@
 //! ダウンロード、画面数の成功指標、スクリーンショットの比較を 1 本のテストで実行する。
 //!
 //! - `wrangler dev`: feature `e2e` を有効にした Dioxus の Web ビルド
-//!   (`frontend/target/dx/brew_book_frontend/release/web/public`、`mise run dioxus:build-e2e`) を
+//!   (`frontend/target/dx/brew_book_frontend/release/web/public`、`mise run frontend:build-e2e`) を
 //!   Static Assets として配信し、`/api/*` を Rust の処理に渡す。実際の画面はこのオリジンから読む。
 //! - chromedriver: WebDriver のセッションを開き、`thirtyfour` で Chrome を操作する
 //!   (`frontend:test-same-origin`)。仮想認証器は ChromeDriver の WebAuthn の拡張コマンド
@@ -197,7 +197,7 @@ async fn run_steps(
         .await?;
     if marker.as_deref() != Some(E2E_MARKER) {
         return Err(format!(
-            "the served build must be the E2E build with the {E2E_MARKER} marker but was {marker:?} (run `mise run dioxus:build-e2e`)"
+            "the served build must be the E2E build with the {E2E_MARKER} marker but was {marker:?} (run `mise run frontend:build-e2e`)"
         ));
     }
 
@@ -759,20 +759,20 @@ fn e2e_assets() -> PathBuf {
     let index = public.join("index.html");
     assert!(
         index.is_file(),
-        "the E2E web build must exist at {} (run `mise run dioxus:build-e2e`)",
+        "the E2E web build must exist at {} (run `mise run frontend:build-e2e`)",
         public.display()
     );
     for name in ["tailwind.css", "favicon.png", "manifest.json"] {
         assert!(
             public.join(name).is_file(),
-            "{} must exist (run `mise run dioxus:build-e2e`)",
+            "{} must exist (run `mise run frontend:build-e2e`)",
             public.join(name).display()
         );
     }
     let wasm = find_assets(&public, "wasm");
     assert!(
         !wasm.is_empty(),
-        "the E2E build must have an assets/*.wasm (run `mise run dioxus:build-e2e`)"
+        "the E2E build must have an assets/*.wasm (run `mise run frontend:build-e2e`)"
     );
     for path in &wasm {
         let bytes = fs::read(path)
@@ -781,14 +781,14 @@ fn e2e_assets() -> PathBuf {
             bytes
                 .windows(E2E_MARKER.len())
                 .any(|window| window == E2E_MARKER.as_bytes()),
-            "{} must contain the E2E marker (run `mise run dioxus:build-e2e`)",
+            "{} must contain the E2E marker (run `mise run frontend:build-e2e`)",
             path.display()
         );
     }
     let js = find_assets(&public, "js");
     assert!(
         !js.is_empty(),
-        "the E2E build must have an assets/*.js (the loader. run `mise run dioxus:build-e2e`)"
+        "the E2E build must have an assets/*.js (the loader. run `mise run frontend:build-e2e`)"
     );
     public
 }

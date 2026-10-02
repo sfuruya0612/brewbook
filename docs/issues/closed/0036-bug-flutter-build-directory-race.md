@@ -2,6 +2,7 @@
 
 Created: 2026-10-02
 Model: deepseek-v4p1-flash
+Completed: 2026-10-02
 
 ## 症状
 
@@ -41,3 +42,11 @@ Model: deepseek-v4p1-flash
 
 - 0020 の検証 (2026-10-02) で見つけた。0020 の変更は frontend のタスクに触れていない。
 - 関連: 0029 (frontend:test-integration の Chrome セッション作成の失敗)。どちらも既定の並列実行でだけ起きる。
+
+## 解決方法
+
+Flutter のビルドとタスクを 0045 で削除したため、この競合は再現しなくなった (2026-10-02 の所有者の決定)。
+
+- 競合していた Flutter のタスク (`frontend:build`、`frontend:build-e2e`、`frontend:analyze`、`frontend:test`、`frontend:test-web`、`frontend:test-integration`) と `[tools]` の `flutter` を 0045 が消した。`frontend/build/` を共有する Flutter の処理自体が無くなり、`frontend:test-web` は Dioxus の wasm-bindgen-test (ブラウザのテスト) になった。
+- 完了条件の 1 行目 (既定の並列で 3 回連続) は、対象の Flutter のタスクが無くなったため実施しない。代わりに、Flutter の無い状態で `mise run check` を既定の並列で実行し、通過することを確認した (2026-10-02 と 2026-10-03。約 23 分と約 27 分。ログの要約は 0045 の解決方法に記録した)。1 回目の実行では別の結合テスト (`wrangler_account_api` の R2 のカーソルの検査) が並列の負荷でタイムアウトしたが、単体では通過し、2 回目と 3 回目の実行では全て通過した。
+- 原因の特定と修正は行っていない (対象のタスクが無くなったため)。

@@ -1,7 +1,8 @@
 //! 翻訳のキー (FR-16)。
 //!
-//! `frontend/lib/l10n/app_ja.arb` と `app_en.arb` の 227 キーから作る。表 ([`super::ja`] と
-//! [`super::en`]) はこの添字で引く。キーの順序は ARB と同じにする。
+//! 移行前の Flutter 版の ARB (`frontend/lib/l10n/app_ja.arb` と `app_en.arb`。0045 で削除) の
+//! 227 キーから作る。表 ([`super::ja`] と [`super::en`]) はこの添字で引く。キーの順序は ARB と
+//! 同じにしていた。
 
 /// キーの数。
 pub const KEY_COUNT: usize = 227;
