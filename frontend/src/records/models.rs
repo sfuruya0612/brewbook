@@ -361,7 +361,7 @@ pub fn format_error(message: impl Into<String>) -> RecordError {
 }
 
 /// 文字列の項目を読む。
-fn string_field(json: &Map<String, Value>, key: &str) -> Result<String, RecordError> {
+pub(crate) fn string_field(json: &Map<String, Value>, key: &str) -> Result<String, RecordError> {
     match json.get(key) {
         Some(Value::String(value)) => Ok(value.clone()),
         _ => Err(format_error(format!("the {key} field must be a string"))),
@@ -369,7 +369,10 @@ fn string_field(json: &Map<String, Value>, key: &str) -> Result<String, RecordEr
 }
 
 /// 文字列の項目を読む。無い場合と `null` は None にする。
-fn optional_string(json: &Map<String, Value>, key: &str) -> Result<Option<String>, RecordError> {
+pub(crate) fn optional_string(
+    json: &Map<String, Value>,
+    key: &str,
+) -> Result<Option<String>, RecordError> {
     match json.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(Value::String(value)) => Ok(Some(value.clone())),
@@ -379,8 +382,18 @@ fn optional_string(json: &Map<String, Value>, key: &str) -> Result<Option<String
     }
 }
 
+/// 0 以上の整数の項目を読む (件数。FR-18)。
+pub(crate) fn count_field(json: &Map<String, Value>, key: &str) -> Result<u64, RecordError> {
+    let value = optional_i64(json, key)?
+        .ok_or_else(|| format_error(format!("the {key} field must be a number")))?;
+    u64::try_from(value).map_err(|_| format_error(format!("the {key} field must not be negative")))
+}
+
 /// 整数の項目を読む。無い場合と `null` は None にする。
-fn optional_i64(json: &Map<String, Value>, key: &str) -> Result<Option<i64>, RecordError> {
+pub(crate) fn optional_i64(
+    json: &Map<String, Value>,
+    key: &str,
+) -> Result<Option<i64>, RecordError> {
     match json.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(Value::Number(value)) => value
@@ -394,7 +407,10 @@ fn optional_i64(json: &Map<String, Value>, key: &str) -> Result<Option<i64>, Rec
 }
 
 /// 小数の項目を読む。無い場合と `null` は None にする。
-fn optional_f64(json: &Map<String, Value>, key: &str) -> Result<Option<f64>, RecordError> {
+pub(crate) fn optional_f64(
+    json: &Map<String, Value>,
+    key: &str,
+) -> Result<Option<f64>, RecordError> {
     match json.get(key) {
         None | Some(Value::Null) => Ok(None),
         Some(Value::Number(value)) => value
@@ -408,7 +424,10 @@ fn optional_f64(json: &Map<String, Value>, key: &str) -> Result<Option<f64>, Rec
 }
 
 /// 評価 (1 から 5) の項目を読む。
-fn optional_rating(json: &Map<String, Value>, key: &str) -> Result<Option<u8>, RecordError> {
+pub(crate) fn optional_rating(
+    json: &Map<String, Value>,
+    key: &str,
+) -> Result<Option<u8>, RecordError> {
     let Some(value) = optional_i64(json, key)? else {
         return Ok(None);
     };

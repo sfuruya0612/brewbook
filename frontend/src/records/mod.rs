@@ -6,6 +6,7 @@
 //! サジェストの状態は [`suggestions`] が持ち、いずれも Dioxus に依存しない (ADR-0013)。
 
 pub mod api;
+pub mod chart;
 pub mod clock;
 pub mod currencies;
 pub mod display;
@@ -14,6 +15,7 @@ pub mod inputs;
 pub mod list;
 pub mod models;
 pub mod photo;
+pub mod stats;
 pub mod stats_period;
 pub mod suggestions;
 pub mod upload;
@@ -50,6 +52,7 @@ pub use photo::{
     ConvertedImage, ImageConverter, PhotoError, PhotoFuture, PhotoPicker, PickedPhoto,
     MAX_PHOTO_BYTES, MAX_PHOTO_LONG_SIDE,
 };
+pub use stats::{stats_path, BrewPeriod, BrewRating, PurchasePeriod, RatingHistoryEntry, StatsApi};
 pub use suggestions::{highlight_parts, SuggestionState};
 pub use upload::{PhotoUpload, PhotoUploader, UploadFuture, UploadRequest, UploadTransport};
 

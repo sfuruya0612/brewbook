@@ -1,6 +1,6 @@
-//! 記録の画面の配線の単体テスト (0041)。
+//! 記録と統計の画面の配線の単体テスト (0041、0042)。
 //!
-//! 画面の型と prop が存在すること、ルーターの経路が記録の画面に繋がっていることを確かめる
+//! 画面の型と prop が存在すること、ルーターの経路が画面に繋がっていることを確かめる
 //! (完了条件 1 の「画面があり」の native の確認)。ブラウザでの描画は 0044 の E2E が確かめる。
 
 use std::fs;
@@ -23,6 +23,9 @@ use brew_book_frontend::screens::records::{
     shop_form::{ShopEditScreen, ShopEditScreenProps, ShopForm, ShopFormProps, ShopFormScreen},
     shop_list::ShopListScreen,
 };
+use brew_book_frontend::screens::stats::{
+    charts::RatingHistoryChartProps, RatingHistoryChart, StatsScreen,
+};
 use dioxus::prelude::Element;
 
 /// クレートのルート (frontend/)。
@@ -36,9 +39,10 @@ fn router_source() -> String {
 }
 
 #[test]
-fn the_ten_record_screens_have_the_expected_props() {
+fn the_record_screens_have_the_expected_props() {
     // 経路に割り当てる画面は、ルーターが渡す prop で組めること (型の確認)。
     let _: fn() -> Element = HomeScreen;
+    let _: fn() -> Element = StatsScreen;
     let _: fn() -> Element = BrewFormScreen;
     let _: fn(BrewEditScreenProps) -> Element = BrewEditScreen;
     let _: fn(BrewDetailScreenProps) -> Element = BrewDetailScreen;
@@ -130,9 +134,30 @@ fn the_record_routes_are_wired_to_the_record_screens() {
         let route = format!("#[route(\"{pattern}\", {screen})]");
         assert!(source.contains(&route), "the router must have {route}");
     }
-    // 統計と設定は 0042 と 0043 が入れるまで仮の画面のままにする。
-    assert!(source.contains("#[route(\"/stats\", Placeholder)]"));
+    // 統計は 0042 が入れた。設定は 0043 が入れるまで仮の画面のままにする。
+    assert!(source.contains("#[route(\"/stats\", StatsScreen)]"));
     assert!(source.contains("#[route(\"/settings\", Placeholder)]"));
+}
+
+/// 購入の詳細が、評価の推移の折れ線を 0041 の画面に足していることを確かめる (FR-18)。
+#[test]
+fn the_purchase_detail_has_the_rating_history_line_chart() {
+    let source = fs::read_to_string(crate_dir().join("src/screens/records/purchase_detail.rs"))
+        .expect("the purchase detail must be readable");
+    assert!(
+        source.contains("RatingHistoryChart { entries: ratings() }"),
+        "the purchase detail must render the rating history chart with the loaded entries"
+    );
+    assert!(
+        source.contains("rating_history(&id)"),
+        "the purchase detail must load the rating history for the purchase"
+    );
+    // 折れ線の部品の型が存在すること (型の確認)。
+    let _: fn(RatingHistoryChartProps) -> Element = RatingHistoryChart;
+    let props = RatingHistoryChartProps {
+        entries: Vec::new(),
+    };
+    assert!(props.entries.is_empty());
 }
 
 /// プレビューの base64 の符号化が RFC 4648 の標準アルファベットとパディングに従う

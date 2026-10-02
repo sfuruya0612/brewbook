@@ -10,10 +10,12 @@ use crate::i18n::{current_language, t, Key};
 use crate::records::display::{
     purchase_reference_tiles, purchase_row_subtitle, purchase_tile_name,
 };
+use crate::records::stats::RatingHistoryEntry;
 use crate::records::{
-    record_error_key, RecordError, RecordServices, RecordsApi, MAX_PHOTO_LONG_SIDE,
+    record_error_key, RecordError, RecordServices, RecordsApi, StatsApi, MAX_PHOTO_LONG_SIDE,
 };
 use crate::router::Route;
+use crate::screens::stats::RatingHistoryChart;
 use crate::ui::{
     AppBar, ArchivedBadge, Button, ButtonVariant, IconButton, Ledger, LedgerRow, ReferenceChain,
     ReferenceTile, TagChip,
@@ -48,7 +50,9 @@ pub fn PurchaseDetail(
     let mut notice = use_context::<Signal<Option<String>>>();
     let navigator = navigator();
     let mut purchase = use_signal(|| None::<crate::records::Purchase>);
+    let mut ratings = use_signal(Vec::<RatingHistoryEntry>::new);
     let mut error = use_signal(|| None::<RecordError>);
+    let mut ratings_error = use_signal(|| None::<RecordError>);
     let mut photo_error = use_signal(|| None::<RecordError>);
     let mut photo_busy = use_signal(|| false);
     let mut loading = use_signal(|| true);
@@ -57,13 +61,20 @@ pub fn PurchaseDetail(
     let reload_id = id.clone();
     let reload = EventHandler::new(move |_| {
         let api = RecordsApi::new(reload_services.api.clone());
+        let stats = StatsApi::new(reload_services.api.clone());
         let id = reload_id.clone();
         spawn(async move {
             loading.set(true);
             error.set(None);
+            ratings_error.set(None);
             match api.purchase(&id).await {
                 Ok(loaded) => purchase.set(Some(loaded)),
                 Err(failure) => error.set(Some(failure)),
+            }
+            // 評価の推移の失敗は、購入の表示を残したままグラフの区画にだけ出す (FR-18)。
+            match stats.rating_history(&id).await {
+                Ok(loaded) => ratings.set(loaded),
+                Err(failure) => ratings_error.set(Some(failure)),
             }
             loading.set(false);
         });
@@ -154,6 +165,7 @@ pub fn PurchaseDetail(
     let language = current_language();
     let current = purchase();
     let failure = error();
+    let ratings_failure = ratings_error();
     let photo_failure = photo_error();
     let photo_url = format!("{}/purchases/{}/photo", services.api.base_path(), id);
     let actions = current.as_ref().map(|purchase| {
@@ -263,6 +275,7 @@ pub fn PurchaseDetail(
                                 }),
                             }
                         }
+                        RatingHistoryChart { entries: ratings() }
                         ReferenceChain {
                             for (kind, name) in purchase_reference_tiles(&purchase).into_iter() {
                                 {
@@ -295,6 +308,9 @@ pub fn PurchaseDetail(
                 }
                 if let Some(failure) = photo_failure {
                     {retryable_banner(&failure, replace_photo)}
+                }
+                if let Some(failure) = ratings_failure {
+                    {retryable_banner(&failure, reload)}
                 }
                 if let Some(failure) = failure {
                     {retryable_banner(&failure, reload)}

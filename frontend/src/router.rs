@@ -14,7 +14,7 @@ use crate::screens::{
     BrewDetailScreen, BrewEditScreen, BrewFormScreen, HomeScreen, LoginScreen, NotFound,
     Placeholder, ProductEditScreen, ProductFormScreen, ProductListScreen, PurchaseDetailScreen,
     PurchaseEditScreen, PurchaseFormScreen, PurchaseListScreen, RegisterScreen, ShopEditScreen,
-    ShopFormScreen, ShopListScreen,
+    ShopFormScreen, ShopListScreen, StatsScreen,
 };
 
 /// 画面の経路の台帳 (ADR-0017)。
@@ -118,7 +118,7 @@ pub enum Route {
     #[route("/shops/:id/edit", ShopEditScreen)]
     ShopEdit { id: String },
     /// 統計 (FR-18)。
-    #[route("/stats", Placeholder)]
+    #[route("/stats", StatsScreen)]
     Stats {},
     /// 未知の経路 (Dioxus のルーターの fallback)。ホームへ戻す (0038)。
     #[route("/:..segments", NotFound)]

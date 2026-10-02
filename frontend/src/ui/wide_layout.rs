@@ -1,8 +1,10 @@
-//! 幅 840 px 以上の 2 段組のレイアウト (0039)。
+//! 幅 840 px 以上の 2 段組のレイアウト (0039、0042)。
 //!
 //! docs/design/components/WideLayout のガイドライン。ナビゲーションレール (88 px) と一覧
 //! (400 px) と詳細 (最大 720 px) を並べる。幅 840 px 未満ではレールと詳細を隠し、1 列に戻る
 //! (判定は design.css のメディアクエリ。Flutter の `LayoutBuilder` に対応する)。
+//!
+//! 一覧と詳細に分かれない画面 (統計) は [`WidePage`] を使い、レールの右を内容が使う。
 
 use dioxus::prelude::*;
 
@@ -70,6 +72,25 @@ pub fn WideLayout(
             div { class: "wide-detail",
                 div { class: "wide-detail-inner", {detail} }
             }
+        }
+    }
+}
+
+/// 幅 840 px 以上の 1 面の配置。レールと、残りの幅いっぱいの内容を並べる。
+///
+/// 一覧と詳細に分かれない画面 (統計) に使う (Flutter の `BrewbookNavigationRail` と
+/// `Expanded` の組み合わせと同じ)。幅 840 px 未満ではレールを隠す。
+#[component]
+pub fn WidePage(
+    /// ナビゲーションレール ([`NavigationRail`])。
+    rail: Element,
+    /// 残りの幅いっぱいに置く内容。
+    children: Element,
+) -> Element {
+    rsx! {
+        div { class: "wide-page",
+            {rail}
+            div { class: "wide-page-main", {children} }
         }
     }
 }

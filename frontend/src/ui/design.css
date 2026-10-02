@@ -10,8 +10,11 @@
  *   .row .tags を足した (docs/design/components/ListRow、Chip)。
  * - 未評価の数字 (.rating .num.none) と、印の色 (.mark) を足した (docs/design/README.md の
  *   「状態」と WideLayout)。
- * - 2 段組 (.wide-layout、.wide-list、.wide-detail、.wide-detail-inner) の配置を足した
+ * - 2 段組 (.wide-layout、.wide-list、.wide-detail、.wide-detail-inner) の配置と、一覧と
+ *   詳細に分かれない画面の 1 面 (.wide-page、.wide-page-main) を足した
  *   (docs/design/components/WideLayout)。
+ * - 統計の画面の並び (.stats、.stats-columns、.stats-section、.stats-scatter) を足した
+ *   (docs/design/components/Stats)。
  * - レールの項目は button で組むため、地と枠を消す規則を足した。
  * - 写真は img で表示するため、.photo img と .thumb img の規則を足した。
  */
@@ -261,6 +264,8 @@
   .wide-layout { display: flex; min-height: 100vh; }
   .wide-list { width: 100%; min-width: 0; }
   .wide-detail { display: none; }
+  .wide-page { display: flex; min-height: 100vh; }
+  .wide-page-main { flex: 1; min-width: 0; }
   @media (min-width: 840px) {
     .wide-layout .rail { display: flex; }
     .wide-list { width: 400px; flex: none; border-right: 1px solid var(--line); }
@@ -269,5 +274,17 @@
   }
   @media (max-width: 839px) {
     .wide-layout .rail { display: none; }
+    .wide-page .rail { display: none; }
+  }
+
+  /* 統計の画面 (0042)。期間の切り替えと、グラフの並び。 */
+  .stats { padding: var(--space-4) var(--space-4) var(--space-8); display: flex; flex-direction: column; gap: var(--space-6); }
+  .stats-columns { display: grid; grid-template-columns: 1fr; gap: var(--space-6); }
+  .stats-section { display: flex; flex-direction: column; gap: var(--space-6); }
+  .stats-scatter { display: flex; flex-direction: column; gap: var(--space-3); }
+  .stats-custom { display: flex; flex-direction: column; gap: var(--space-3); }
+  .stats-custom .apply { display: flex; justify-content: flex-end; }
+  @media (min-width: 840px) {
+    .stats-columns { grid-template-columns: 1fr 1fr; gap: var(--space-8); }
   }
 }

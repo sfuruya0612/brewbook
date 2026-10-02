@@ -13,7 +13,7 @@ use brew_book_frontend::ui::{
     AppBar, Banner, Button, ButtonVariant, ChartFrame, ChartSection, Chip, ChipVariant,
     ConfirmDialog, Fab, Field, Icon, IconButton, Ledger, LedgerRow, ListRow, ListThumb,
     NavigationRail, PickerTile, RailItem, Rating, RatingInput, ReferenceChain, ReferenceTile,
-    RowValue, Snackbar, StatTile, StatTiles, TagChip, TextField, WideLayout,
+    RowValue, Snackbar, StatTile, StatTiles, TagChip, TextField, WideLayout, WidePage,
 };
 use dioxus::prelude::*;
 use wasm_bindgen_test::*;
@@ -786,4 +786,33 @@ fn run_boot_script() {
         .append_child(&script)
         .expect("the script must be attached");
     script.remove();
+}
+
+#[component]
+fn WidePageProbe() -> Element {
+    rsx! {
+        WidePage {
+            rail: rsx! { div { class: "rail" } },
+            div { class: "content" }
+        }
+    }
+}
+
+/// 1 面の配置 (レールと残り幅の内容) が原本の値になることを検査する (0042 のレビューの指摘)。
+#[wasm_bindgen_test]
+async fn the_wide_page_places_the_rail_and_the_content() {
+    install_styles();
+    set_theme("paper");
+    let root = mount(WidePageProbe).await;
+
+    let page = select(&root, ".wide-page");
+    assert_eq!(computed(&page, "display"), "flex");
+    // 高さは画面いっぱい (min-height: 100vh は計算済みのスタイルでは px になる)。
+    assert_ne!(computed(&page, "min-height"), "0px");
+    // レールは 88 px で、内容は残り幅いっぱい。
+    let rail = select(&root, ".wide-page .rail");
+    assert_eq!(computed(&rail, "width"), "88px");
+    let main = select(&root, ".wide-page-main");
+    assert_eq!(computed(&main, "flex-grow"), "1");
+    assert_eq!(computed(&main, "min-width"), "0px");
 }

@@ -38,7 +38,10 @@ pub(crate) fn is_activation_key(event: &KeyboardEvent) -> bool {
 
 pub use app_bar::AppBar;
 pub use button::{Button, ButtonSize, ButtonVariant, Fab, IconButton};
-pub use charts::{ChartFrame, ChartSection, StatTile, StatTiles};
+pub use charts::{
+    ChartBars, ChartFrame, ChartLine, ChartScatter, ChartScatterFrame, ChartSection, ChartSeries,
+    StatTile, StatTiles,
+};
 pub use chip::{Chip, ChipVariant, TagChip};
 pub use feedback::{Banner, ConfirmDialog, Snackbar};
 pub use field::{Field, TextField};
@@ -48,4 +51,4 @@ pub use list_row::{ArchivedBadge, ListRow, ListThumb, RowValue};
 pub use mark::BrewbookMark;
 pub use rating::{lit_dots, Rating, RatingInput, RatingSize};
 pub use reference_tile::{PickerTile, ReferenceChain, ReferenceTile};
-pub use wide_layout::{NavigationRail, RailItem, WideLayout};
+pub use wide_layout::{NavigationRail, RailItem, WideLayout, WidePage};

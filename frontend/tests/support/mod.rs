@@ -6,6 +6,9 @@
 
 #![allow(dead_code)] // 補助は複数のテストクレートで共有するため、各クレートから見て未使用の項目がある
 
+#[cfg(target_arch = "wasm32")]
+pub mod web;
+
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::future::Future;

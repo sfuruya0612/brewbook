@@ -1,7 +1,7 @@
-//! 画面 (0038、0040、0041)。
+//! 画面 (0038、0040、0041、0042)。
 //!
-//! 認証の画面 (ログイン、登録) と、記録の画面 (ホーム、抽出、購入、商品、店) を入れる。
-//! 統計と設定の画面は 0042 と 0043 が入れるまで仮の画面 ([`Placeholder`]) にする。
+//! 認証の画面 (ログイン、登録) と、記録の画面 (ホーム、抽出、購入、商品、店) と、統計の画面を
+//! 入れる。設定の画面は 0043 が入れるまで仮の画面 ([`Placeholder`]) にする。
 
 use dioxus::prelude::*;
 use dioxus_router::{navigator, use_route};
@@ -13,6 +13,7 @@ mod login;
 mod register;
 
 pub mod records;
+pub mod stats;
 
 pub use login::LoginScreen;
 pub use records::{
@@ -28,11 +29,12 @@ pub use records::{
     shop_list::ShopListScreen,
 };
 pub use register::{register_submit, RegisterScreen, RegisterSubmit};
+pub use stats::StatsScreen;
 
 /// 画面の実装が入るまでの仮の画面。経路の題を表示する。
 ///
-/// 統計と設定の経路 (0042、0043 が入れる) だけが使う。経路の動的な値 (`segments`) は、
-/// Dioxus のルーターが経路の型から渡すために prop として持つ。
+/// 設定の経路 (0043 が入れる) だけが使う。経路の動的な値 (`segments`) は、Dioxus の
+/// ルーターが経路の型から渡すために prop として持つ。
 #[component]
 pub fn Placeholder(#[props(default)] segments: Vec<String>) -> Element {
     let _ = segments;

@@ -59,11 +59,23 @@ proptest! {
         prop_assert_eq!(parse_count(&value.to_string()), Some(value));
     }
 
-    /// 数字以外を含む文字列は整数として読まない。
+    /// 数字以外を含む文字列は整数として読まない (前後の空白は除いてから読む)。
+    ///
+    /// 空白を除いた後に数字以外が残るときだけ拒否する (0042 の作業中に見つけた既存の
+    /// テストの誤り。実装は `parse_count` のとおりで、期待値の側が除く前の文字列を見ていた)。
     #[test]
-    fn a_count_with_a_non_digit_is_rejected(prefix in ".*", digit in "[0-9]", suffix in ".*") {
+    fn a_count_with_a_non_digit_is_rejected(
+        prefix in "[^0-9]*",
+        digit in "[0-9]",
+        suffix in "[^0-9]*",
+    ) {
         let text = format!("{prefix}{digit}{suffix}");
-        prop_assert!(parse_count(&text).is_some() == text.bytes().all(|byte| byte.is_ascii_digit()));
+        prop_assert_eq!(
+            parse_count(&text).is_some(),
+            text.trim().bytes().all(|byte| byte.is_ascii_digit()),
+            "the parse must match the digits after trimming: {:?}",
+            text
+        );
     }
 
     /// 小数第 1 位までの数の整形と解釈の往復。
