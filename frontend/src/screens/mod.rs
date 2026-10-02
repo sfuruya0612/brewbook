@@ -1,13 +1,19 @@
-//! 画面 (0038)。
+//! 画面 (0038、0040)。
 //!
-//! 0038 では経路の台帳とルーターの配線を確かめる仮の画面だけを置く。デザインシステムは 0039、
-//! 各画面の実装は 0040 以降が入れる。
+//! 0040 が認証の画面 (ログイン、登録) を入れ、それ以外の経路は仮の画面 ([`Placeholder`]) の
+//! ままにする。残りの画面は 0041 以降が入れる。
 
 use dioxus::prelude::*;
 use dioxus_router::{navigator, use_route};
 
 use crate::i18n::{t, Key};
 use crate::router::{fallback_destination, Route};
+
+mod login;
+mod register;
+
+pub use login::LoginScreen;
+pub use register::{register_submit, RegisterScreen, RegisterSubmit};
 
 /// 画面の実装が入るまでの仮の画面。経路の題を表示する。
 ///

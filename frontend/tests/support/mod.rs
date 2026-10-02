@@ -15,10 +15,14 @@ use std::task::{Context, Poll, Waker};
 use brew_book_frontend::api::{
     ApiClient, ApiRequest, ApiResponse, Transport, TransportError, TransportFuture,
 };
+use brew_book_frontend::auth::{
+    CreationOptions, PasskeyClient, PasskeyError, PasskeyFuture, RequestOptions,
+};
 use brew_book_frontend::records::values::LocalDateTime;
 use brew_book_frontend::records::{
     Clock, ConvertedImage, ImageConverter, PhotoFuture, PhotoPicker, PickedPhoto,
 };
+use serde_json::{Map, Value};
 
 /// 未来を完了まで進める。
 ///
@@ -97,6 +101,69 @@ pub fn client(
     let transport = Rc::new(FakeTransport::new(responses));
     let client = ApiClient::new(transport.clone());
     (client, transport)
+}
+
+/// パスキーの偽の実装 (0040)。呼び出しのオプションを記録し、用意したクレデンシャルか失敗を返す。
+pub struct FakePasskeyClient {
+    /// `create_credential` と `get_credential` が返すクレデンシャル。
+    pub credential: Map<String, Value>,
+
+    /// 返す失敗。Some のときはクレデンシャルの代わりに失敗する。
+    pub failure: Option<PasskeyError>,
+
+    created: RefCell<Vec<CreationOptions>>,
+    requested: RefCell<Vec<RequestOptions>>,
+}
+
+impl FakePasskeyClient {
+    /// 固定のクレデンシャルを返す偽の実装を作る。
+    pub fn new() -> Self {
+        let mut credential = Map::new();
+        credential.insert("id".to_string(), Value::String("ZmFrZQ".to_string()));
+        credential.insert("type".to_string(), Value::String("public-key".to_string()));
+        Self {
+            credential,
+            failure: None,
+            created: RefCell::new(Vec::new()),
+            requested: RefCell::new(Vec::new()),
+        }
+    }
+
+    /// 登録で受け取ったオプション。
+    pub fn created(&self) -> Vec<CreationOptions> {
+        self.created.borrow().clone()
+    }
+
+    /// ログインで受け取ったオプション。
+    pub fn requested(&self) -> Vec<RequestOptions> {
+        self.requested.borrow().clone()
+    }
+}
+
+impl Default for FakePasskeyClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PasskeyClient for FakePasskeyClient {
+    fn create_credential(&self, options: CreationOptions) -> PasskeyFuture<Map<String, Value>> {
+        self.created.borrow_mut().push(options);
+        let result = match &self.failure {
+            Some(error) => Err(error.clone()),
+            None => Ok(self.credential.clone()),
+        };
+        Box::pin(std::future::ready(result))
+    }
+
+    fn get_credential(&self, options: RequestOptions) -> PasskeyFuture<Map<String, Value>> {
+        self.requested.borrow_mut().push(options);
+        let result = match &self.failure {
+            Some(error) => Err(error.clone()),
+            None => Ok(self.credential.clone()),
+        };
+        Box::pin(std::future::ready(result))
+    }
 }
 
 /// 端末の時計の偽の実装。

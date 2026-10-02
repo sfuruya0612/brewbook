@@ -84,7 +84,8 @@ impl TransportError {
 /// 送信の未来。Web の fetch もテストの偽の実装も、同じ型で返す。
 pub type TransportFuture = Pin<Box<dyn Future<Output = Result<ApiResponse, TransportError>>>>;
 
-/// 401 の応答を受け取ったときに呼ぶ callback。ログイン画面へ遷移させるために使う (ADR-0007)。
+/// 401 の応答を受け取ったときに呼ぶ callback。セッションが失われたことを記録するために使う
+/// (遷移は `AppShell` の遷移の判定が行う。ADR-0007)。
 pub type UnauthorizedCallback = Rc<dyn Fn()>;
 
 /// 設定を差し替えられる callback の置き場。
@@ -103,7 +104,7 @@ pub trait Transport {
 ///
 /// エラーの応答は共通の型 ([`ApiError`]) に、応答を取得できない失敗は [`NetworkError`] に
 /// 変換する。401 の応答を受け取ったときは [`ApiClient::set_on_unauthorized`] の callback を
-/// 呼び、ログイン画面へ遷移させる (ADR-0007)。
+/// 呼び、セッションが失われたことを記録する (遷移は `AppShell` の遷移の判定が行う。ADR-0007)。
 #[derive(Clone)]
 pub struct ApiClient {
     transport: Rc<dyn Transport>,
@@ -141,8 +142,8 @@ impl ApiClient {
         &self.base_path
     }
 
-    /// 401 の応答を受け取ったときに呼ぶ callback を設定する。ログイン画面へ遷移させるために
-    /// 使う (ADR-0007)。起動時にセッションの監視を設定する。
+    /// 401 の応答を受け取ったときに呼ぶ callback を設定する。セッションが失われたことを
+    /// 記録するために使う (ADR-0007)。起動時にセッションの監視を設定する。
     pub fn set_on_unauthorized(&self, callback: UnauthorizedCallback) {
         *self.on_unauthorized.borrow_mut() = Some(callback);
     }

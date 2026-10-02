@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 use dioxus_router::Routable;
 
 use crate::app::AppShell;
-use crate::screens::{NotFound, Placeholder};
+use crate::screens::{LoginScreen, NotFound, Placeholder, RegisterScreen};
 
 /// 画面の経路の台帳 (ADR-0017)。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -62,10 +62,10 @@ pub const APP_ROUTES: [AppRoute; 18] = [
 pub enum Route {
     #[layout(AppShell)]
     /// ログイン (FR-2)。
-    #[route("/login", Placeholder)]
+    #[route("/login", LoginScreen)]
     Login {},
     /// 登録用トークンによるパスキーの登録 (FR-1)。トークンはクエリで渡す。
-    #[route("/register?:token", Placeholder)]
+    #[route("/register?:token", RegisterScreen)]
     Register { token: Option<String> },
     /// ホーム (抽出の一覧。FR-11)。
     #[route("/", Placeholder)]

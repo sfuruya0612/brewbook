@@ -54,6 +54,8 @@
   - @sfuruya0612
 - [ADD] Frontend のデザインシステム (部品 10 種、2 段組のレイアウト、2 テーマ) を Tailwind CSS で実装する
   - @sfuruya0612
+- [ADD] Frontend の認証の画面 (ログイン、登録) とパスキーの呼び出しを追加する
+  - @sfuruya0612
 - [CHANGE] アプリ名と名前空間を brewbook に変更する
   - @sfuruya0612
 
