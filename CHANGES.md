@@ -52,6 +52,8 @@
   - @sfuruya0612
 - [ADD] Frontend の Dioxus の基盤 (経路の台帳、API クライアント、起動時のセッション確認、翻訳、値の変換、記録の依存の束ね) を追加する
   - @sfuruya0612
+- [ADD] Frontend のデザインシステム (部品 10 種、2 段組のレイアウト、2 テーマ) を Tailwind CSS で実装する
+  - @sfuruya0612
 - [CHANGE] アプリ名と名前空間を brewbook に変更する
   - @sfuruya0612
 

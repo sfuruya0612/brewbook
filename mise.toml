@@ -344,6 +344,8 @@ run = "cargo test --manifest-path frontend/Cargo.toml --workspace"
 description = "ブラウザで動かすテストを headless の Chrome (mise の chromedriver) で実行する"
 # wasm-bindgen-test-runner は mise の wasm-bindgen が入れる (mise.toml の [tools])。
 # CHROMEDRIVER を明示して、PATH 上の他の WebDriver (geckodriver など) を使わせない。
+# ブラウザの画面の大きさは frontend/webdriver.json の --window-size で 1280 px にする
+# (デザインシステムの 2 段組は 840 px 以上で効くため。0039)。
 run = """
 # chromedriver が見つからない場合は、原因の分かるメッセージで先に失敗させる (0037 のレビューの指摘。
 # コマンド置換の失敗は export の終了状態に伝わらないため)。

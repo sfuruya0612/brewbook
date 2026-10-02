@@ -54,6 +54,9 @@ web-sys = { version = "0.3", features = [
   "HtmlCanvasElement",
   "HtmlImageElement",
   "Url",
+  # デザインシステムの計算済みスタイルのテスト (0039)。
+  "CssStyleDeclaration",
+  "NodeList",
 ] }
 
 [dev-dependencies]

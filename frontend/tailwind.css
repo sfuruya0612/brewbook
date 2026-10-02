@@ -1,4 +1,67 @@
 @import "tailwindcss";
 
+/* デザイントークンの原本 (docs/design/tokens.css) をそのまま読む。値の写しを持たず、
+   原本を先に変えると実装 (ユーティリティと部品の CSS) が追随する。
+   layer(base) に入れるのは、原本が持つプレビュー用の型のクラス (.wordmark など) が
+   部品のクラス (components レイヤー) に勝たないようにするため。 */
+@import "../docs/design/tokens.css" layer(base);
+
+/* 部品の CSS (docs/design/components/bundle.css の写し)。 */
+@import "./src/ui/design.css";
+
 /* Rust のソースと index.html を走査して、使われているクラスだけを出力する。 */
 @source "./src/**/*.{rs,html,css}";
+
+/* Tailwind のユーティリティを原本の変数に結び付ける (bg-paper、text-ink、p-4 など)。
+   @theme inline はユーティリティの値を変数へ直接展開するため、[data-theme] の切り替えに
+   追随する (Tailwind CSS v4)。 */
+@theme inline {
+  /* 色。Paper と Night の値は tokens.css の [data-theme] が上書きする。 */
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-paper-sunken: var(--paper-sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-roast: var(--roast);
+  --color-on-roast: var(--on-roast);
+  --color-roast-soft: var(--roast-soft);
+  --color-crema: var(--crema);
+  --color-crema-ink: var(--crema-ink);
+  --color-crema-soft: var(--crema-soft);
+  --color-signal: var(--signal);
+  --color-signal-soft: var(--signal-soft);
+  --color-on-signal: var(--on-signal);
+  --color-focus: var(--focus);
+  --color-link: var(--link);
+  --color-chart-count: var(--chart-count);
+  --color-chart-grams: var(--chart-grams);
+
+  /* 余白。4 px を基準にした 8 段 (p-1 から p-12)。 */
+  --spacing-1: var(--space-1);
+  --spacing-2: var(--space-2);
+  --spacing-3: var(--space-3);
+  --spacing-4: var(--space-4);
+  --spacing-5: var(--space-5);
+  --spacing-6: var(--space-6);
+  --spacing-8: var(--space-8);
+  --spacing-12: var(--space-12);
+
+  /* 角丸と書体は Tailwind の名前空間と同じ名前になる。値は原本 (docs/design/tokens.css) の
+     写しで、一致は frontend/tests/test_ui.rs が検査する。 */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+  --font-sans: "IBM Plex Sans JP", "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace;
+  --font-serif: "IBM Plex Serif", Georgia, serif;
+}
+
+/* 影は Paper と Night で変わる。@theme inline で値を固定すると切り替えに追随しないため、
+   通常の @theme で写し、原本の [data-theme] の上書き (レイヤーの外) を効かせる。 */
+@theme {
+  --shadow-float: 0 2px 6px #2b1d1326, 0 8px 24px -4px #2b1d1333;
+}
