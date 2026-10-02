@@ -13,3 +13,22 @@ pub mod router;
 pub mod screens;
 pub mod settings;
 pub mod ui;
+
+/// E2E のビルドであることの印 (0044)。
+///
+/// `frontend:test-same-origin` のハーネスが、配信するビルドがテスト用の feature `e2e` を
+/// 有効にしたものであることを、ビルドの成果物と実行中の両方で確認するために使う。
+pub const E2E_MARKER: &str = "brewbook-e2e-build";
+
+/// E2E のビルドであることの印を `<html>` の `data-e2e` 属性に付ける (0044)。
+///
+/// feature `e2e` を有効にした wasm のビルドだけがこの関数を持ち、`main.rs` が起動の前に呼ぶ。
+#[cfg(all(feature = "e2e", target_arch = "wasm32"))]
+pub fn mark_e2e_build() {
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.document_element())
+    {
+        let _ = element.set_attribute("data-e2e", E2E_MARKER);
+    }
+}

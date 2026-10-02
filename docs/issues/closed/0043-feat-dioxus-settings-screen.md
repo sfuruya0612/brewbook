@@ -85,3 +85,10 @@ Flutter の設定は `frontend/lib/screens/settings_screen.dart` と `frontend/l
 
 - エクスポートの `save` の内部 (Blob の種別、応答のバイト列、オブジェクト URL の解放) はブラウザテストで確認していない (`download_link` の href と download 属性まで)。実際の保存は 0044 の E2E が確認する。
 - `docs/issues/0045-chore-switch-delivery-and-remove-flutter.md` の追記 (0036 を 0045 で close する所有者の決定) は作業ツリーにあるが、0045 の変更として扱い、この issue のコミットには含めない。
+
+## 0044 の E2E の検証 (2026-10-02)
+
+0044 の E2E (`mise run frontend:test-same-origin`) が、この issue の E2E の完了条件を検証した。
+
+- エクスポートのダウンロード: 設定の画面からエクスポートを実行し、JSON のファイル (`brewbook-export.json`) が一時ディレクトリへ保存され、中身が確認できることを確かめた。
+- ログアウト: 設定の画面のログアウトでログイン画面へ遷移することを確かめた。

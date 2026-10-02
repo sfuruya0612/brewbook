@@ -91,11 +91,27 @@ pub fn AppShell() -> Element {
     // 経路の変更とセッションの変更のたびに遷移の判定をやり直す (FR-1、FR-2)。
     use_effect(move || {
         let route = router.current::<Route>();
+        // 画面数の成功指標 (PRD の成功指標) のため、現在の経路をアプリのルート要素に出す (0044)。
+        #[cfg(target_arch = "wasm32")]
+        set_data_route(crate::router::route_name(&route));
         if let Some(destination) = guard_destination(&route, session()) {
             let _ = navigator.replace(destination);
         }
     });
     rsx! {
         Outlet::<Route> {}
+    }
+}
+
+/// アプリのルート要素 (`#main`) に現在の経路を出す (0044)。
+///
+/// E2E (`frontend:test-same-origin`) が画面数の成功指標を数えるために読む。
+#[cfg(target_arch = "wasm32")]
+fn set_data_route(name: &str) {
+    if let Some(element) = web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("main"))
+    {
+        let _ = element.set_attribute("data-route", name);
     }
 }

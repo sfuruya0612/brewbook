@@ -128,3 +128,32 @@ pub enum Route {
 pub fn fallback_destination() -> Route {
     Route::Home {}
 }
+
+/// 現在の経路を `data-route` 属性に出す名前 (0044)。
+///
+/// 画面数の成功指標 (PRD の成功指標) で「表示した画面の種類」を数えるため、経路のパターンを
+/// 返す。`APP_ROUTES` の名前と一致させ、動的な経路もパターンの形 (`/brews/:id`) にする。
+/// 未知の経路は `/:..segments` とする。
+pub fn route_name(route: &Route) -> &'static str {
+    match route {
+        Route::Login {} => "/login",
+        Route::Register { .. } => "/register",
+        Route::Home {} => "/",
+        Route::Settings {} => "/settings",
+        Route::BrewNew {} => "/brews/new",
+        Route::BrewDetail { .. } => "/brews/:id",
+        Route::BrewEdit { .. } => "/brews/:id/edit",
+        Route::Purchases {} => "/purchases",
+        Route::PurchaseNew {} => "/purchases/new",
+        Route::PurchaseDetail { .. } => "/purchases/:id",
+        Route::PurchaseEdit { .. } => "/purchases/:id/edit",
+        Route::Products {} => "/products",
+        Route::ProductNew {} => "/products/new",
+        Route::ProductEdit { .. } => "/products/:id/edit",
+        Route::Shops {} => "/shops",
+        Route::ShopNew {} => "/shops/new",
+        Route::ShopEdit { .. } => "/shops/:id/edit",
+        Route::Stats {} => "/stats",
+        Route::NotFound { .. } => "/:..segments",
+    }
+}

@@ -31,9 +31,9 @@ impl Method {
 pub enum OkTest {
     /// CI で実行する正常系のテストを持つ。
     Ci,
-    /// CI では実行できない正常系のため、手元で確認する (写真からの推測は Workers AI の
-    /// 推論を要する。PRD の成功指標の例外。FR-19)。
-    Manual,
+    /// CI では実行できない正常系のため、staging へのデプロイで確認する (写真からの推測は
+    /// Workers AI の推論と実写真を要する。PRD の成功指標の測定方法。FR-19)。
+    Staging,
 }
 
 /// `/api` の経路 1 件のメタデータ。
@@ -389,8 +389,9 @@ pub const ROUTES: &[Route] = &[
         auth_required: true,
         // 入力は変換済みの JPEG の本体である (Content-Type とサイズを検証する)。
         has_input: true,
-        // 正常系は Workers AI の推論を要するため、CI では実行せず手元で確認する (PRD の成功指標)。
-        ok_test: OkTest::Manual,
+        // 正常系は Workers AI の推論を要するため、CI では実行せず、staging へのデプロイで
+        // 実写真を送って確認する (PRD の成功指標の測定方法)。
+        ok_test: OkTest::Staging,
     },
     Route {
         name: "stats_brews",
@@ -480,7 +481,7 @@ pub fn matched(method: &str, path: &str) -> Option<&'static Route> {
 /// 経路が持つべきテストの種別。PRD の成功指標の照合に使う。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TestRequirements {
-    /// 正常系のテスト。全ての経路が持つ。CI で実行できない経路は手元で確認する。
+    /// 正常系のテスト。全ての経路が持つ。CI で実行できない経路は staging で確認する。
     pub ok: OkTest,
     /// 未認証 401 のテスト。認証が必要な経路だけが持つ。
     pub unauthenticated_401: bool,

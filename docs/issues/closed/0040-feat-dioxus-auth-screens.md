@@ -87,3 +87,11 @@ Flutter の認証は `frontend/lib/auth/passkey_client_web.dart` が `dart:js_in
 - 登録の画面の送信の前の判定を `register_submit` として切り出し、`tests/test_register.rs` で守るようにした (完了条件「範囲外は画面で拒否する」を画面の経路でも確認するため)。
 - `tests/test_passkey_web.rs` に、JS の例外の名前から失敗の種類を決めること、空の `rpId` を設定しないこと、`attestation` と `userVerification` の列挙の写像の検査を足した。
 - オプションのバイト列を `Uint8Array` にコピーして渡すように直した。web-sys の `*_with_u8_slice` は wasm のメモリへのビューを JS の辞書に保持させるため、その後の確保でチャレンジの中身が変わる (追加したテストが実際に検出した。パスキーの検証が失敗し得る不具合だった)。
+
+## 0044 の E2E の検証 (2026-10-02)
+
+0044 の E2E (`mise run frontend:test-same-origin`) が、この issue の E2E の完了条件を検証した。
+
+- `/register?token=<トークン>` の登録とホームへの遷移: ChromeDriver の WebAuthn の拡張コマンドで付けた仮想認証器でパスキーを登録し、セッションが発行されてホームへ遷移することを確認した。
+- `/login` のログインとホームへの遷移: ログアウトの後に同じパスキーでログインし、ホームへ遷移することを確認した。
+- ログアウトと以後の 401: ログアウトの後に保護された画面を開くとログイン画面へ戻ることを確認した。

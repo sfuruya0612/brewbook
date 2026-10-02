@@ -4,8 +4,9 @@
  * クラス名と値は原本と同じに保ち、突き合わせを機械的にできるようにする (0039 の設計判断)。
  * 値は docs/design/tokens.css の変数だけを参照する。原本を先に変え、このファイルは追随する。
  * 原本からの違いは次のとおり (いずれも実装のため):
- * - アイコンは Material Icons Outlined の Web フォントなので、svg を対象にした寸法と色の規則を
- *   .icon にも足した (docs/design/README.md の「アイコン」)。
+ * - アイコンは Material Icons Outlined の Web フォントなので、svg を対象にした寸法の規則を
+ *   .icon にも足した (色は原本の svg と同じく周囲の文字の色を継承する。docs/design/README.md
+ *   の「アイコン」)。
  * - 一覧と詳細の中の小さなタグ (.chip.mini) と、タグの削除ボタン (.chip-remove)、タグを並べる
  *   .row .tags を足した (docs/design/components/ListRow、Chip)。
  * - 未評価の数字 (.rating .num.none) と、印の色 (.mark) を足した (docs/design/README.md の
@@ -31,7 +32,10 @@
 
 @layer components {
   /* アイコン (Material Icons Outlined の Web フォント。24 px、ink か ink-muted) */
-  .icon { font-family: "Material Icons Outlined"; font-weight: normal; font-style: normal; font-size: 24px; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr; -webkit-font-feature-settings: "liga"; -webkit-font-smoothing: antialiased; color: var(--ink); }
+  /* 色は周囲の文字の色を継承する (原本の svg の stroke: currentColor と同じ。塗りボタンの中でも
+     見えるようにする。0044 のスクリーンショットの比較で、塗りボタンのアイコンが ink のまま
+     暗くなるのを見つけた)。 */
+  .icon { font-family: "Material Icons Outlined"; font-weight: normal; font-style: normal; font-size: 24px; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr; -webkit-font-feature-settings: "liga"; -webkit-font-smoothing: antialiased; color: currentColor; }
   .icon.muted { color: var(--ink-muted); }
 
   /* 型 */

@@ -83,6 +83,8 @@
   - @sfuruya0612
 - [UPDATE] Frontend の Rust のツールチェーン (Dioxus CLI) と Dioxus のビルドとテストのタスクを追加する
   - @sfuruya0612
+- [UPDATE] E2E とテストの基盤を Flutter から Dioxus に差し替える
+  - @sfuruya0612
 - [ADD] Flutter の値の変換と統計の期間と入力の形に PBT を追加する
   - @sfuruya0612
 - [ADD] Fuzzing の対象を入力の文字列パーサに広げる

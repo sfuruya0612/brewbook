@@ -4,7 +4,7 @@
 
 use std::str::FromStr;
 
-use brew_book_frontend::router::{fallback_destination, AppRoute, Route, APP_ROUTES};
+use brew_book_frontend::router::{fallback_destination, route_name, AppRoute, Route, APP_ROUTES};
 
 /// Flutter の `AppRoutes` と同じ 18 経路 (名前、パターン)。名前はパターンと同じ。
 const FLUTTER_ROUTES: [(&str, &str); 18] = [
@@ -136,4 +136,51 @@ fn an_unknown_path_falls_back_to_the_home() {
 fn a_path_that_only_differs_in_the_last_segment_falls_back() {
     let route = Route::from_str("/brews/abc/unknown").expect("the fallback must accept any path");
     assert!(matches!(route, Route::NotFound { .. }));
+}
+
+#[test]
+fn every_route_has_the_pattern_as_its_data_route_name() {
+    // 画面数の成功指標 (PRD の成功指標) で数える `data-route` の名前は、経路のパターンと同じに
+    // する (0044)。動的な経路もパターンの形にする。
+    let id = || "x".to_string();
+    let routes = [
+        (Route::Login {}, "/login"),
+        (Route::Register { token: None }, "/register"),
+        (Route::Register { token: Some(id()) }, "/register"),
+        (Route::Home {}, "/"),
+        (Route::Settings {}, "/settings"),
+        (Route::BrewNew {}, "/brews/new"),
+        (Route::BrewDetail { id: id() }, "/brews/:id"),
+        (Route::BrewEdit { id: id() }, "/brews/:id/edit"),
+        (Route::Purchases {}, "/purchases"),
+        (Route::PurchaseNew {}, "/purchases/new"),
+        (Route::PurchaseDetail { id: id() }, "/purchases/:id"),
+        (Route::PurchaseEdit { id: id() }, "/purchases/:id/edit"),
+        (Route::Products {}, "/products"),
+        (Route::ProductNew {}, "/products/new"),
+        (Route::ProductEdit { id: id() }, "/products/:id/edit"),
+        (Route::Shops {}, "/shops"),
+        (Route::ShopNew {}, "/shops/new"),
+        (Route::ShopEdit { id: id() }, "/shops/:id/edit"),
+        (Route::Stats {}, "/stats"),
+        (
+            Route::NotFound {
+                segments: vec!["unknown".to_string()],
+            },
+            "/:..segments",
+        ),
+    ];
+    let mut names: Vec<&'static str> = Vec::new();
+    for (route, expected) in routes {
+        assert_eq!(route_name(&route), expected, "the data-route of {route:?}");
+        names.push(expected);
+    }
+    // 台帳の 18 経路の名前が全て現れる。
+    for route in APP_ROUTES {
+        assert!(
+            names.contains(&route.name),
+            "the data-route {} must exist",
+            route.name
+        );
+    }
 }

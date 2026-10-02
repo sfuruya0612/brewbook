@@ -5,6 +5,9 @@
 /// Web の起動。ブラウザでアプリを立ち上げる。
 #[cfg(target_arch = "wasm32")]
 fn main() {
+    // E2E のビルドでは、ハーネスがテスト用のフックの有無を確認できるように印を付ける (0044)。
+    #[cfg(feature = "e2e")]
+    brew_book_frontend::mark_e2e_build();
     dioxus::launch(brew_book_frontend::app::App);
 }
 

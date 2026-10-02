@@ -284,12 +284,14 @@ flutter drive --driver=test_driver/integration_test.dart --target=integration_te
 """
 
 [tasks."frontend:test-same-origin"]
-description = "実バックエンドと仮想認証器で、ログインから抽出の保存までを検証する"
+description = "実バックエンドと仮想認証器で、Dioxus の画面の登録から抽出の保存までを検証する"
 # 事前ビルドの理由は backend:test-integration と同じ (0020)。
-depends = ["frontend:build-e2e", "backend:build"]
+depends = ["dioxus:build-e2e", "backend:build"]
 dir = "backend"
-# Rust のハーネスが wrangler dev と chromedriver を起動し、テストコード入りの Web ビルドを
-# Static Assets として配信して、実際の画面を chrome で操作する (0017)。
+# Rust のハーネスが wrangler dev と chromedriver を起動し、テスト用の feature `e2e` を有効に
+# した Dioxus の Web ビルドを Static Assets として配信して、実際の画面を Chrome で操作する
+# (0044)。仮想認証器は ChromeDriver の WebAuthn の拡張コマンドで付ける。スクリーンショットの
+# 比較の結果は frontend/target/e2e-screenshots/ に残す。
 run = "export BREWBOOK_SKIP_WORKER_BUILD=1 && cargo test -p brew_book --test wrangler_same_origin_e2e"
 
 # Dioxus の Frontend のタスク (0037)。移行の間だけ dioxus:* の名前を使い、Flutter の frontend:* は
@@ -323,11 +325,21 @@ ls assets/*.js > /dev/null
 
 [tasks."dioxus:build-e2e"]
 description = "テスト用の feature を有効にした Web ビルドを作る (0044 の E2E が使う)"
+# 配布用のビルドと同じ成果物のディレクトリを使うため、dioxus:build に依存させて必ず後に
+# 実行する。mise は依存関係の無いタスクを並列に実行するため、check の中で同時に走ると
+# 成果物が混ざり、ハーネスの e2e のマーカーの検査が失敗し得る。
+depends = ["dioxus:build"]
 dir = "frontend"
-# 実バックエンドの E2E はテストコード入りのビルドを配信する (0044)。check が作る配布用のビルドと
-# 同じ成果物のディレクトリを使うため、E2E の直前に実行する。
+# 実バックエンドの E2E はテストコード入りのビルドを配信する (0044)。dx は出力の public/ を
+# 消さずに追記するため、古い成果物 (wasm と JS) が残る。ハーネスは assets/*.wasm の全てに
+# e2e のマーカーがあることを確かめるので、配布用のビルドと混ざらないように、先に消してから
+# 作る。
 # mise exec を挟む理由は dioxus:build と同じ。
-run = "mise exec -- dx build --release --platform web --features e2e"
+run = """
+set -e
+rm -rf target/dx/brew_book_frontend/release/web/public
+mise exec -- dx build --release --platform web --features e2e
+"""
 
 [tasks."dioxus:lint"]
 description = "Dioxus の Frontend の Rust の lint と整形を検査する"

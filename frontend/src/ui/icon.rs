@@ -6,7 +6,8 @@
 
 use dioxus::prelude::*;
 
-/// 画面内のアイコン。既定は 24 px の `ink`。
+/// 画面内のアイコン。既定は 24 px で、色は周囲の文字の色を継承する (原本の svg の
+/// `stroke: currentColor` と同じ)。`muted` のときは `ink-muted` にする。
 #[component]
 pub fn Icon(name: String, #[props(default = false)] muted: bool) -> Element {
     let class = if muted { "icon muted" } else { "icon" };

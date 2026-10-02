@@ -23,6 +23,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 pub mod cdp;
+pub mod e2e;
 pub mod http;
 pub mod seed;
 
@@ -73,8 +74,8 @@ pub struct SuiteEntry {
 /// 0007 が購入と抽出の 12 経路、0008 がサジェストの 1 経路、0009 が購入の写真の 4 経路、
 /// 0010 が統計と評価の推移の 4 経路、0011 がエクスポートの 1 経路、
 /// 0012 がアカウント削除の 1 経路、0034 が写真からの推測の 1 経路を追加する。
-/// 写真からの推測の正常系は Workers AI の推論を要するため CI では実行せず、手元で確認する
-/// (正常系の種別を持たない。PRD の成功指標の例外。FR-19)。
+/// 写真からの推測の正常系は Workers AI の推論を要するため CI では実行せず、staging への
+/// デプロイで実写真を送って確認する (PRD の成功指標の測定方法。FR-19)。
 pub const SUITE: &[SuiteEntry] = &[
     SuiteEntry {
         route: "auth_register_begin",
@@ -276,7 +277,7 @@ pub fn suite_covers_ledger() -> Result<(), String> {
 ///
 /// 台帳の全経路が同じ名前のスイートの項目を持ち、スイートの種別が必要な種別 (正常系、
 /// 未認証 401、入力不正 400) と過不足なく一致することを確認する。
-/// 正常系を CI で実行できない経路 (`OkTest::Manual`) は正常系の種別を要求しない (FR-19)。
+/// 正常系を CI で実行できない経路 (`OkTest::Staging`) は正常系の種別を要求しない (FR-19)。
 pub fn covers(
     routes: &[brew_book_core::routes::Route],
     suite: &[SuiteEntry],

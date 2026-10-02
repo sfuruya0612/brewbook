@@ -18,4 +18,16 @@ worker = { version = "0.8.6", features = ["d1"] }
 headless_chrome = "1.0"
 # 結合テストのハーネスが `wrangler` をプロセスグループごと停止するために追加する (0019)。
 libc = "0.2"
-reqwest = { version = "0.12", features = ["blocking"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+# E2E (0044) のブラウザ操作に使う WebDriver のクライアント。fantoccini と比較し、CDP を
+# 送れること (テーマの切り替えの `Emulation.setEmulatedMedia` に使う) と、要素と画面の
+# スクリーンショットの API を持つことから thirtyfour を選んだ。WebAuthn の仮想認証器の
+# 拡張コマンドは thirtyfour に型が無いため、同じセッションへ reqwest で直接送る (e2e.rs)。
+# manager (chromedriver の自動起動と取得) は使わないため既定の feature から外す。
+thirtyfour = { version = "0.37", default-features = false, features = [
+  "reqwest",
+  "rustls",
+  "cdp",
+] }
+# thirtyfour の非同期の API を同期のテストから実行するためのランタイム (0044)。
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }

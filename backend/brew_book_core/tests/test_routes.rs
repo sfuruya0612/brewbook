@@ -51,7 +51,7 @@ fn sample_routes() -> Vec<Route> {
             pattern: "/api/purchase-suggestions",
             auth_required: true,
             has_input: true,
-            ok_test: OkTest::Manual,
+            ok_test: OkTest::Staging,
         },
     ]
 }
@@ -139,11 +139,11 @@ fn test_requirements_follow_the_auth_and_input_flags() {
             invalid_input_400: true,
         }
     );
-    // 正常系を CI で実行できない経路 (写真からの推測。FR-19) は、手元で確認する区分になる。
+    // 正常系を CI で実行できない経路 (写真からの推測。FR-19) は、staging で確認する区分になる。
     assert_eq!(
         test_requirements(&routes[5]),
         TestRequirements {
-            ok: OkTest::Manual,
+            ok: OkTest::Staging,
             unauthenticated_401: true,
             invalid_input_400: true,
         }
@@ -151,13 +151,13 @@ fn test_requirements_follow_the_auth_and_input_flags() {
 }
 
 #[test]
-fn the_ledger_marks_the_photo_suggestion_route_as_a_manual_check() {
+fn the_ledger_marks_the_photo_suggestion_route_as_a_staging_check() {
     // 写真からの推測の正常系は Workers AI の推論を要するため、CI の照合の対象外にする (FR-19)。
     let route = ROUTES
         .iter()
         .find(|route| route.name == "purchase_suggestions")
         .expect("the ledger must have the purchase suggestions route");
-    assert_eq!(route.ok_test, OkTest::Manual);
+    assert_eq!(route.ok_test, OkTest::Staging);
     assert_eq!(route.pattern, "/api/purchase-suggestions");
     assert_eq!(route.method, Method::Post);
     assert!(route.auth_required);

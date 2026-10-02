@@ -23,9 +23,9 @@ fn index_html_references_the_static_assets() {
     let html = strip_comments(&html);
 
     for (rel, href) in [
-        ("rel=\"icon\"", "href=\"favicon.png\""),
-        ("rel=\"manifest\"", "href=\"manifest.json\""),
-        ("rel=\"stylesheet\"", "href=\"tailwind.css\""),
+        ("rel=\"icon\"", "href=\"/favicon.png\""),
+        ("rel=\"manifest\"", "href=\"/manifest.json\""),
+        ("rel=\"stylesheet\"", "href=\"/tailwind.css\""),
     ] {
         let tag = html
             .split('<')
