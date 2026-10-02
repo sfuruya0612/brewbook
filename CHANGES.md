@@ -50,6 +50,8 @@
   - @sfuruya0612
 - [ADD] 購入の通貨コードをマスタのプルダウンから選べるようにする
   - @sfuruya0612
+- [ADD] Frontend の Dioxus の基盤 (経路の台帳、API クライアント、起動時のセッション確認、翻訳、値の変換、記録の依存の束ね) を追加する
+  - @sfuruya0612
 - [CHANGE] アプリ名と名前空間を brewbook に変更する
   - @sfuruya0612
 

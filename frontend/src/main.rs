@@ -1,18 +1,13 @@
-//! brewbook の Frontend (ADR-0017)。
+//! brewbook の Frontend の起動 (ADR-0017)。
 //!
-//! 0037 で作った最小のアプリで、ビルドとテストの配線だけを確認する。
-//! 画面の中身は 0038 以降で実装する。
+//! 画面の基盤は `brew_book_frontend` のクレートに置き、このファイルは Web の起動だけを行う。
 
-use dioxus::prelude::*;
-
+/// Web の起動。ブラウザでアプリを立ち上げる。
+#[cfg(target_arch = "wasm32")]
 fn main() {
-    dioxus::launch(App);
+    dioxus::launch(brew_book_frontend::app::App);
 }
 
-/// 画面のルート。0037 では中身を持たない。
-#[component]
-fn App() -> Element {
-    rsx! {
-        div { id: "app" }
-    }
-}
+/// Web 以外は対象外 (ADR-0017)。テストと lint が native でも通るための空の main。
+#[cfg(not(target_arch = "wasm32"))]
+fn main() {}

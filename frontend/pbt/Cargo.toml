@@ -1,0 +1,16 @@
+[package]
+name = "brew_book_frontend_pbt"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dev-dependencies]
+brew_book_frontend = { path = ".." }
+
+# PBT は native だけで動かす (ADR-0013)。proptest は wasm を対象にしないため、
+# wasm のテスト (dioxus:test-web) のビルドに含めない。テストのファイルは
+# `#![cfg(not(target_arch = "wasm32"))]` で wasm では空になる。
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+proptest = "1"
+# 要求と応答の JSON の値を作るため (brew_book_frontend の依存に含まれるクレート)。
+serde_json = "1"
