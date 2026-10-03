@@ -16,7 +16,10 @@
 
 mod support;
 
+use std::io::{Read, Write};
+use std::net::TcpListener;
 use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use brew_book_core::auth::{KIND_AUTHENTICATION, KIND_REGISTRATION};
@@ -81,6 +84,13 @@ const ROWS_PER_STATEMENT: usize = 200;
 const PAGE_BOUNDARIES: [i64; 6] = [0, 999, 1_000, 1_999, 2_000, 2_999];
 /// 想定規模の削除の応答を待つ上限。1 件ずつの削除の時間が機械の負荷で伸びても待てるようにする。
 const SCALE_TIMEOUT: Duration = Duration::from_secs(600);
+/// 想定規模の下ごしらえ (1 リクエストで 1,000 件の put) の応答を待つ上限。
+/// 既定の 30 秒では、並列の負荷の下で 1,000 件の put が 30 秒を超えることがある (0030)。
+const PUT_TIMEOUT: Duration = Duration::from_secs(120);
+/// 想定規模の下ごしらえの再試行の回数。接続断と 200 以外の応答で同じ範囲をやり直す (0030)。
+const PUT_RETRIES: usize = 3;
+/// 想定規模の下ごしらえの再試行の間隔 (0030)。
+const PUT_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 
 /// 正常系のテストの購入の ID。
 const OK_PURCHASE_ID: &str = "ok-purchase-00000";
@@ -322,29 +332,157 @@ fn counts(server: &DevServer, user: &str) -> Vec<(&'static str, i64)> {
 }
 
 /// テスト専用の経路で、オブジェクトを `count` 件置く。1 回の上限ごとに分けて呼ぶ。
+///
+/// miniflare の ProxyWorker と Worker の間の接続は失われることがある (接続の再利用と idle の
+/// 接続の閉鎖の競合)。接続断と 5xx の応答は同じ範囲をやり直す。R2 の put は同じ鍵への上書き
+/// なので、やり直しても結果は変わらない (0030)。
 fn put_objects(lease: &ServerLease, user: &str, kind: &str, count: usize) {
     let base_url = lease.use_server(|server| server.base_url());
-    let client = ApiClient::new(&base_url, None);
+    // 1 リクエストで 1,000 件を置くため、既定の 30 秒では並列の負荷の下で足りないことがある。
+    let client = ApiClient::with_timeout(&base_url, None, PUT_TIMEOUT);
     let limit = brew_book::r2_check::MAX_COUNT as usize;
     let mut start = 0;
     while start < count {
         let size = (count - start).min(limit);
-        let body = assert_status(
-            client.post_json(
-                brew_book::r2_check::PATH,
-                &json!({
-                    "action": "put",
-                    "user_id": user,
-                    "kind": kind,
-                    "start": start,
-                    "count": size,
-                }),
-            ),
-            200,
-        );
-        assert_eq!(body["count"], json!(size), "{body}");
+        put_range(&client, user, kind, start, size);
         start += size;
     }
+}
+
+/// 1 つの範囲の put を送る。一時的な失敗 (送信の失敗と 5xx) は [`PUT_RETRY_INTERVAL`] の間隔で
+/// 最大 [`PUT_RETRIES`] 回やり直す。4xx は入力の誤りなのでやり直さず、すぐに失敗させる。
+/// 最後まで成功しなければ、最後の失敗の内容を添えて失敗にする (0030)。
+fn put_range(client: &ApiClient, user: &str, kind: &str, start: usize, size: usize) {
+    let body = json!({
+        "action": "put",
+        "user_id": user,
+        "kind": kind,
+        "start": start,
+        "count": size,
+    });
+    let mut last_failure = None;
+    for attempt in 0..=PUT_RETRIES {
+        if attempt > 0 {
+            thread::sleep(PUT_RETRY_INTERVAL);
+        }
+        match client.try_post_json(brew_book::r2_check::PATH, &body) {
+            Ok(response) if response.status().as_u16() == 200 => {
+                let body = assert_status(response, 200);
+                assert_eq!(body["count"], json!(size), "{body}");
+                return;
+            }
+            // 5xx は本文が JSON とは限らない (ProxyWorker の 500 はエラーの文面を返す)。
+            // JSON として読まずに、そのまま再試行の材料にする。
+            Ok(response) if response.status().as_u16() >= 500 => {
+                let status = response.status().as_u16();
+                let body = response
+                    .text()
+                    .unwrap_or_else(|error| format!("<the body was unreadable: {error}>"));
+                last_failure = Some(format!("the response status was {status}: {body}"));
+            }
+            Ok(response) => {
+                let status = response.status().as_u16();
+                let body = response.text().unwrap_or_default();
+                panic!(
+                    "the put of {size} objects from {start} must not be retried: \
+                     the response status was {status}: {body}"
+                );
+            }
+            Err(error) => last_failure = Some(error.to_string()),
+        }
+    }
+    panic!(
+        "the put of {size} objects from {start} must succeed within {} attempts: {}",
+        PUT_RETRIES + 1,
+        last_failure.unwrap_or_else(|| "no attempt was made".to_owned())
+    );
+}
+
+/// 再試行の経路の検査に使う、応答を差し替えられる小さな HTTP サーバー。
+///
+/// 指定した応答を順に返し、受け取ったリクエストの本文を返す。`Content-Length` の分だけ本文を
+/// 読み、1 リクエストにつき 1 接続で応答の後に閉じる。
+fn spawn_fake_server(
+    responses: Vec<(u16, &'static str)>,
+) -> (String, thread::JoinHandle<Vec<String>>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("the fake server must bind");
+    let address = listener
+        .local_addr()
+        .expect("the fake server must have an address");
+    let handle = thread::spawn(move || {
+        let mut bodies = Vec::new();
+        for (status, body) in responses {
+            let (mut stream, _) = listener.accept().expect("the fake server must accept");
+            let mut buffer = Vec::new();
+            let mut chunk = [0_u8; 1024];
+            let header_end = loop {
+                if let Some(position) = buffer.windows(4).position(|window| window == b"\r\n\r\n") {
+                    break position + 4;
+                }
+                let read = stream
+                    .read(&mut chunk)
+                    .expect("the request must be readable");
+                assert!(read > 0, "the request must have headers");
+                buffer.extend_from_slice(&chunk[..read]);
+            };
+            let headers = String::from_utf8_lossy(&buffer[..header_end]).to_ascii_lowercase();
+            let length: usize = headers
+                .lines()
+                .find_map(|line| line.strip_prefix("content-length:"))
+                .and_then(|value| value.trim().parse().ok())
+                .unwrap_or(0);
+            while buffer.len() < header_end + length {
+                let read = stream
+                    .read(&mut chunk)
+                    .expect("the request body must be readable");
+                if read == 0 {
+                    break;
+                }
+                buffer.extend_from_slice(&chunk[..read]);
+            }
+            bodies.push(
+                String::from_utf8_lossy(&buffer[header_end..header_end + length]).into_owned(),
+            );
+            let response = format!(
+                "HTTP/1.1 {status} X\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("the response must be written");
+        }
+        bodies
+    });
+    (format!("http://{address}"), handle)
+}
+
+/// 再試行の経路: 5xx の後に成功したら、同じ範囲が再送されることを検査する (0030)。
+#[test]
+fn put_range_retries_the_same_range_after_a_failure() {
+    let (base_url, server) = spawn_fake_server(vec![
+        (500, "Error: Network connection lost."),
+        (200, r#"{"count": 1000, "pages": 0}"#),
+    ]);
+    let client = ApiClient::with_timeout(&base_url, None, Duration::from_secs(5));
+    put_range(&client, "user-1", "users", 0, 1000);
+    let bodies = server.join().expect("the fake server must finish");
+    assert_eq!(bodies.len(), 2, "the request must be sent twice");
+    assert_eq!(bodies[0], bodies[1], "the same range must be sent again");
+}
+
+/// 再試行の上限: 5xx が続いたら、最後の失敗の内容を添えて失敗することを検査する (0030)。
+#[test]
+#[should_panic(expected = "the put of 1000 objects from 0 must succeed within 4 attempts")]
+fn put_range_fails_after_the_retry_limit() {
+    let (base_url, server) = spawn_fake_server(vec![
+        (500, "Error: Network connection lost."),
+        (500, "Error: Network connection lost."),
+        (500, "Error: Network connection lost."),
+        (500, "Error: Network connection lost."),
+    ]);
+    let client = ApiClient::with_timeout(&base_url, None, Duration::from_secs(5));
+    put_range(&client, "user-1", "users", 0, 1000);
+    let _ = server.join();
 }
 
 /// テスト専用の経路で、プレフィックスごとの残件数を数える。

@@ -101,3 +101,5 @@
   - @sfuruya0612
 - [FIX] 結合テストの worker のビルドを 1 回にまとめ、`wrangler dev` の起動ごとの重複ビルドをなくす
   - @sfuruya0612
+- [FIX] 想定規模のアカウント削除テストの下ごしらえが miniflare の接続断で失敗しないようにする
+  - @sfuruya0612

@@ -32,7 +32,7 @@ impl ApiClient {
         Self::with_timeout(base_url, token, Duration::from_secs(30))
     }
 
-    /// 応答に時間のかかる呼び出し (想定規模の R2 の削除) のために、待ち時間を指定して作る。
+    /// 応答に時間のかかる呼び出し (想定規模の R2 の操作) のために、待ち時間を指定して作る。
     pub fn with_timeout(base_url: &str, token: Option<&str>, timeout: Duration) -> Self {
         Self {
             base_url: base_url.to_owned(),
@@ -70,8 +70,16 @@ impl ApiClient {
         self.send(Method::POST, path, None)
     }
 
+    /// 本体を JSON として送る。
     pub fn post_json(&self, path: &str, body: &Value) -> Response {
-        self.send(Method::POST, path, Some(body))
+        self.try_post_json(path, body)
+            .expect("the request must reach the dev server")
+    }
+
+    /// 本体を JSON として送る。送信の失敗 (接続断、タイムアウトなど) を呼び出し側で扱えるように、
+    /// 結果をそのまま返す。
+    pub fn try_post_json(&self, path: &str, body: &Value) -> Result<Response, reqwest::Error> {
+        self.try_send(Method::POST, path, Some(body))
     }
 
     /// 本体をバイト列として送る。Content-Type を指定する (写真からの推測の検査に使う。FR-19)。
@@ -107,6 +115,17 @@ impl ApiClient {
 
     /// 1 件のリクエストを送る。GET と HEAD 以外には `Origin` を付ける (ブラウザの挙動に合わせる)。
     fn send(&self, method: Method, path: &str, body: Option<&Value>) -> Response {
+        self.try_send(method, path, body)
+            .expect("the request must reach the dev server")
+    }
+
+    /// 送信の失敗を呼び出し側で扱えるようにした [`ApiClient::send`]。
+    fn try_send(
+        &self,
+        method: Method,
+        path: &str,
+        body: Option<&Value>,
+    ) -> Result<Response, reqwest::Error> {
         let mut request = self
             .client
             .request(method.clone(), format!("{}{path}", self.base_url));
@@ -123,9 +142,7 @@ impl ApiClient {
                 request = request.header("origin", origin);
             }
         }
-        request
-            .send()
-            .expect("the request must reach the dev server")
+        request.send()
     }
 }
 
