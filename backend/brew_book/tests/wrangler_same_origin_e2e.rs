@@ -1,7 +1,8 @@
 //! 実バックエンドと仮想認証器を使う E2E (0044)。
 //!
 //! 次の 4 つを組み合わせて、登録、ログイン、ログアウト、抽出の保存、エクスポートの
-//! ダウンロード、画面数の成功指標、スクリーンショットの比較を 1 本のテストで実行する。
+//! ダウンロード、ハンバーガーメニューの遷移 (0047)、画面数の成功指標、スクリーンショットの
+//! 比較を 1 本のテストで実行する。
 //!
 //! - `wrangler dev`: feature `e2e` を有効にした Dioxus の Web ビルド
 //!   (`frontend/target/dx/brew_book_frontend/release/web/public`、`mise run frontend:build-e2e`) を
@@ -257,6 +258,10 @@ async fn run_steps(
     logout(browser).await?;
     login(browser).await?;
 
+    // ハンバーガーメニューから 6 つの行き先へ移れる (0047)。
+    nav_menu(browser).await?;
+    println!("nav menu: the six destinations are reachable");
+
     // エクスポートのダウンロード (FR-14、0043)。確認のダイアログ無しで一時ディレクトリへ保存する。
     let export_path = download_dir.join("brewbook-export.json");
     // 前回の実行の残りを拾わないように、先に消す (0044 のレビューの指摘)。
@@ -371,14 +376,84 @@ async fn logout(browser: &E2eBrowser) -> Result<(), String> {
 
 /// 設定の画面からログアウトし、ログインへ戻ることを確かめる (FR-4、0043)。
 ///
-/// ホームのメニューのログアウト (上の [`logout`]) とは別の入口 (設定の画面の文字ボタン) を
-/// 確かめる (0044 のレビューの指摘)。
+/// ヘッダーのハンバーガーメニューのログアウト (上の [`logout`]) とは別の入口 (設定の画面の
+/// 文字ボタン) を確かめる (0044 のレビューの指摘)。
 async fn logout_from_settings(browser: &E2eBrowser) -> Result<(), String> {
     browser.goto("/settings").await?;
     browser.wait_route("/settings").await?;
     browser.wait_text("Log out").await?;
     browser.click_text("Log out").await?;
     browser.wait_route("/login").await?;
+    Ok(())
+}
+
+/// ヘッダーのハンバーガーメニューから 6 つの行き先へ移れることを確かめる (0047)。
+///
+/// メニューはハンバーガーの下に開き、項目を押すと対応する経路へ移って閉じる。現在の経路と
+/// 同じ項目を押したときは遷移せず、メニューだけ閉じる (履歴が増えないことで確かめる)。
+/// アプリ名を押すとホームへ戻り、ホームでは何もしない。
+async fn nav_menu(browser: &E2eBrowser) -> Result<(), String> {
+    // 6 つの行き先を順に開く。
+    for (label, route) in [
+        ("Purchases", "/purchases"),
+        ("Products", "/products"),
+        ("Shops", "/shops"),
+        ("Stats", "/stats"),
+        ("Settings", "/settings"),
+        ("Brews", "/"),
+    ] {
+        browser.click_selector("button[aria-label='Menu']").await?;
+        browser.wait_selector(".menu").await?;
+        browser.click_menu_item(label).await?;
+        browser.wait_route(route).await?;
+        browser.wait_menu_closed().await?;
+    }
+
+    // 現在の経路と同じ項目 (購入) を押したときは、遷移せずメニューだけ閉じる。
+    browser.goto("/purchases").await?;
+    browser.wait_route("/purchases").await?;
+    let before = browser
+        .eval_string("return String(window.history.length);")
+        .await?;
+    browser.click_selector("button[aria-label='Menu']").await?;
+    browser.wait_selector(".menu").await?;
+    browser.click_menu_item("Purchases").await?;
+    browser.wait_menu_closed().await?;
+    let after = browser
+        .eval_string("return String(window.history.length);")
+        .await?;
+    if before != after {
+        return Err(format!(
+            "the current route item must not navigate but the history length changed from {before:?} to {after:?}"
+        ));
+    }
+    browser.wait_route("/purchases").await?;
+
+    // アプリ名を押すとホームへ戻る。ホームでは何もしない (履歴が増えない)。
+    browser.click_selector(".appbar .app-name").await?;
+    browser.wait_route("/").await?;
+    let before = browser
+        .eval_string("return String(window.history.length);")
+        .await?;
+    browser.click_selector(".appbar .app-name").await?;
+    let after = browser
+        .eval_string("return String(window.history.length);")
+        .await?;
+    if before != after {
+        return Err(format!(
+            "the app name on the home must not navigate but the history length changed from {before:?} to {after:?}"
+        ));
+    }
+    browser.wait_route("/").await?;
+
+    // レールを持たないフォームの画面でも、ヘッダーのメニューから移れる (0047)。
+    browser.goto("/products/new").await?;
+    browser.wait_route("/products/new").await?;
+    browser.click_selector("button[aria-label='Menu']").await?;
+    browser.wait_selector(".menu").await?;
+    browser.click_menu_item("Shops").await?;
+    browser.wait_route("/shops").await?;
+    browser.wait_menu_closed().await?;
     Ok(())
 }
 

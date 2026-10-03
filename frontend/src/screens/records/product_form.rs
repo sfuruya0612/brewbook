@@ -12,7 +12,8 @@ use crate::records::{
     record_error_key, save_target, validate_product_form, RecordError, RecordServices, RecordsApi,
     SaveTarget, SuggestionTarget,
 };
-use crate::ui::{AppBar, Banner, Button, ButtonVariant, Chip, ChipVariant, Field, TextField};
+use crate::screens::ScreenAppBar;
+use crate::ui::{Banner, Button, ButtonVariant, Chip, ChipVariant, Field, TextField};
 
 use super::{
     archive_button, clear_notice_after, mark_records_changed, retryable_banner, SuggestionField,
@@ -213,7 +214,7 @@ pub fn ProductForm(
 
     rsx! {
         div { class: "screen",
-            AppBar {
+            ScreenAppBar {
                 title: t(if id.is_some() { Key::ProductEditTitle } else { Key::ProductNewTitle }).to_string(),
                 leading_icon: Some("close".to_string()),
                 leading_label: Some(t(Key::CancelButton).to_string()),

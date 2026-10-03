@@ -1,7 +1,7 @@
 //! 店の登録と編集の画面 (FR-6)。
 //!
 //! 店名は必須、住所は任意。編集では現在の値を読み込んでから上書きする。アーカイブと
-//! アーカイブ解除は AppBar の右端から行う (FR-12)。
+//! アーカイブ解除はヘッダー (ScreenAppBar) の右端から行う (FR-12)。
 
 use dioxus::prelude::*;
 use dioxus_router::navigator;
@@ -11,7 +11,8 @@ use crate::records::{
     record_error_key, save_target, validate_shop_form, RecordError, RecordServices, RecordsApi,
     SaveTarget,
 };
-use crate::ui::{AppBar, Button, ButtonVariant, Field, TextField};
+use crate::screens::ScreenAppBar;
+use crate::ui::{Button, ButtonVariant, Field, TextField};
 
 use super::{archive_button, clear_notice_after, mark_records_changed, retryable_banner};
 
@@ -178,7 +179,7 @@ pub fn ShopForm(
 
     rsx! {
         div { class: "screen",
-            AppBar {
+            ScreenAppBar {
                 title: t(if id.is_some() { Key::ShopEditTitle } else { Key::ShopNewTitle }).to_string(),
                 leading_icon: Some("close".to_string()),
                 leading_label: Some(t(Key::CancelButton).to_string()),

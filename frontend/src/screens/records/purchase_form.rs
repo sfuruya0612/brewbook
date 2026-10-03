@@ -17,7 +17,8 @@ use crate::records::{
     PurchaseFormErrors, PurchaseFormValues, RecordError, RecordServices, RecordsApi, SaveTarget,
     Shop, DEFAULT_CURRENCY, MAX_PHOTO_BYTES, MAX_PHOTO_LONG_SIDE,
 };
-use crate::ui::{AppBar, Banner, Button, ButtonVariant, Field, Icon, ListRow, TextField};
+use crate::screens::ScreenAppBar;
+use crate::ui::{Banner, Button, ButtonVariant, Field, Icon, ListRow, TextField};
 
 use super::{
     clear_notice_after, mark_records_changed, photo_preview_url, retryable_banner, RecordLoader,
@@ -459,7 +460,7 @@ pub fn PurchaseForm(
 
     rsx! {
         div { class: "screen",
-            AppBar {
+            ScreenAppBar {
                 title: t(if id.is_some() { Key::PurchaseEditTitle } else { Key::PurchaseNewTitle }).to_string(),
                 leading_icon: Some("close".to_string()),
                 leading_label: Some(t(Key::CancelButton).to_string()),

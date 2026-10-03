@@ -10,8 +10,9 @@ use crate::i18n::{current_language, t, Key};
 use crate::records::display::{brew_reference_tiles, count_text, number_text, rating_text};
 use crate::records::{record_error_key, RecordError, RecordServices, RecordsApi};
 use crate::router::Route;
+use crate::screens::ScreenAppBar;
 use crate::ui::{
-    AppBar, ArchivedBadge, IconButton, Ledger, LedgerRow, Rating, ReferenceChain, ReferenceTile,
+    ArchivedBadge, IconButton, Ledger, LedgerRow, Rating, ReferenceChain, ReferenceTile,
 };
 
 use super::{archive_button, clear_notice_after, mark_records_changed, retryable_banner};
@@ -117,7 +118,7 @@ pub fn BrewDetail(
 
     rsx! {
         div { class: "screen",
-            AppBar {
+            ScreenAppBar {
                 title: t(Key::BrewDetailTitle).to_string(),
                 leading_icon: (!embedded).then_some("arrow_back_ios_new".to_string()),
                 leading_label: Some(t(Key::CancelButton).to_string()),

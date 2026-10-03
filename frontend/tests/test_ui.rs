@@ -240,6 +240,30 @@ fn the_component_css_covers_the_classes_of_the_bundle() {
     );
 }
 
+/// AppBar が印とアプリ名とその下の画面名を出し、`wordmark` prop と `dioxus_router` を
+/// 持たないことを検査する (0047)。
+#[test]
+fn the_app_bar_has_the_mark_and_the_app_name_without_the_router() {
+    let source = read(crate_dir().join("src/ui/app_bar.rs"));
+
+    assert!(
+        source.contains("BrewbookMark"),
+        "the AppBar must show the BrewbookMark"
+    );
+    assert!(
+        source.contains("Key::AppTitle"),
+        "the AppBar must show the app name from the translations"
+    );
+    assert!(
+        !source.contains("wordmark"),
+        "the AppBar must not have the wordmark prop"
+    );
+    assert!(
+        !source.contains("dioxus_router"),
+        "the AppBar must not depend on dioxus_router"
+    );
+}
+
 /// アイコンの名前が Material Icons のリガチャの基底名になっていることを検査する (0039 の
 /// レビューの指摘)。
 ///

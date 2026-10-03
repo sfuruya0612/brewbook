@@ -2,6 +2,7 @@
 
 Created: 2026-10-03
 Model: DeepSeek V4.1 Flash
+Completed: 2026-10-04
 
 ## 背景
 
@@ -63,3 +64,41 @@ Model: DeepSeek V4.1 Flash
 - 0039 のデザインシステム (`frontend/src/ui/`) の `AppBar` を拡張する。
 - 0041 の記録の画面の `AppBar` の使い方 (`ScreenAppBar` への置き換え) を変える。
 - 0044 の E2E (`frontend:test-same-origin`) のメニューの操作を新しいハンバーガーメニューに合わせる。
+
+## 解決方法
+
+ヘッダーを、ハンバーガーメニュー、既存の先頭の操作、アプリの印 (`BrewbookMark`、32 px) とアプリ名、その下の画面名、末尾の操作の構成にし、記録、統計、設定のどの画面からでも 6 つの行き先とログアウトへ移れるようにした。
+
+- `frontend/src/ui/app_bar.rs`: `AppBar` から `wordmark` prop を削除し、`menu: Option<Element>` と `on_home: Option<EventHandler<MouseEvent>>` の prop を足した。先頭に `menu`、続いて既存の先頭の操作、`BrewbookMark { size: 32 }` と `Key::AppTitle` を持つ `.app-name` ボタン、その下の `.ttl` に画面名、末尾に `actions` を置く。`dioxus_router` は参照しない。
+- `frontend/src/screens/app_nav.rs` (新規): ハンバーガーボタンと `.menu.left` の面を組む `AppNav`、`navigator` と `auth` を組む `ScreenAppBar`、メニューの項目を組む `nav_items` を追加した。メニューは 6 項目とログアウトを持ち、項目を押すと遷移して閉じ、現在の経路と同じ項目では遷移せずに閉じる。ログアウトは `crate::auth::logout` を呼び、`SessionStatus::SignedOut` にする。
+- `frontend/src/screens/records/mod.rs`: 6 つの行き先を `NAV_ENTRIES` に切り出し、`rail_items` と `AppNav` の両方が使うようにした。ホームのラベルを `Key::HomeTitle` から `Key::BrewsLabel` (「抽出」) に変えた。
+- 記録、統計、設定の画面 (`home.rs`、`purchase_list.rs`、`product_list.rs`、`shop_list.rs`、`purchase_detail.rs`、`purchase_form.rs`、`brew_form.rs`、`product_form.rs`、`shop_form.rs`、`brew_detail.rs`、`stats/mod.rs`、`settings.rs`) を `ScreenAppBar` に置き換えた。ホームの `more_vert` のメニューは削除した。登録の画面 (`register.rs`) は `ui::AppBar` のままとした。
+- `frontend/src/ui/design.css` と `docs/design/components/bundle.css`: `.menu.left { left: 0; right: auto; }` を足し、ハンバーガーの下に左寄せで開くようにした。
+- 原本 (`docs/design/components/AppBar/README.md` と `preview.html`、`Home`、`Lists`、`Settings` の README と `preview.html`、`Detail`、`Stats`、`Auth`、`RecordForms`、`BrewForm`、`WideLayout` の `preview.html`、`bundle.css`) を新しい構成に更新した。
+- テスト: `frontend/tests/test_app_nav_web.rs` (新規) に `the_app_nav_opens_the_menu_under_the_hamburger` を置き、メニューの開閉、区切りの div が 1 つであること、6 項目とログアウト、ハンバーガーとの左端の一致と下への開きを検証する。`the_app_bar_matches_the_tokens` (`frontend/tests/test_ui_web.rs`) と `frontend/tests/test_ui.rs`、`test_records_screens.rs`、`test_stats_web.rs` を新しい構成に合わせた。E2E は `backend/brew_book/tests/wrangler_same_origin_e2e.rs` に `nav_menu` を足し、6 つの行き先への遷移、現在の経路と同じ項目で履歴が増えないこと、アプリ名でホームへ戻りホームでは履歴が増えないこと、レールを持たないフォームの画面 (`/products/new`) からも移れることを検証する。`backend/brew_book/tests/support/e2e.rs` に `click_menu_item` と `wait_menu_closed` を足した。
+
+完了条件の検証:
+
+- `ui::AppBar` が印とアプリ名と画面名を表示し、`wordmark` prop を持たず `dioxus_router` を参照しない: `frontend/src/ui/app_bar.rs` を確認し、`frontend/tests/test_ui_web.rs` の `the_app_bar_matches_the_tokens` で構成を検証した。
+- アプリ名を押すと `Route::Home {}` へ遷移し、ホームでは何もしない: E2E の `nav_menu` が `.appbar .app-name` の押下でホームへ移ることと、ホームでの再押下で `window.history.length` が変わらないことを検証した。
+- 記録、統計、設定の全画面が `ScreenAppBar` を使う: `frontend/src/screens/` を検索し、`ui::AppBar` を使うのは登録の画面だけであることを確認した。`frontend/tests/test_records_screens.rs` の `the_signed_in_screens_use_the_screen_app_bar` が 12 ファイルを検査する。
+- 登録の画面は `ui::AppBar` のままでハンバーガーが出ない: `frontend/src/screens/register.rs` を確認した。
+- ハンバーガーでメニューが開き、ハンバーガーの下に左寄せで 6 項目とログアウトが出る: `the_app_nav_opens_the_menu_under_the_hamburger` が `.menu` の項目数と、ハンバーガーの左端とメニューの左端の差 (1 px 未満)、メニューの上端がハンバーガーの下端以降であることを検証した。
+- メニューの各項目で対応する経路へ移り、メニューが閉じ、現在の経路と同じ項目では遷移しない: E2E の `nav_menu` が 6 経路への遷移と `.menu` の消滅、`/purchases` での履歴長の不変を検証した。
+- ホームの `more_vert` のメニューが削除されている: `frontend/src/screens/records/home.rs` を確認し、E2E と部品テストも `Menu` の aria-label を使う新しいメニューだけを操作する。
+- `rail_items` のホームのラベルが `Key::BrewsLabel` になっている: `the_navigation_entries_start_with_the_brews_label` が `NAV_ENTRIES[0].0` を実行時に確かめる (`rail_items` と `AppNav` が共有する値)。
+- `docs/design/` の原本が新しい構成になっている: 上記のとおり更新した。
+- スクリーンショット比較: `frontend/target/e2e-screenshots/comparison.json` で、更新した原本は Home、AppBar、BrewForm、Detail、Lists、RecordForms、Stats、Settings、WideLayout の 9 種 (18 ファイル) で、対応する比較 (BrewDetail、Purchases、ProductEdit を含む) は mean 0.00 である。残差は PurchaseDetail 10.3/9.6、Products 1.4/1.2、Shops 1.8/1.6、ShopEdit 4.2/2.5 (paper/night) で、複数の画面が 1 つの原本を共有することによる内容の差である。その他の部品 (Button、Chip、Rating、Feedback、ReferenceTile、Field、Ledger、Charts、ListRow、Auth) の比較は 0044 のハーネスの既存の差で、今回の変更の対象外である。
+- 既存の Frontend のテストと E2E、`mise run check` が通過する: `mise run check` が通過した (2026-10-04、2643 秒。fmt、lint、frontend:build、frontend:lint、formal、backend:test、backend:test-integration、frontend:test、frontend:test-web、frontend:test-same-origin の全てが成功)。
+
+レビューの指摘を受けて変えたもの (方式は変えていない):
+
+- 統計の画面 (`frontend/src/screens/stats/mod.rs`) に、ヘッダーのメニューのログアウトの失敗を伝える通知 (`notice` と `Snackbar`) を足した。統計の画面だけ通知の表示が無く、失敗が利用者に伝わらなかった (レビューの指摘、中)。
+- メニューのブラウザテストを `frontend/tests/test_ui_web.rs` から `frontend/tests/test_app_nav_web.rs` に移した (`src/screens/app_nav.rs` に対応する置き場。レビューの指摘、低)。
+- `the_navigation_entries_start_with_the_brews_label` を、実装の行の写しではなく `NAV_ENTRIES[0].0` を実行時に確かめる形にした (レビューの指摘、低)。
+- `docs/design/components/AppBar/preview.html` のメニューの区切りを、実装と同じ組み方 (空の `div.sep` とログアウトの `div`) に直した (レビューの指摘、低)。
+- E2E の `nav_menu` に、レールを持たないフォームの画面 (`/products/new`) からメニューで店へ移る検査を足した (レビューの指摘、低)。
+
+却下した指摘:
+
+- メニュー項目のキーボード操作 (role、tabindex、キーの処理) の追加: 完了条件に無く、以前のホームのメニューと同じ組み方の引き継ぎである。今回のスコープ外の改善として報告する (レビューの指摘、低)。

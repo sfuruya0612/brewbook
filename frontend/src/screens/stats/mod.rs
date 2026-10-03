@@ -17,9 +17,10 @@ use crate::records::stats_period::{
 };
 use crate::records::values::{format_day, parse_day, LocalDate};
 use crate::records::{RecordError, RecordServices, StatsApi};
-use crate::screens::records::{rail_items, retryable_banner};
+use crate::screens::records::{clear_notice_after, rail_items, retryable_banner};
+use crate::screens::ScreenAppBar;
 use crate::ui::{
-    AppBar, Button, ButtonSize, ButtonVariant, Chip, Field, NavigationRail, TextField, WidePage,
+    Button, ButtonSize, ButtonVariant, Chip, Field, NavigationRail, Snackbar, TextField, WidePage,
 };
 
 pub use charts::{
@@ -31,6 +32,8 @@ pub use charts::{
 pub fn StatsScreen() -> Element {
     let services = use_context::<RecordServices>();
     let navigator = navigator();
+    // ヘッダーのメニューのログアウトが失敗したときの通知 (0047 のレビューの指摘)。
+    let notice = use_context::<Signal<Option<String>>>();
 
     // 期間の切り替えと、任意の期間の入力 (FR-18)。
     let mut preset = use_signal(|| StatsPeriodPreset::CurrentMonth);
@@ -248,7 +251,7 @@ pub fn StatsScreen() -> Element {
 
     let content = rsx! {
         div { class: "screen",
-            AppBar { title: t(Key::StatsTitle).to_string() }
+            ScreenAppBar { title: t(Key::StatsTitle).to_string() }
             div { class: "body",
                 div { class: "stats",
                     {chips}
@@ -276,6 +279,12 @@ pub fn StatsScreen() -> Element {
         WidePage {
             rail: rsx! { NavigationRail { items: rail_items(navigator, 4) } },
             {content}
+        }
+        if let Some(message) = notice() {
+            {clear_notice_after(notice)}
+            div { class: "notice",
+                Snackbar { message }
+            }
         }
     }
 }

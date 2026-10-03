@@ -14,6 +14,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use brew_book_frontend::api::ApiClient;
+use brew_book_frontend::auth::{AuthServices, SessionStatus};
 use brew_book_frontend::i18n::{set_language, text, Key, Language};
 use brew_book_frontend::records::stats::{
     BrewPeriod, BrewRating, PurchasePeriod, RatingHistoryEntry,
@@ -33,7 +34,10 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 
 use support::web::{computed, count, install_styles, mount, select, set_theme, tick};
-use support::{FakeClock, FakeImageConverter, FakePhotoPicker, FakeTransport, FakeUploadTransport};
+use support::{
+    FakeClock, FakeImageConverter, FakePasskeyClient, FakePhotoPicker, FakeTransport,
+    FakeUploadTransport,
+};
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -50,18 +54,19 @@ thread_local! {
 }
 
 /// 統計の画面の依存を組む。API は thread_local の偽の送信の実装を使う。
-fn stats_services() -> RecordServices {
+fn stats_services() -> (RecordServices, AuthServices) {
     let transport = STATS_TRANSPORT.with(|slot| {
         slot.borrow()
             .clone()
             .expect("the transport must be set before mounting")
     });
     let api = ApiClient::new(transport);
+    let auth = AuthServices::new(api.clone(), Rc::new(FakePasskeyClient::new()));
     let uploader = PhotoUploader::new(
         RecordsApi::new(api.clone()),
         Rc::new(FakeUploadTransport::new()),
     );
-    RecordServices::new(
+    let records = RecordServices::new(
         api,
         Rc::new(FakeClock {
             now: LocalDateTime::new(2026, 9, 25, 12, 30),
@@ -70,7 +75,8 @@ fn stats_services() -> RecordServices {
         Rc::new(FakePhotoPicker { photo: None }),
         Rc::new(FakeImageConverter),
         Rc::new(uploader),
-    )
+    );
+    (records, auth)
 }
 
 /// 統計の画面だけを持つテスト用の経路 (ルーターの文脈を用意する)。
@@ -90,7 +96,11 @@ fn StatsRoute() -> Element {
 /// 統計の画面を、ルーターの文脈と依存を与えて描く探り。
 #[component]
 fn StatsScreenProbe() -> Element {
-    let _services = use_context_provider(stats_services);
+    let (services, auth) = stats_services();
+    let _services = use_context_provider(|| services);
+    let _auth = use_context_provider(|| auth);
+    let _session = use_context_provider(|| Signal::new(SessionStatus::SignedIn));
+    let _notice = use_context_provider(|| Signal::new(None::<String>));
     rsx! {
         HistoryProvider {
             history: move |_| Rc::new(MemoryHistory::with_initial_path("/stats")) as Rc<dyn History>,

@@ -7,16 +7,14 @@
 use dioxus::prelude::*;
 use dioxus_router::navigator;
 
-use crate::auth::{logout, message_key, AuthServices, SessionStatus};
 use crate::i18n::{current_language, t, Key};
 use crate::records::{brew_row_subtitle, RecordServices, RecordsApi};
 use crate::router::Route;
 use crate::screens::records::{
     clear_notice_after, rail_items, use_wide_layout, RecordListView, RecordLoader,
 };
-use crate::ui::{
-    AppBar, Fab, IconButton, ListRow, NavigationRail, Rating, RowValue, Snackbar, WideLayout,
-};
+use crate::screens::ScreenAppBar;
+use crate::ui::{Fab, ListRow, NavigationRail, Rating, RowValue, Snackbar, WideLayout};
 
 use super::{brew_detail::BrewDetail, brew_form::BrewForm};
 
@@ -24,12 +22,9 @@ use super::{brew_detail::BrewDetail, brew_form::BrewForm};
 #[component]
 pub fn HomeScreen() -> Element {
     let services = use_context::<RecordServices>();
-    let auth = use_context::<AuthServices>();
-    let mut session = use_context::<Signal<SessionStatus>>();
-    let mut notice = use_context::<Signal<Option<String>>>();
+    let notice = use_context::<Signal<Option<String>>>();
     let navigator = navigator();
     let wide = use_wide_layout();
-    let mut menu_open = use_signal(|| false);
     let mut selected = use_signal(|| None::<String>);
     let mut creating = use_signal(|| false);
 
@@ -88,52 +83,9 @@ pub fn HomeScreen() -> Element {
         None
     };
 
-    let menu = rsx! {
-        if !wide() {
-            IconButton {
-                name: "more_vert".to_string(),
-                label: t(Key::MenuTooltip).to_string(),
-                onclick: move |_| menu_open.toggle(),
-            }
-            if menu_open() {
-                div { class: "menu",
-                    for (key, route) in [
-                        (Key::PurchasesTitle, Route::Purchases {}),
-                        (Key::ProductsTitle, Route::Products {}),
-                        (Key::ShopsTitle, Route::Shops {}),
-                        (Key::StatsTitle, Route::Stats {}),
-                        (Key::SettingsTitle, Route::Settings {}),
-                    ] {
-                        div {
-                            onclick: move |_| {
-                                menu_open.set(false);
-                                let _ = navigator.push(route.clone());
-                            },
-                            "{t(key)}"
-                        }
-                    }
-                    div { class: "sep" }
-                    div {
-                        onclick: move |_| {
-                            menu_open.set(false);
-                            let auth = auth.clone();
-                            spawn(async move {
-                                match logout(&auth).await {
-                                    Ok(()) => session.set(SessionStatus::SignedOut),
-                                    Err(error) => notice.set(Some(t(message_key(&error)).to_string())),
-                                }
-                            });
-                        },
-                        "{t(Key::LogoutButton)}"
-                    }
-                }
-            }
-        }
-    };
-
     let list = rsx! {
         div { class: "screen",
-            AppBar { title: t(Key::HomeTitle).to_string(), wordmark: true, actions: menu }
+            ScreenAppBar { title: t(Key::BrewsLabel).to_string() }
             RecordListView::<crate::records::Brew> {
                 load,
                 row,

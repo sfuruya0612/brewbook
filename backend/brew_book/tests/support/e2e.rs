@@ -303,6 +303,44 @@ impl E2eBrowser {
             .map_err(|error| format!("{selector} must be clicked: {error}"))
     }
 
+    /// ハンバーガーメニューの項目 (`.menu` の中の直接の文字) を押す (0047)。
+    ///
+    /// ナビゲーションレールの項目も同じ文言を持つため、`.menu` の中に限って探す。
+    pub async fn click_menu_item(&self, text: &str) -> Result<(), String> {
+        let xpath = format!(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), ' menu ')]\
+             //div[normalize-space(text()) = {}]",
+            xpath_literal(text)
+        );
+        let element = self.find(By::XPath(xpath)).await?;
+        element
+            .click()
+            .await
+            .map_err(|error| format!("the menu item {text} must be clicked: {error}"))
+    }
+
+    /// ハンバーガーメニューの面 (`.menu`) が閉じるまで待つ (0047)。
+    pub async fn wait_menu_closed(&self) -> Result<(), String> {
+        let deadline = self.deadline();
+        loop {
+            if self
+                .driver
+                .find(By::Css(".menu".to_string()))
+                .await
+                .is_err()
+            {
+                return Ok(());
+            }
+            if Instant::now() > deadline {
+                return Err(format!(
+                    "the hamburger menu must close (url: {})",
+                    self.current_path().await.unwrap_or_default()
+                ));
+            }
+            tokio::time::sleep(POLL_INTERVAL).await;
+        }
+    }
+
     /// CSS の選択子に一致する入力欄に文字を入れる。
     pub async fn type_selector(&self, selector: &str, text: &str) -> Result<(), String> {
         let element = self.find(By::Css(selector.to_string())).await?;

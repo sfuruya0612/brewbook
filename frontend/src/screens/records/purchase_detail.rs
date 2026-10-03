@@ -16,8 +16,9 @@ use crate::records::{
 };
 use crate::router::Route;
 use crate::screens::stats::RatingHistoryChart;
+use crate::screens::ScreenAppBar;
 use crate::ui::{
-    AppBar, ArchivedBadge, Button, ButtonVariant, IconButton, Ledger, LedgerRow, ReferenceChain,
+    ArchivedBadge, Button, ButtonVariant, IconButton, Ledger, LedgerRow, ReferenceChain,
     ReferenceTile, TagChip,
 };
 
@@ -187,7 +188,7 @@ pub fn PurchaseDetail(
 
     rsx! {
         div { class: "screen",
-            AppBar {
+            ScreenAppBar {
                 title: t(Key::PurchaseDetailTitle).to_string(),
                 leading_icon: (!embedded).then_some("arrow_back_ios_new".to_string()),
                 leading_label: Some(t(Key::CancelButton).to_string()),

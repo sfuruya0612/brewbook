@@ -6,6 +6,8 @@
 use std::fs;
 use std::path::PathBuf;
 
+use brew_book_frontend::i18n::Key;
+use brew_book_frontend::screens::records::NAV_ENTRIES;
 use brew_book_frontend::screens::records::{
     brew_detail::{BrewDetail, BrewDetailProps, BrewDetailScreen, BrewDetailScreenProps},
     brew_form::{BrewEditScreen, BrewEditScreenProps, BrewForm, BrewFormProps, BrewFormScreen},
@@ -136,6 +138,66 @@ fn the_record_routes_are_wired_to_the_record_screens() {
     }
     // 統計は 0042 が入れた。設定の経路の配線は 0043 のテスト (test_settings.rs) が確かめる。
     assert!(source.contains("#[route(\"/stats\", StatsScreen)]"));
+}
+
+/// 認証後の画面 (記録、統計、設定) が ScreenAppBar を使い、登録の画面は ui::AppBar のままで
+/// ハンバーガーを出さないことを確かめる (0047)。
+#[test]
+fn the_signed_in_screens_use_the_screen_app_bar() {
+    for path in [
+        "src/screens/records/home.rs",
+        "src/screens/records/brew_detail.rs",
+        "src/screens/records/brew_form.rs",
+        "src/screens/records/purchase_list.rs",
+        "src/screens/records/purchase_detail.rs",
+        "src/screens/records/purchase_form.rs",
+        "src/screens/records/product_list.rs",
+        "src/screens/records/product_form.rs",
+        "src/screens/records/shop_list.rs",
+        "src/screens/records/shop_form.rs",
+        "src/screens/stats/mod.rs",
+        "src/screens/settings.rs",
+    ] {
+        let source = fs::read_to_string(crate_dir().join(path))
+            .unwrap_or_else(|error| panic!("{path}: {error}"));
+        assert!(
+            source.contains("ScreenAppBar {"),
+            "{path} must use the ScreenAppBar"
+        );
+        // AppBar は ScreenAppBar の中にだけ現れる (ui::AppBar を直接使わない)。
+        assert_eq!(
+            source.matches("AppBar").count(),
+            source.matches("ScreenAppBar").count(),
+            "{path} must not use ui::AppBar directly"
+        );
+    }
+
+    // 登録の画面は認証前なので ui::AppBar のままで、ハンバーガー (AppNav) を出さない。
+    let register = fs::read_to_string(crate_dir().join("src/screens/register.rs"))
+        .expect("the register screen must be readable");
+    assert!(register.contains("use crate::ui::{AppBar"));
+    assert!(register.contains("AppBar { title:"));
+    assert!(!register.contains("ScreenAppBar"));
+    assert!(!register.contains("AppNav"));
+
+    // ホームの more_vert のメニューは削除し、行き先はハンバーガーメニューに一本化した (0047)。
+    let home = fs::read_to_string(crate_dir().join("src/screens/records/home.rs"))
+        .expect("the home screen must be readable");
+    assert!(!home.contains("more_vert"), "the home menu must be removed");
+}
+
+/// ヘッダーのメニューとレールの 1 項目目 (ホーム) が「抽出」になっていることを確かめる (0047)。
+///
+/// 完了条件はソースの検査を挙げているが、`rail_items` と `AppNav` が共有する並びの実体
+/// (`NAV_ENTRIES`) を実行時に読む方が、整形の変更に強く、値を直接確かめられる
+/// (0047 のレビューの指摘)。
+#[test]
+fn the_navigation_entries_start_with_the_brews_label() {
+    assert_eq!(
+        NAV_ENTRIES[0].0,
+        Key::BrewsLabel,
+        "the first navigation entry must be the brews label"
+    );
 }
 
 /// 購入の詳細が、評価の推移の折れ線を 0041 の画面に足していることを確かめる (FR-18)。

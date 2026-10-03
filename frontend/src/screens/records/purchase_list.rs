@@ -10,7 +10,8 @@ use crate::i18n::{current_language, t, Key};
 use crate::records::display::{purchase_price_text, purchase_row_subtitle, purchase_weight_text};
 use crate::records::{RecordServices, RecordsApi};
 use crate::router::Route;
-use crate::ui::{AppBar, Fab, ListRow, ListThumb, NavigationRail, RowValue, WideLayout};
+use crate::screens::ScreenAppBar;
+use crate::ui::{Fab, ListRow, ListThumb, NavigationRail, RowValue, WideLayout};
 
 use super::{clear_notice_after, rail_items, use_wide_layout, RecordListView, RecordLoader};
 use super::{purchase_detail::PurchaseDetail, purchase_form::PurchaseForm};
@@ -114,7 +115,7 @@ pub fn PurchaseListScreen() -> Element {
 
     let list = rsx! {
         div { class: "screen",
-            AppBar { title: t(Key::PurchasesTitle).to_string() }
+            ScreenAppBar { title: t(Key::PurchasesTitle).to_string() }
             RecordListView::<crate::records::Purchase> {
                 load,
                 row,

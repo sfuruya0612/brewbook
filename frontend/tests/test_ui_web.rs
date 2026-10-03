@@ -9,6 +9,9 @@
 
 #![cfg(target_arch = "wasm32")]
 
+use brew_book_frontend::i18n::{set_language, Language};
+use brew_book_frontend::router::Route;
+use brew_book_frontend::screens::AppNav;
 use brew_book_frontend::ui::{
     AppBar, Banner, Button, ButtonVariant, ChartFrame, ChartSection, Chip, ChipVariant,
     ConfirmDialog, Fab, Field, Icon, IconButton, Ledger, LedgerRow, ListRow, ListThumb,
@@ -16,6 +19,7 @@ use brew_book_frontend::ui::{
     RowValue, Snackbar, StatTile, StatTiles, TagChip, TextField, WideLayout, WidePage,
 };
 use dioxus::prelude::*;
+use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -353,19 +357,27 @@ fn AppBarProbe() -> Element {
     rsx! {
         AppBar {
             title: "x",
-            wordmark: true,
             leading_icon: "close",
             leading_label: "y",
             actions: rsx! { IconButton { name: "more_vert", label: "z" } },
+            menu: rsx! {
+                AppNav {
+                    current: Route::Home {},
+                    on_navigate: move |_| {},
+                    on_logout: move |_| {},
+                }
+            },
+            on_home: move |_| {},
         }
     }
 }
 
-/// AppBar の高さと罫線と書体が原本の値と一致することを検査する。
+/// AppBar が印とアプリ名とその下の画面名を原本の値で出すことを検査する (0047)。
 #[wasm_bindgen_test]
 async fn the_app_bar_matches_the_tokens() {
     install_styles();
     set_theme("paper");
+    set_language(Language::English);
     let root = mount(AppBarProbe).await;
     let bar = select(&root, ".appbar");
 
@@ -375,17 +387,40 @@ async fn the_app_bar_matches_the_tokens() {
     assert_eq!(computed(&bar, "background-color"), "rgb(244, 237, 226)");
     assert_eq!(computed(&bar, "padding-left"), "16px");
     assert_eq!(computed(&bar, "padding-right"), "8px");
-    // ホームの題は wordmark (IBM Plex Serif の 24 px)。
-    let title = select(&root, ".appbar .ttl.wordmark");
-    assert!(computed(&title, "font-family").contains("IBM Plex Serif"));
-    assert_eq!(computed(&title, "font-size"), "24px");
-    assert_eq!(computed(&title, "font-weight"), "500");
+    // 先頭はハンバーガーボタン (40 px 四方)。名前は Menu。
+    let hamburger = select(&root, ".appbar .nav .iconbtn");
+    assert_eq!(
+        hamburger.get_attribute("aria-label").as_deref(),
+        Some("Menu")
+    );
+    assert_eq!(computed(&hamburger, "width"), "40px");
+    assert_eq!(computed(&hamburger, "height"), "40px");
+    // 印は 32 px の roast。
+    let mark = select(&root, ".appbar .app-name .mark");
+    assert_eq!(computed(&mark, "width"), "32px");
+    assert_eq!(computed(&mark, "height"), "32px");
+    assert_eq!(computed(&mark, "color"), "rgb(74, 47, 28)");
+    // アプリ名は IBM Plex Serif の 18 px の 500。
+    let name = select(&root, ".appbar .app-name .name");
+    assert_eq!(name.text_content().as_deref(), Some("brewbook"));
+    assert!(computed(&name, "font-family").contains("IBM Plex Serif"));
+    assert_eq!(computed(&name, "font-size"), "18px");
+    assert_eq!(computed(&name, "font-weight"), "500");
+    // 画面名はアプリ名の下に、label の 13 px の --ink-muted で出る。
+    let title = select(&root, ".appbar .ttl");
+    assert_eq!(title.text_content().as_deref(), Some("x"));
+    assert_eq!(computed(&title, "font-size"), "13px");
+    assert_eq!(computed(&title, "color"), "rgb(106, 88, 71)");
+    assert!(
+        title.get_bounding_client_rect().top() >= name.get_bounding_client_rect().bottom(),
+        "the screen name must be under the app name"
+    );
     // 先頭の操作は 40 px 四方。
     let lead = select(&root, ".appbar .lead");
     assert_eq!(computed(&lead, "width"), "40px");
     assert_eq!(computed(&lead, "height"), "40px");
     // 末尾の操作は 40 px 四方の丸。
-    let action = select(&root, ".appbar .iconbtn");
+    let action = select(&root, ".appbar > .iconbtn");
     assert_eq!(computed(&action, "width"), "40px");
     assert_eq!(computed(&action, "border-top-left-radius"), "9999px");
     assert_eq!(computed(&action, "background-color"), "rgba(0, 0, 0, 0)");

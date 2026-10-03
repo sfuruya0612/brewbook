@@ -16,9 +16,10 @@ use crate::i18n::{current_language, t, text, text_args, Key, Language};
 use crate::records::values::{display_timestamp, parse_utc_to_local};
 use crate::records::RecordServices;
 use crate::screens::records::{clear_notice_after, rail_items};
+use crate::screens::ScreenAppBar;
 use crate::settings::{export_all, SettingsServices};
 use crate::ui::{
-    AppBar, Banner, Button, ButtonSize, ButtonVariant, ConfirmDialog, Field, Icon, IconButton,
+    Banner, Button, ButtonSize, ButtonVariant, ConfirmDialog, Field, Icon, IconButton,
     NavigationRail, Snackbar, TextField, WidePage,
 };
 
@@ -350,7 +351,7 @@ pub fn SettingsScreen() -> Element {
         WidePage {
             rail: rsx! { NavigationRail { items: rail_items(navigator, 5) } },
             div { class: "screen",
-                AppBar { title: t(Key::SettingsTitle).to_string() }
+                ScreenAppBar { title: t(Key::SettingsTitle).to_string() }
                 div { class: "body",
                     div { class: "section",
                         h2 { "{t(Key::PasskeysTitle)}" }

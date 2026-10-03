@@ -10,7 +10,8 @@ use crate::i18n::{current_language, t, Key};
 use crate::records::display::shop_row_subtitle;
 use crate::records::{RecordServices, RecordsApi};
 use crate::router::Route;
-use crate::ui::{AppBar, Fab, ListRow, NavigationRail, WideLayout};
+use crate::screens::ScreenAppBar;
+use crate::ui::{Fab, ListRow, NavigationRail, WideLayout};
 
 use super::shop_form::ShopForm;
 use super::{clear_notice_after, rail_items, use_wide_layout, RecordListView, RecordLoader};
@@ -81,7 +82,7 @@ pub fn ShopListScreen() -> Element {
 
     let list = rsx! {
         div { class: "screen",
-            AppBar { title: t(Key::ShopsTitle).to_string() }
+            ScreenAppBar { title: t(Key::ShopsTitle).to_string() }
             RecordListView::<crate::records::Shop> {
                 load,
                 row,

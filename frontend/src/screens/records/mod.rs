@@ -32,19 +32,24 @@ pub use list_view::{RecordListView, RecordLoader};
 pub use picker::RecordPickerSheet;
 pub use suggestion_field::SuggestionField;
 
+/// ヘッダーのメニューとナビゲーションレールに並べる行き先 (0047)。
+///
+/// 抽出、購入、商品、店、統計、設定の 6 項目。並びの添字が [`rail_items`] の `active` に
+/// 対応する。ホームのラベルは画面名ではなく「抽出」([`Key::BrewsLabel`]) にする。
+pub const NAV_ENTRIES: [(Key, &str, Route); 6] = [
+    (Key::BrewsLabel, "format_list_bulleted", Route::Home {}),
+    (Key::PurchasesTitle, "shopping_bag", Route::Purchases {}),
+    (Key::ProductsTitle, "spa", Route::Products {}),
+    (Key::ShopsTitle, "storefront", Route::Shops {}),
+    (Key::StatsTitle, "bar_chart", Route::Stats {}),
+    (Key::SettingsTitle, "settings", Route::Settings {}),
+];
+
 /// 広い画面のナビゲーションレールの項目を組む (docs/design/components/WideLayout)。
 ///
 /// `active` は選択中の項目の位置 (ホーム 0、購入 1、商品 2、店 3、統計 4、設定 5)。
 pub fn rail_items(navigator: Navigator, active: usize) -> Vec<RailItem> {
-    let entries = [
-        (Key::HomeTitle, "format_list_bulleted", Route::Home {}),
-        (Key::PurchasesTitle, "shopping_bag", Route::Purchases {}),
-        (Key::ProductsTitle, "spa", Route::Products {}),
-        (Key::ShopsTitle, "storefront", Route::Shops {}),
-        (Key::StatsTitle, "bar_chart", Route::Stats {}),
-        (Key::SettingsTitle, "settings", Route::Settings {}),
-    ];
-    entries
+    NAV_ENTRIES
         .into_iter()
         .enumerate()
         .map(|(index, (key, icon, route))| RailItem {
@@ -79,7 +84,7 @@ pub fn retryable_banner(error: &RecordError, on_retry: EventHandler<()>) -> Elem
     }
 }
 
-/// アーカイブとアーカイブ解除のボタン (FR-12)。AppBar の末尾に置く。
+/// アーカイブとアーカイブ解除のボタン (FR-12)。ヘッダー (ScreenAppBar) の末尾に置く。
 ///
 /// 実行中 (`busy`) は押せない (二重に要求を送らない。0041 のレビューの指摘)。
 pub fn archive_button(archived: bool, busy: bool, on_click: EventHandler<MouseEvent>) -> Element {

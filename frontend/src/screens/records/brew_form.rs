@@ -2,7 +2,8 @@
 //!
 //! 購入は必須で、ボトムシートから選ぶ。抽出日時は端末のローカル時刻で入力し、送信の直前に
 //! UTC の ISO 8601 へ変換する (FR-11)。抽出方法と挽き目は、入力中に過去の入力値の候補を出す
-//! (FR-13)。保存は AppBar の右端の文字ボタン。1 画面に収める (docs/design/components/BrewForm)。
+//! (FR-13)。保存はヘッダー (ScreenAppBar) の右端の文字ボタン。1 画面に収める
+//! (docs/design/components/BrewForm)。
 
 use dioxus::prelude::*;
 use dioxus_router::navigator;
@@ -14,8 +15,9 @@ use crate::records::{
     save_target, validate_brew_form, BrewFormErrors, BrewFormValues, Purchase, RecordError,
     RecordServices, RecordsApi, SaveTarget, SuggestionTarget,
 };
+use crate::screens::ScreenAppBar;
 use crate::ui::{
-    AppBar, Banner, Button, ButtonVariant, Field, Icon, ListRow, RatingInput, RowValue, TextField,
+    Banner, Button, ButtonVariant, Field, Icon, ListRow, RatingInput, RowValue, TextField,
 };
 
 use super::{
@@ -219,7 +221,7 @@ pub fn BrewForm(
 
     rsx! {
         div { class: "screen",
-            AppBar {
+            ScreenAppBar {
                 title: t(if id.is_some() { Key::BrewEditTitle } else { Key::BrewNewTitle }).to_string(),
                 leading_icon: Some("close".to_string()),
                 leading_label: Some(t(Key::CancelButton).to_string()),

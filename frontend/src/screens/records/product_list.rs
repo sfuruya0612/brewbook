@@ -11,7 +11,8 @@ use crate::i18n::Key;
 use crate::records::display::product_row_subtitle;
 use crate::records::{RecordServices, RecordsApi};
 use crate::router::Route;
-use crate::ui::{AppBar, Fab, ListRow, NavigationRail, TagChip, WideLayout};
+use crate::screens::ScreenAppBar;
+use crate::ui::{Fab, ListRow, NavigationRail, TagChip, WideLayout};
 
 use super::product_form::ProductForm;
 use super::{clear_notice_after, rail_items, use_wide_layout, RecordListView, RecordLoader};
@@ -91,7 +92,7 @@ pub fn ProductListScreen() -> Element {
 
     let list = rsx! {
         div { class: "screen",
-            AppBar { title: t(Key::ProductsTitle).to_string() }
+            ScreenAppBar { title: t(Key::ProductsTitle).to_string() }
             RecordListView::<crate::records::Product> {
                 load,
                 row,

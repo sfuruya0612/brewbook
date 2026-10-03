@@ -11,10 +11,12 @@ use crate::router::fallback_destination;
 mod login;
 mod register;
 
+pub mod app_nav;
 pub mod records;
 pub mod settings;
 pub mod stats;
 
+pub use app_nav::{AppNav, AppNavItem, ScreenAppBar};
 pub use login::LoginScreen;
 pub use records::{
     brew_detail::BrewDetailScreen,
