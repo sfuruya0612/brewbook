@@ -20,7 +20,8 @@ use crate::records::{RecordError, RecordServices, StatsApi};
 use crate::screens::records::{clear_notice_after, rail_items, retryable_banner};
 use crate::screens::ScreenAppBar;
 use crate::ui::{
-    Button, ButtonSize, ButtonVariant, Chip, Field, NavigationRail, Snackbar, TextField, WidePage,
+    Button, ButtonSize, ButtonVariant, Chip, Field, NavigationRail, Snackbar, TextField,
+    TextFieldKind, WidePage,
 };
 
 pub use charts::{
@@ -217,20 +218,22 @@ pub fn StatsScreen() -> Element {
                 Field {
                     label: t(Key::StatsStartLabel).to_string(),
                     error: start_error().map(|key| t(key).to_string()),
+                    help: Some(t(Key::DayFormatHint).to_string()),
                     TextField {
                         value: start_text(),
                         mono: true,
-                        icon: Some("calendar_today".to_string()),
+                        kind: TextFieldKind::Date,
                         oninput: move |event: FormEvent| start_text.set(event.value()),
                     }
                 }
                 Field {
                     label: t(Key::StatsEndLabel).to_string(),
                     error: end_error().map(|key| t(key).to_string()),
+                    help: Some(t(Key::DayFormatHint).to_string()),
                     TextField {
                         value: end_text(),
                         mono: true,
-                        icon: Some("calendar_today".to_string()),
+                        kind: TextFieldKind::Date,
                         oninput: move |event: FormEvent| end_text.set(event.value()),
                     }
                 }

@@ -18,6 +18,7 @@ use crate::records::{
 use crate::screens::ScreenAppBar;
 use crate::ui::{
     Banner, Button, ButtonVariant, Field, Icon, ListRow, RatingInput, RowValue, TextField,
+    TextFieldKind,
 };
 
 use super::{
@@ -278,11 +279,12 @@ pub fn BrewForm(
                                 label: t(Key::BrewedAtLabel).to_string(),
                                 required: true,
                                 error: errors().date.map(|key| t(key).to_string()),
+                                help: Some(t(Key::DayFormatHint).to_string()),
                                 disabled: busy(),
                                 TextField {
                                     value: date(),
                                     mono: true,
-                                    placeholder: Some(t(Key::DayFormatHint).to_string()),
+                                    kind: TextFieldKind::Date,
                                     disabled: busy(),
                                     oninput: move |event: FormEvent| date.set(event.value()),
                                 }
@@ -290,11 +292,12 @@ pub fn BrewForm(
                             Field {
                                 label: String::new(),
                                 error: errors().time.map(|key| t(key).to_string()),
+                                help: Some(t(Key::TimeFormatHint).to_string()),
                                 disabled: busy(),
                                 TextField {
                                     value: time(),
                                     mono: true,
-                                    placeholder: Some(t(Key::TimeFormatHint).to_string()),
+                                    kind: TextFieldKind::Time,
                                     disabled: busy(),
                                     oninput: move |event: FormEvent| time.set(event.value()),
                                 }

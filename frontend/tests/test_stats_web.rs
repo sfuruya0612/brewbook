@@ -580,3 +580,59 @@ async fn the_period_chip_reloads_with_the_selected_period() {
         text(Language::English, Key::StatsPeriodThreeMonths)
     );
 }
+
+/// 任意の期間の開始日と終了日が date input で描かれ、値が `YYYY-MM-DD` になることを検査する
+/// (完了条件 1、3)。
+///
+/// 表示の形式 (ブラウザの言語による yyyy/mm/dd などの見え方) は検査しない。内部の値の形式
+/// だけを確かめる。
+#[wasm_bindgen_test]
+async fn the_custom_period_dates_use_the_native_date_inputs() {
+    install_styles();
+    set_theme("paper");
+    let transport = Rc::new(FakeTransport::new(vec![
+        FakeTransport::response(200, &json!({"brews": []}).to_string()),
+        FakeTransport::response(200, &json!({"purchases": []}).to_string()),
+        FakeTransport::response(200, &json!({"brew_ratings": []}).to_string()),
+    ]));
+    STATS_TRANSPORT.with(|slot| *slot.borrow_mut() = Some(transport));
+    let root = mount(StatsScreenProbe).await;
+    for _ in 0..10 {
+        tick().await;
+    }
+
+    // 「任意」を選ぶまで入力欄は出ない (FR-18)。
+    assert_eq!(count(&root, ".stats-custom"), 0);
+    let chips = elements(&root, ".chips .chip");
+    assert_eq!(chips.len(), 6, "the preset chips must be shown");
+    chips[5]
+        .dyn_ref::<web_sys::HtmlElement>()
+        .expect("the chip must be clickable")
+        .click();
+    for _ in 0..5 {
+        tick().await;
+    }
+
+    // 開始日は当月の 1 日、終了日は当日 (端末のタイムゾーン。FR-18)。
+    assert_eq!(count(&root, ".stats-custom input[type='date']"), 2);
+    let dates = elements(&root, ".stats-custom input[type='date']");
+    assert_eq!(
+        dates[0]
+            .unchecked_ref::<web_sys::HtmlInputElement>()
+            .value(),
+        "2026-09-01"
+    );
+    assert_eq!(
+        dates[1]
+            .unchecked_ref::<web_sys::HtmlInputElement>()
+            .value(),
+        "2026-09-25"
+    );
+    // 形式の案内は help に出し、placeholder と icon は使わない (0049 の原本の更新による)。
+    assert_eq!(count(&root, ".stats-custom .field .help"), 2);
+    assert!(dates.iter().all(|date| date
+        .get_attribute("placeholder")
+        .unwrap_or_default()
+        .is_empty()));
+    assert_eq!(count(&root, ".stats-custom input[type='date'] ~ .icon"), 0);
+}

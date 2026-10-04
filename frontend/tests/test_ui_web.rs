@@ -16,9 +16,11 @@ use brew_book_frontend::ui::{
     AppBar, Banner, Button, ButtonVariant, ChartFrame, ChartSection, Chip, ChipVariant,
     ConfirmDialog, Fab, Field, Icon, IconButton, Ledger, LedgerRow, ListRow, ListThumb,
     NavigationRail, PickerTile, RailItem, Rating, RatingInput, ReferenceChain, ReferenceTile,
-    RowValue, Snackbar, StatTile, StatTiles, TagChip, TextField, WideLayout, WidePage,
+    RowValue, Snackbar, StatTile, StatTiles, TagChip, TextField, TextFieldKind, WideLayout,
+    WidePage,
 };
 use dioxus::prelude::*;
+use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -241,6 +243,65 @@ async fn the_field_matches_the_tokens() {
     let label = select(&root, ".field .lbl");
     assert_eq!(computed(&label, "font-size"), "13px");
     assert_eq!(computed(&label, "color"), "rgb(106, 88, 71)");
+}
+
+#[component]
+fn DateAndTimeFieldProbe() -> Element {
+    rsx! {
+        Field { label: "d", help: "YYYY-MM-DD".to_string(),
+            TextField {
+                value: "2026-09-26".to_string(),
+                mono: true,
+                kind: TextFieldKind::Date,
+            }
+        }
+        Field { label: "t", help: "HH:MM".to_string(),
+            TextField {
+                value: "08:12".to_string(),
+                mono: true,
+                kind: TextFieldKind::Time,
+            }
+        }
+        Field { label: "x", TextField { value: "text".to_string() } }
+    }
+}
+
+/// 日付は date input、時刻は time input で描き、値の形式の案内を help に出すことを検査する
+/// (完了条件 1、2)。
+///
+/// 表示の形式 (ブラウザの言語による yyyy/mm/dd などの見え方) は検査しない。内部の値の形式
+/// (`YYYY-MM-DD` と `HH:MM`) だけを確かめる。
+#[wasm_bindgen_test]
+async fn the_date_and_time_fields_draw_the_native_inputs() {
+    install_styles();
+    set_theme("paper");
+    let root = mount(DateAndTimeFieldProbe).await;
+
+    assert_eq!(count(&root, "input[type='date']"), 1);
+    assert_eq!(count(&root, "input[type='time']"), 1);
+    assert_eq!(count(&root, "input[type='text']"), 1);
+    let date = select(&root, "input[type='date']");
+    assert_eq!(
+        date.unchecked_ref::<web_sys::HtmlInputElement>().value(),
+        "2026-09-26"
+    );
+    let time = select(&root, "input[type='time']");
+    assert_eq!(
+        time.unchecked_ref::<web_sys::HtmlInputElement>().value(),
+        "08:12"
+    );
+    // 形式の案内は help に出し、placeholder と icon は使わない (0049 の原本の更新による)。
+    assert_eq!(count(&root, ".field .help"), 2);
+    assert!(date
+        .get_attribute("placeholder")
+        .unwrap_or_default()
+        .is_empty());
+    assert!(time
+        .get_attribute("placeholder")
+        .unwrap_or_default()
+        .is_empty());
+    assert_eq!(count(&root, "input[type='date'] ~ .icon"), 0);
+    assert_eq!(count(&root, "input[type='time'] ~ .icon"), 0);
 }
 
 #[component]

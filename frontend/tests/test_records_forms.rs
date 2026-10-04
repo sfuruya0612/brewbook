@@ -222,6 +222,58 @@ fn the_brew_form_rejects_broken_numbers() {
     assert_eq!(errors.brew_time, Some(Key::ValidationNumber));
 }
 
+/// 日付と時刻を空にすると必須の誤りになる (完了条件 4)。date input と time input を空に
+/// したときの保存の検証を確かめる。
+#[test]
+fn an_empty_day_or_time_is_a_required_error() {
+    let errors = validate_purchase_form(PurchaseFormValues {
+        product: Some(&product("p1", "豆")),
+        shop: None,
+        purchased_on: "",
+        roast: "",
+        roast_date: "",
+        price: "",
+        currency: "JPY",
+        weight: "",
+    })
+    .expect_err("the form must be rejected");
+    assert_eq!(errors.purchased_on, Some(Key::ValidationDay));
+
+    let errors = validate_brew_form(BrewFormValues {
+        purchase: Some(&purchase("b1")),
+        date: "",
+        time: "09:30",
+        dose: "",
+        water: "",
+        water_temp: "",
+        brew_time: "",
+        method: "",
+        grind_setting: "",
+        rating: None,
+        notes: "",
+        utc_offset_minutes: 540,
+    })
+    .expect_err("the form must be rejected");
+    assert_eq!(errors.date, Some(Key::ValidationDay));
+
+    let errors = validate_brew_form(BrewFormValues {
+        purchase: Some(&purchase("b1")),
+        date: "2026-10-01",
+        time: "",
+        dose: "",
+        water: "",
+        water_temp: "",
+        brew_time: "",
+        method: "",
+        grind_setting: "",
+        rating: None,
+        notes: "",
+        utc_offset_minutes: 540,
+    })
+    .expect_err("the form must be rejected");
+    assert_eq!(errors.time, Some(Key::ValidationTime));
+}
+
 #[test]
 fn the_product_match_selects_only_when_no_product_is_selected() {
     let suggestion = PurchaseSuggestion {

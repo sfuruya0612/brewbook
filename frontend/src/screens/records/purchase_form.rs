@@ -18,7 +18,7 @@ use crate::records::{
     Shop, DEFAULT_CURRENCY, MAX_PHOTO_BYTES, MAX_PHOTO_LONG_SIDE,
 };
 use crate::screens::ScreenAppBar;
-use crate::ui::{Banner, Button, ButtonVariant, Field, Icon, ListRow, TextField};
+use crate::ui::{Banner, Button, ButtonVariant, Field, Icon, ListRow, TextField, TextFieldKind};
 
 use super::{
     clear_notice_after, mark_records_changed, photo_preview_url, retryable_banner, RecordLoader,
@@ -551,11 +551,12 @@ pub fn PurchaseForm(
                             label: t(Key::PurchasedOnLabel).to_string(),
                             required: true,
                             error: errors().purchased_on.map(|key| t(key).to_string()),
+                            help: Some(t(Key::DayFormatHint).to_string()),
                             disabled: busy(),
                             TextField {
                                 value: purchased_on(),
                                 mono: true,
-                                placeholder: Some(t(Key::DayFormatHint).to_string()),
+                                kind: TextFieldKind::Date,
                                 disabled: busy(),
                                 oninput: move |event: FormEvent| purchased_on.set(event.value()),
                             }
@@ -570,11 +571,12 @@ pub fn PurchaseForm(
                         Field {
                             label: t(Key::RoastDate).to_string(),
                             error: errors().roast_date.map(|key| t(key).to_string()),
+                            help: Some(t(Key::DayFormatHint).to_string()),
                             disabled: busy(),
                             TextField {
                                 value: roast_date(),
                                 mono: true,
-                                placeholder: Some(t(Key::DayFormatHint).to_string()),
+                                kind: TextFieldKind::Date,
                                 disabled: busy(),
                                 oninput: move |event: FormEvent| roast_date.set(event.value()),
                             }

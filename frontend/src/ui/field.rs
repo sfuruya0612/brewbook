@@ -2,12 +2,25 @@
 //!
 //! docs/design/components/Field のガイドライン。項目名を上に `label` (`ink-muted`) で置き、
 //! 48 px の枠 (`paper-sunken` の地、`line-strong` の枠、`radius-sm`) に値を入れる。浮動ラベルは
-//! 使わない。数値と日付は `mono` で組み、単位を `caption` で右端に添える。
+//! 使わない。数値と日付は `mono` で組み、単位を `caption` で右端に添える。日付と時刻は
+//! ブラウザ標準の date input と time input で選ぶ ([`TextFieldKind`])。
 
 use dioxus::prelude::*;
 
 use crate::i18n::{t, Key};
 use crate::ui::Icon;
+
+/// [`TextField`] が描く入力の種類。
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum TextFieldKind {
+    /// 文字の入力 (`input { r#type: "text" }`)。
+    #[default]
+    Text,
+    /// ブラウザ標準の日付の選択 (`input { r#type: "date" }`)。値は `YYYY-MM-DD`。
+    Date,
+    /// ブラウザ標準の時刻の選択 (`input { r#type: "time" }`)。値は `HH:MM`。
+    Time,
+}
 
 /// 項目名と、枠と、理由 (誤りか助け) を縦に並べる。
 #[component]
@@ -71,6 +84,9 @@ pub fn TextField(
     /// 値を等幅で組むか (数値と日付は true)。
     #[props(default = false)]
     mono: bool,
+    /// 入力の種類。日付と時刻はブラウザ標準のピッカーで選ぶ (既定は文字の入力)。
+    #[props(default)]
+    kind: TextFieldKind,
     /// 複数行の入力欄にするか (感想など)。
     #[props(default = false)]
     area: bool,
@@ -89,6 +105,11 @@ pub fn TextField(
 ) -> Element {
     let input_class = if mono { "in num" } else { "in" };
     let box_class = if area { "box area" } else { "box" };
+    let input_type = match kind {
+        TextFieldKind::Text => "text",
+        TextFieldKind::Date => "date",
+        TextFieldKind::Time => "time",
+    };
     let placeholder = placeholder.unwrap_or_default();
     let on_input = move |event: FormEvent| oninput.call(event);
     let unit = unit.map(|unit| rsx! { span { class: "unit", "{unit}" } });
@@ -106,7 +127,7 @@ pub fn TextField(
             } else {
                 input {
                     class: "{input_class}",
-                    r#type: "text",
+                    r#type: input_type,
                     value: "{value}",
                     placeholder: "{placeholder}",
                     disabled,

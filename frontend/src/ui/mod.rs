@@ -44,7 +44,7 @@ pub use charts::{
 };
 pub use chip::{Chip, ChipVariant, TagChip};
 pub use feedback::{Banner, ConfirmDialog, Snackbar};
-pub use field::{Field, TextField};
+pub use field::{Field, TextField, TextFieldKind};
 pub use icon::Icon;
 pub use ledger::{Ledger, LedgerRow};
 pub use list_row::{ArchivedBadge, ListRow, ListThumb, RowValue};
