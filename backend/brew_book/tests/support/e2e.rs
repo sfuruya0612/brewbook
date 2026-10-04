@@ -183,6 +183,16 @@ impl E2eBrowser {
         Ok(ret.json().as_str().map(str::to_string))
     }
 
+    /// ページの式を評価し、JSON の文字列の結果を値にして返す。
+    pub async fn eval_json(&self, script: &str) -> Result<Value, String> {
+        let text = self
+            .eval_string(script)
+            .await?
+            .ok_or_else(|| "the script must return a JSON string".to_string())?;
+        serde_json::from_str(&text)
+            .map_err(|error| format!("the result must be JSON but was {text}: {error}"))
+    }
+
     /// パスを開く。
     pub async fn goto(&self, path: &str) -> Result<(), String> {
         self.driver
@@ -350,6 +360,20 @@ impl E2eBrowser {
             .map_err(|error| format!("{selector} must receive the text: {error}"))
     }
 
+    /// CSS の選択子に一致するファイルの入力欄に、パスのファイルを選ばせる。
+    pub async fn choose_file_selector(&self, selector: &str, path: &Path) -> Result<(), String> {
+        let element = self.find(By::Css(selector.to_string())).await?;
+        element
+            .send_keys(path.display().to_string())
+            .await
+            .map_err(|error| {
+                format!(
+                    "{selector} must receive the file {}: {error}",
+                    path.display()
+                )
+            })
+    }
+
     /// 文字を消してから入れる (前の値が残らないようにする)。
     pub async fn clear_and_type_selector(&self, selector: &str, text: &str) -> Result<(), String> {
         let element = self.find(By::Css(selector.to_string())).await?;
@@ -461,6 +485,34 @@ impl E2eBrowser {
             .set_window_rect(0, 0, width, height)
             .await
             .map_err(|error| format!("the window must be resized: {error}"))
+    }
+
+    /// 表示の領域の大きさを CDP の端末の計測の上書きで変える (0048)。
+    ///
+    /// OS の窓には下限の幅があり、`set_window_size` では 375 px にできない環境がある
+    /// (macOS の headless の Chrome は 500 px に丸める)。症状を計測した幅で確かめるため、
+    /// 表示の領域を直接上書きする。`mobile` を false にすると `<meta name="viewport">` を
+    /// 効かせず、指定した幅をそのまま使う。
+    pub async fn set_viewport_size(&self, width: u32, height: u32) -> Result<(), String> {
+        self.driver
+            .cdp()
+            .send_raw(
+                "Emulation.setDeviceMetricsOverride",
+                json!({ "width": width, "height": height, "deviceScaleFactor": 1, "mobile": false }),
+            )
+            .await
+            .map_err(|error| format!("the viewport must be overridden: {error}"))?;
+        Ok(())
+    }
+
+    /// 表示の領域の上書きを外す (0048)。
+    pub async fn clear_viewport_size(&self) -> Result<(), String> {
+        self.driver
+            .cdp()
+            .send_raw("Emulation.clearDeviceMetricsOverride", json!({}))
+            .await
+            .map_err(|error| format!("the viewport override must be cleared: {error}"))?;
+        Ok(())
     }
 
     /// 経路の変更の記録を始める (画面数の成功指標。PRD の成功指標)。

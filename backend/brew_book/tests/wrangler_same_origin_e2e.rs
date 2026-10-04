@@ -278,6 +278,16 @@ async fn run_steps(
     screenshots(browser, report, fixture).await?;
     wide_screenshot(browser, report).await?;
 
+    // 幅 375 px で各フォームが横にはみ出さず、縦スクロールで最後の入力欄に届くことを
+    // 確かめる (0048)。
+    form_layouts(browser, fixture).await?;
+    println!("form layouts: the forms fit 375 px and scroll to the last input");
+
+    // 購入の登録の「推測した内容で商品を登録する」のシートが縦にスクロールできることを
+    // 確かめる (0048)。
+    register_sheet_scrolls(browser).await?;
+    println!("register sheet: the sheet scrolls to the last input and the save action");
+
     // 設定の画面のログアウトでも、ログイン画面へ戻ることを確かめる (0043)。
     logout_from_settings(browser).await?;
 
@@ -656,6 +666,356 @@ async fn wide_screenshot(browser: &E2eBrowser, report: &mut Report) -> Result<()
     }
     browser.set_window_size(390, 844).await?;
     Ok(())
+}
+
+/// 幅 375 px で検査するフォームの画面 (0048)。
+struct FormScreen {
+    /// 失敗の報告に使う名前。
+    name: &'static str,
+    /// 開くパス。
+    path: String,
+    /// 待つ `data-route`。
+    route: &'static str,
+    /// 統計の任意の期間か (「任意」を選ぶと入力欄が出る)。
+    custom_period: bool,
+}
+
+/// フォームを持つ画面 (0048)。登録と編集の両方と、統計の任意の期間を並べる。
+fn form_screens(fixture: &Fixture) -> Vec<FormScreen> {
+    vec![
+        FormScreen {
+            name: "ProductNew",
+            path: "/products/new".to_string(),
+            route: "/products/new",
+            custom_period: false,
+        },
+        FormScreen {
+            name: "ProductEdit",
+            path: format!("/products/{}/edit", fixture.product_id),
+            route: "/products/:id/edit",
+            custom_period: false,
+        },
+        FormScreen {
+            name: "PurchaseNew",
+            path: "/purchases/new".to_string(),
+            route: "/purchases/new",
+            custom_period: false,
+        },
+        FormScreen {
+            name: "PurchaseEdit",
+            path: format!("/purchases/{}/edit", fixture.purchase_id),
+            route: "/purchases/:id/edit",
+            custom_period: false,
+        },
+        FormScreen {
+            name: "BrewNew",
+            path: "/brews/new".to_string(),
+            route: "/brews/new",
+            custom_period: false,
+        },
+        FormScreen {
+            name: "BrewEdit",
+            path: format!("/brews/{}/edit", fixture.brew_id),
+            route: "/brews/:id/edit",
+            custom_period: false,
+        },
+        FormScreen {
+            name: "ShopNew",
+            path: "/shops/new".to_string(),
+            route: "/shops/new",
+            custom_period: false,
+        },
+        FormScreen {
+            name: "ShopEdit",
+            path: format!("/shops/{}/edit", fixture.shop_id),
+            route: "/shops/:id/edit",
+            custom_period: false,
+        },
+        FormScreen {
+            name: "StatsCustom",
+            path: "/stats".to_string(),
+            route: "/stats",
+            custom_period: true,
+        },
+    ]
+}
+
+/// 幅 375 px で各フォームが横にはみ出さず、最後の入力欄まで縦スクロールで到達できることを
+/// 確かめる (0048)。
+///
+/// 症状は幅 375 px で計測したため、その幅で確かめる (390 px では `scrollWidth` が切り上げられて
+/// 条件を満たし得る)。窓の大きさは OS の下限 (macOS の Chrome は 500 px) に丸められるため、
+/// 表示の領域は CDP の端末の計測の上書きで 375 px にする。
+async fn form_layouts(browser: &E2eBrowser, fixture: &Fixture) -> Result<(), String> {
+    browser.set_window_size(375, 844).await?;
+    browser.set_viewport_size(375, 844).await?;
+    let result = check_form_layouts(browser, fixture).await;
+    // 上書きを外して窓を元の大きさに戻す (この後の手順に影響させない)。
+    let cleared = browser.clear_viewport_size().await;
+    let resized = browser.set_window_size(390, 844).await;
+    result.and(cleared).and(resized)
+}
+
+/// 各フォームの `.body` の横幅と、末尾まで縦スクロールしたときの最後の入力欄の位置を
+/// 確かめる (0048)。
+async fn check_form_layouts(browser: &E2eBrowser, fixture: &Fixture) -> Result<(), String> {
+    for form in form_screens(fixture) {
+        browser.goto(&form.path).await?;
+        browser.wait_route(form.route).await?;
+        if form.custom_period {
+            // 統計の任意の期間は「任意」を選ぶと入力欄が出る (FR-18)。
+            browser.click_text("Custom").await?;
+            browser.wait_selector(".stats-custom .grid2").await?;
+            // グラフの読み込みを待つ (読み込み中は `.body` の中身が短い)。
+            browser.wait_selector(".chart-frame").await?;
+        } else {
+            // 編集の画面は値の読み込みを待つ (読み込み中は入力欄が無い)。
+            browser.wait_selector(".form .field .box .in").await?;
+        }
+        let metrics = browser.eval_json(FORM_METRICS_SCRIPT).await?;
+        check_form_metrics(&metrics, form.name)?;
+    }
+    Ok(())
+}
+
+/// `.body` の横幅と、末尾まで縦スクロールしたときの最後の入力欄の位置を測るスクリプト
+/// (0048)。
+///
+/// 最後の入力欄は `input` と `textarea` のうち本文の順で最後のものにする。`scrollTop` を
+/// 末尾にしてから入力欄を表示の位置に入れる (`scrollIntoView`)。統計の画面は入力欄の下に
+/// グラフが続くため、末尾までのスクロールと入力欄の到達を別々に確かめられる必要がある。
+const FORM_METRICS_SCRIPT: &str = r#"
+const body = document.querySelector('.body');
+if (!body) { return JSON.stringify({ error: 'the screen must have a .body' }); }
+const inputs = body.querySelectorAll('input, textarea');
+const last = inputs.length ? inputs[inputs.length - 1] : null;
+body.scrollTop = body.scrollHeight;
+const endScrollTop = body.scrollTop;
+if (last && last.scrollIntoView) { last.scrollIntoView({ block: 'end' }); }
+const bodyRect = body.getBoundingClientRect();
+const lastRect = last ? last.getBoundingClientRect() : null;
+return JSON.stringify({
+  viewportWidth: window.innerWidth,
+  viewportHeight: window.innerHeight,
+  scrollWidth: body.scrollWidth,
+  clientWidth: body.clientWidth,
+  scrollHeight: body.scrollHeight,
+  clientHeight: body.clientHeight,
+  endScrollTop: endScrollTop,
+  body: [bodyRect.top, bodyRect.bottom, bodyRect.left, bodyRect.right],
+  last: lastRect ? [lastRect.top, lastRect.bottom, lastRect.left, lastRect.right] : null,
+});
+"#;
+
+/// フォームの計測を確かめる (0048)。
+fn check_form_metrics(metrics: &Value, name: &str) -> Result<(), String> {
+    if let Some(error) = metrics.get("error") {
+        return Err(format!("{name}: {error}"));
+    }
+    let viewport_width = metric_number(metrics, "viewportWidth")?;
+    if (viewport_width - 375.0).abs() > 0.5 {
+        return Err(format!(
+            "{name}: the viewport must be 375 px but was {viewport_width}"
+        ));
+    }
+    let scroll_width = metric_number(metrics, "scrollWidth")?;
+    let client_width = metric_number(metrics, "clientWidth")?;
+    if scroll_width > client_width {
+        return Err(format!(
+            "{name}: the form must not scroll horizontally but scrollWidth {scroll_width} exceeded clientWidth {client_width}"
+        ));
+    }
+    let scroll_height = metric_number(metrics, "scrollHeight")?;
+    let client_height = metric_number(metrics, "clientHeight")?;
+    let end_scroll_top = metric_number(metrics, "endScrollTop")?;
+    let max_scroll_top = (scroll_height - client_height).max(0.0);
+    if (end_scroll_top - max_scroll_top).abs() > 1.0 {
+        return Err(format!(
+            "{name}: the body must scroll to the end but scrollTop was {end_scroll_top} of {max_scroll_top}"
+        ));
+    }
+    let body = metric_rect(metrics, "body")?;
+    let last = metric_rect(metrics, "last")?;
+    if last[0] < body[0] - 1.0
+        || last[1] > body[1] + 1.0
+        || last[2] < body[2] - 1.0
+        || last[3] > body[3] + 1.0
+    {
+        return Err(format!(
+            "{name}: the last input must be inside the body after scrolling to the end: input {last:?} body {body:?}"
+        ));
+    }
+    // 入力欄が表示の領域の中にあること (`.body` が表示の領域に縛られず伸びる退行を防ぐ)。
+    let viewport_height = metric_number(metrics, "viewportHeight")?;
+    if last[1] > viewport_height + 1.0 {
+        return Err(format!(
+            "{name}: the last input must be inside the viewport after scrolling to the end: input {last:?} viewport height {viewport_height}"
+        ));
+    }
+    Ok(())
+}
+
+/// 購入の登録の「推測した内容で商品を登録する」のシートを開き、シートの中を縦にスクロールして
+/// 下部の入力欄と保存の操作に到達できることを確かめる (0048)。
+///
+/// シートは `.sheet` (高さ 70 vh) の中にフォームを置くため、内容が高さを超えると下部が切れて
+/// いた (0048)。表示の領域の高さを低くして内容が高さを超える状態にし、シートの本体
+/// (`.sheet .body`) を末尾までスクロールできることを確かめる。
+async fn register_sheet_scrolls(browser: &E2eBrowser) -> Result<(), String> {
+    browser.goto("/purchases/new").await?;
+    browser.wait_route("/purchases/new").await?;
+    browser.wait_selector(".form .field .box .in").await?;
+    // 推測の応答を差し替え、写真の選択のダイアログを開かないようにする。実環境の推測は
+    // Workers AI を呼ぶため E2E では使えない (0048 のテストのための仕掛け)。
+    browser.eval_string(SUGGESTION_STUB_SCRIPT).await?;
+    browser.click_text("Choose a photo").await?;
+    // 写真の入力欄は押した時点で本文に足される (frontend/src/records/photo.rs)。
+    browser
+        .choose_file_selector("input[type=file]", &photo_path()?)
+        .await?;
+    // 推測の商品名は下ごしらえした商品と一致しないため、登録の導線が出る (FR-19)。
+    browser
+        .wait_text("Add a product with the suggested values")
+        .await?;
+    browser
+        .click_text("Add a product with the suggested values")
+        .await?;
+    browser.wait_selector(".sheet .body .form").await?;
+    // 内容が 70 vh を超える高さにする (0048)。
+    browser.set_viewport_size(375, 520).await?;
+    let result = match browser.eval_json(SHEET_METRICS_SCRIPT).await {
+        Ok(metrics) => check_sheet_metrics(&metrics),
+        Err(error) => Err(error),
+    };
+    // 検査が失敗しても表示の上書きを外す (最初の失敗を保つ)。
+    let cleared = browser.clear_viewport_size().await;
+    result.and(cleared)
+}
+
+/// 推測の導線に使う写真 (リポジトリにある PNG)。chromedriver は正規化したパスを求めるため、
+/// `..` を含まない絶対パスにする。
+fn photo_path() -> Result<PathBuf, String> {
+    let path = repo_root().join("frontend/public/favicon.png");
+    fs::canonicalize(&path).map_err(|error| format!("{} must exist: {error}", path.display()))
+}
+
+/// 推測 API の応答を差し替え、写真の選択のダイアログを開かないようにするスクリプト (0048)。
+///
+/// E2E の環境では Workers AI を呼べないため、推測の応答をページの `fetch` に差し込む。返す
+/// 商品名は下ごしらえした商品と一致しないので、「推測した内容で商品を登録する」の導線が出る
+/// (FR-19)。写真の選択は `<input type="file">` のクリックでダイアログを開くため、クリックを
+/// 止めて入力欄を残し、あとから WebDriver でファイルを設定できるようにする。
+const SUGGESTION_STUB_SCRIPT: &str = r#"
+const realFetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+  const url = typeof input === 'string' ? input : (input && input.url) || '';
+  if (url.includes('/api/purchase-suggestions')) {
+    const body = JSON.stringify({
+      product: { name: 'E2E Suggested Product', producer: null, origin: null, region: null, process: null, variety: null, flavor_notes: [] },
+      roast: null, roast_date: null, price_amount: null, weight_grams: null
+    });
+    return Promise.resolve(new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } }));
+  }
+  return realFetch(input, init);
+};
+const originalClick = HTMLInputElement.prototype.click;
+HTMLInputElement.prototype.click = function () {
+  if (this.type === 'file') { window.__brewbookFileInput = this; return; }
+  return originalClick.apply(this, arguments);
+};
+"#;
+
+/// シートの中の縦スクロールと、下部の入力欄と保存の操作の位置を測るスクリプト (0048)。
+const SHEET_METRICS_SCRIPT: &str = r#"
+const sheet = document.querySelector('.sheet');
+if (!sheet) { return JSON.stringify({ error: 'the sheet must be open' }); }
+const body = sheet.querySelector('.body');
+if (!body) { return JSON.stringify({ error: 'the sheet must have a .body' }); }
+const inputs = body.querySelectorAll('input, textarea');
+const last = inputs.length ? inputs[inputs.length - 1] : null;
+body.scrollTop = body.scrollHeight;
+const endScrollTop = body.scrollTop;
+if (last && last.scrollIntoView) { last.scrollIntoView({ block: 'end' }); }
+const sheetRect = sheet.getBoundingClientRect();
+const bodyRect = body.getBoundingClientRect();
+const lastRect = last ? last.getBoundingClientRect() : null;
+const acts = sheet.querySelector('.acts');
+const actsRect = acts ? acts.getBoundingClientRect() : null;
+return JSON.stringify({
+  viewportWidth: window.innerWidth,
+  viewportHeight: window.innerHeight,
+  scrollHeight: body.scrollHeight,
+  clientHeight: body.clientHeight,
+  endScrollTop: endScrollTop,
+  sheet: [sheetRect.top, sheetRect.bottom, sheetRect.left, sheetRect.right],
+  body: [bodyRect.top, bodyRect.bottom, bodyRect.left, bodyRect.right],
+  last: lastRect ? [lastRect.top, lastRect.bottom, lastRect.left, lastRect.right] : null,
+  acts: actsRect ? [actsRect.top, actsRect.bottom, actsRect.left, actsRect.right] : null,
+});
+"#;
+
+/// シートの計測を確かめる (0048)。
+fn check_sheet_metrics(metrics: &Value) -> Result<(), String> {
+    if let Some(error) = metrics.get("error") {
+        return Err(format!("the register sheet: {error}"));
+    }
+    let scroll_height = metric_number(metrics, "scrollHeight")?;
+    let client_height = metric_number(metrics, "clientHeight")?;
+    if scroll_height <= client_height {
+        return Err(format!(
+            "the register sheet must have content taller than the body but scrollHeight {scroll_height} was not above clientHeight {client_height}"
+        ));
+    }
+    let end_scroll_top = metric_number(metrics, "endScrollTop")?;
+    let max_scroll_top = scroll_height - client_height;
+    if (end_scroll_top - max_scroll_top).abs() > 1.0 {
+        return Err(format!(
+            "the register sheet must scroll to the end but scrollTop was {end_scroll_top} of {max_scroll_top}"
+        ));
+    }
+    let body = metric_rect(metrics, "body")?;
+    let last = metric_rect(metrics, "last")?;
+    if last[0] < body[0] - 1.0 || last[1] > body[1] + 1.0 {
+        return Err(format!(
+            "the last input of the register sheet must be inside the sheet body: input {last:?} body {body:?}"
+        ));
+    }
+    let sheet = metric_rect(metrics, "sheet")?;
+    let acts = metric_rect(metrics, "acts")?;
+    if acts[0] < sheet[0] - 1.0 || acts[1] > sheet[1] + 1.0 {
+        return Err(format!(
+            "the save action of the register sheet must be inside the sheet: acts {acts:?} sheet {sheet:?}"
+        ));
+    }
+    let viewport_height = metric_number(metrics, "viewportHeight")?;
+    if acts[0] < 0.0 || acts[1] > viewport_height + 1.0 {
+        return Err(format!(
+            "the save action of the register sheet must be visible but acts {acts:?} viewport height {viewport_height}"
+        ));
+    }
+    Ok(())
+}
+
+/// 計測の JSON から数の値を読む。
+fn metric_number(metrics: &Value, key: &str) -> Result<f64, String> {
+    metrics
+        .get(key)
+        .and_then(Value::as_f64)
+        .ok_or_else(|| format!("the metrics must have {key}: {metrics}"))
+}
+
+/// 計測の JSON から矩形 (上、下、左、右) を読む。
+fn metric_rect(metrics: &Value, key: &str) -> Result<[f64; 4], String> {
+    let array = metrics
+        .get(key)
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("the metrics must have {key}: {metrics}"))?;
+    let values: Option<Vec<f64>> = array.iter().map(Value::as_f64).collect();
+    let values =
+        values.ok_or_else(|| format!("the metrics must have numbers for {key}: {metrics}"))?;
+    values
+        .try_into()
+        .map_err(|_| format!("the metrics must have four values for {key}: {metrics}"))
 }
 
 /// 比較の対象にする画面。

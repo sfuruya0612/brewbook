@@ -117,10 +117,10 @@ a { color: var(--link); }
 .chain .link { width: 2px; height: 12px; background: var(--line-strong); margin-left: 27px; }
 
 /* 入力欄 */
-.field { display: flex; flex-direction: column; gap: 6px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field .lbl { font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; color: var(--ink-muted); }
 .field .lbl .req { color: var(--ink-muted); font-weight: 400; margin-left: var(--space-1); }
-.field .box { display: flex; align-items: center; gap: var(--space-2); height: 48px; padding: 0 var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--paper-sunken); font-size: 15px; line-height: 22px; }
+.field .box { display: flex; align-items: center; gap: var(--space-2); height: 48px; padding: 0 var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--paper-sunken); font-size: 15px; line-height: 22px; min-width: 0; }
 .field .box.area { height: auto; min-height: 88px; align-items: flex-start; padding: var(--space-3); }
 .field .box.area .in { white-space: normal; overflow: visible; }
 .field .box .in { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -133,12 +133,12 @@ a { color: var(--link); }
 .field .help { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
 .field.error .help { color: var(--signal); }
 .field.disabled .box { border-color: var(--line); color: var(--ink-faint); }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3) var(--space-3); }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-3); }
 .suggest { border: 1px solid var(--line-strong); border-top: 0; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--paper-raised); box-shadow: var(--shadow-float); overflow: hidden; }
 .suggest div { padding: 10px var(--space-3); font-size: 15px; line-height: 22px; border-bottom: 1px solid var(--line); }
 .suggest div:last-child { border-bottom: 0; }
 .suggest b { color: var(--crema-ink); font-weight: 600; }
-.form { padding: var(--space-4) var(--space-4) var(--space-8); display: flex; flex-direction: column; gap: var(--space-5); }
+.form { padding: var(--space-4) var(--space-4) var(--space-8); display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
 .sec { font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; color: var(--ink-muted); padding-top: var(--space-2); }
 .picker { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--paper-sunken); }
 .picker .main { flex: 1; min-width: 0; }

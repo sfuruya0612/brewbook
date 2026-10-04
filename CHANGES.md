@@ -66,6 +66,8 @@
   - @sfuruya0612
 - [CHANGE] アプリ名と名前空間を brewbook に変更する
   - @sfuruya0612
+- [FIX] 幅 375 px のフォームの横スクロールを直し、入力欄を縦スクロールで扱えるようにする
+  - @sfuruya0612
 
 ### misc
 

@@ -694,56 +694,58 @@ pub fn PurchaseForm(
             div { class: "sheet-scrim",
                 div { class: "sheet",
                     div { class: "ttl", "{t(Key::SuggestionRegisterProductButton)}" }
-                    div { class: "form",
-                        if let Some(failure) = register_failure {
-                            Banner { message: t(record_error_key(&failure)).to_string() }
-                        }
-                        Field {
-                            label: t(Key::ProductNameLabel).to_string(),
-                            required: true,
-                            disabled: busy(),
-                            TextField {
-                                value: draft_name(),
+                    div { class: "body",
+                        div { class: "form",
+                            if let Some(failure) = register_failure {
+                                Banner { message: t(record_error_key(&failure)).to_string() }
+                            }
+                            Field {
+                                label: t(Key::ProductNameLabel).to_string(),
+                                required: true,
                                 disabled: busy(),
-                                oninput: move |event: FormEvent| draft_name.set(event.value()),
-                            }
-                        }
-                        Field { label: t(Key::Producer).to_string(), disabled: busy(),
-                            TextField {
-                                value: draft_producer(),
-                                disabled: busy(),
-                                oninput: move |event: FormEvent| draft_producer.set(event.value()),
-                            }
-                        }
-                        div { class: "grid2",
-                            Field { label: t(Key::Origin).to_string(), disabled: busy(),
                                 TextField {
-                                    value: draft_origin(),
+                                    value: draft_name(),
                                     disabled: busy(),
-                                    oninput: move |event: FormEvent| draft_origin.set(event.value()),
+                                    oninput: move |event: FormEvent| draft_name.set(event.value()),
                                 }
                             }
-                            Field { label: t(Key::Region).to_string(), disabled: busy(),
+                            Field { label: t(Key::Producer).to_string(), disabled: busy(),
                                 TextField {
-                                    value: draft_region(),
+                                    value: draft_producer(),
                                     disabled: busy(),
-                                    oninput: move |event: FormEvent| draft_region.set(event.value()),
+                                    oninput: move |event: FormEvent| draft_producer.set(event.value()),
                                 }
                             }
-                        }
-                        div { class: "grid2",
-                            Field { label: t(Key::Process).to_string(), disabled: busy(),
-                                TextField {
-                                    value: draft_process(),
-                                    disabled: busy(),
-                                    oninput: move |event: FormEvent| draft_process.set(event.value()),
+                            div { class: "grid2",
+                                Field { label: t(Key::Origin).to_string(), disabled: busy(),
+                                    TextField {
+                                        value: draft_origin(),
+                                        disabled: busy(),
+                                        oninput: move |event: FormEvent| draft_origin.set(event.value()),
+                                    }
+                                }
+                                Field { label: t(Key::Region).to_string(), disabled: busy(),
+                                    TextField {
+                                        value: draft_region(),
+                                        disabled: busy(),
+                                        oninput: move |event: FormEvent| draft_region.set(event.value()),
+                                    }
                                 }
                             }
-                            Field { label: t(Key::Variety).to_string(), disabled: busy(),
-                                TextField {
-                                    value: draft_variety(),
-                                    disabled: busy(),
-                                    oninput: move |event: FormEvent| draft_variety.set(event.value()),
+                            div { class: "grid2",
+                                Field { label: t(Key::Process).to_string(), disabled: busy(),
+                                    TextField {
+                                        value: draft_process(),
+                                        disabled: busy(),
+                                        oninput: move |event: FormEvent| draft_process.set(event.value()),
+                                    }
+                                }
+                                Field { label: t(Key::Variety).to_string(), disabled: busy(),
+                                    TextField {
+                                        value: draft_variety(),
+                                        disabled: busy(),
+                                        oninput: move |event: FormEvent| draft_variety.set(event.value()),
+                                    }
                                 }
                             }
                         }

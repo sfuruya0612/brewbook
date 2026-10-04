@@ -694,6 +694,101 @@ async fn the_wide_layout_matches_the_documented_widths() {
 }
 
 #[component]
+fn Grid2Probe() -> Element {
+    rsx! {
+        div { class: "form",
+            div { class: "grid2",
+                Field { label: "a".to_string(), TextField { value: String::new() } }
+                Field { label: "b".to_string(), TextField { value: String::new() } }
+            }
+        }
+    }
+}
+
+/// 幅 840 px 以上で 2 段組 (.grid2) の計算済みのトラックが 2 つになることを検査する (0048)。
+///
+/// テストの窓は 1280 px (frontend/webdriver.json) で、`.grid2` はフォームの幅いっぱいに
+/// 2 トラックを取る。窓が広いと `1fr 1fr` でも同じ 2 トラックになるため、この検査は
+/// 幅 375 px のはみ出しの退行を検出できない (狭い幅の検査は
+/// `the_form_grid_does_not_overflow_at_the_narrow_width` が担う)。
+#[wasm_bindgen_test]
+async fn the_form_grid_keeps_two_tracks_on_the_wide_layout() {
+    install_styles();
+    set_theme("paper");
+    let root = mount(Grid2Probe).await;
+    let grid = select(&root, ".grid2");
+
+    assert_eq!(computed(&grid, "display"), "grid");
+    let columns = computed(&grid, "grid-template-columns");
+    let tracks: Vec<&str> = columns.split_whitespace().collect();
+    assert_eq!(
+        tracks.len(),
+        2,
+        "the two-column grid must have two tracks but was {columns}"
+    );
+    assert_eq!(
+        tracks[0], tracks[1],
+        "the two tracks must have the same width: {columns}"
+    );
+    // 入力欄はトラックの中に収まる (右端が切れない)。
+    let input = select(&root, ".grid2 .field .box .in");
+    let grid_rect = grid.get_bounding_client_rect();
+    let input_rect = input.get_bounding_client_rect();
+    assert!(
+        input_rect.right() <= grid_rect.right(),
+        "the input must stay inside the grid: input {} grid {}",
+        input_rect.right(),
+        grid_rect.right()
+    );
+}
+
+#[component]
+fn NarrowGrid2Probe() -> Element {
+    rsx! {
+        // 幅 375 px の画面のフォームを模す。テストの窓は 1280 px のため、狭い幅は入れ物で作る
+        // (`.form` の左右の余白 16 px を引いた 343 px がグリッドの幅になる)。
+        div { class: "form", style: "width: 375px",
+            div { class: "grid2",
+                Field { label: "a".to_string(), TextField { value: String::new() } }
+                Field { label: "b".to_string(), TextField { value: String::new() } }
+            }
+        }
+    }
+}
+
+/// 幅 375 px のフォームで 2 段組がはみ出さないことを検査する (0048)。
+///
+/// `1fr 1fr` のトラックの最小値は中身 (入力欄の固有幅) の min-content になるため、幅 375 px
+/// では入力欄がフォームの右にはみ出し、`.body` に横スクロールが出る (0048 の症状)。
+/// `repeat(2, minmax(0, 1fr))` は入力欄の幅に依らず 2 トラックを保つ。窓 (1280 px) の検査
+/// (`the_form_grid_keeps_two_tracks_on_the_wide_layout`) は狭い幅のはみ出しを検出できない
+/// ため、この検査で退行を防ぐ。
+#[wasm_bindgen_test]
+async fn the_form_grid_does_not_overflow_at_the_narrow_width() {
+    install_styles();
+    set_theme("paper");
+    let root = mount(NarrowGrid2Probe).await;
+    let grid = select(&root, ".grid2");
+    // はみ出したトラックはグリッドの scrollWidth を clientWidth より大きくする。
+    let scroll_width = grid.scroll_width();
+    let client_width = grid.client_width();
+    assert!(
+        scroll_width <= client_width,
+        "the narrow grid must not overflow: scrollWidth {scroll_width} clientWidth {client_width}"
+    );
+    // 入力欄の右端がグリッドの右端を超えない。
+    let input = select(&root, ".grid2 .field .box .in");
+    let grid_rect = grid.get_bounding_client_rect();
+    let input_rect = input.get_bounding_client_rect();
+    assert!(
+        input_rect.right() <= grid_rect.right() + 0.5,
+        "the input must stay inside the narrow grid: input {} grid {}",
+        input_rect.right(),
+        grid_rect.right()
+    );
+}
+
+#[component]
 fn FabProbe() -> Element {
     rsx! {
         Fab { label: "x", icon: Some("add".to_string()), onclick: move |_| {} }
