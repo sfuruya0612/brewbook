@@ -19,7 +19,6 @@ use brew_book_frontend::ui::{
     RowValue, Snackbar, StatTile, StatTiles, TagChip, TextField, WideLayout, WidePage,
 };
 use dioxus::prelude::*;
-use wasm_bindgen::JsCast;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
