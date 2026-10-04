@@ -73,17 +73,9 @@ a { color: var(--link); }
 .row .sub .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .row .side { flex: none; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .row .val { font-family: var(--font-mono); font-size: 15px; line-height: 22px; font-variant-numeric: tabular-nums; }
-.row.archived .name, .row.archived .sub { color: var(--ink-muted); }
 .row.selected { background: var(--roast-soft); }
 .thumb { width: 44px; height: 44px; border-radius: var(--radius-sm); background: var(--paper-sunken); flex: none; display: flex; align-items: center; justify-content: center; color: var(--ink-faint); overflow: hidden; }
 .thumb svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; }
-.badge { display: inline-flex; align-items: center; height: 20px; padding: 0 var(--space-2); border-radius: var(--radius-sm); background: var(--paper-sunken); color: var(--ink-muted); font-size: 12px; line-height: 16px; font-weight: 500; }
-.toolbar { display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink-muted); font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; }
-.switch { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--ink-muted); }
-.switch .track { width: 36px; height: 20px; border-radius: var(--radius-full); border: 1px solid var(--line-strong); position: relative; background: transparent; }
-.switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--line-strong); }
-.switch.on .track { background: var(--roast); border-color: var(--roast); }
-.switch.on .track::after { left: 19px; background: var(--on-roast); }
 .empty { padding: var(--space-12) var(--space-6); text-align: center; color: var(--ink-muted); }
 
 /* 評価 */
@@ -221,7 +213,6 @@ a { color: var(--link); }
     <div class="banner"><span class="main">通信に失敗しました。接続を確認してもう一度お試しください。</span><span class="act">再試行</span></div>
     <div class="banner"><span class="main">入力の内容を確認してください。</span></div>
     <div><span class="snack">保存しました。</span></div>
-    <div><span class="snack">アーカイブしました。<span class="act">元に戻す</span></span></div>
   </div>
   <div class="dialog"><h2>アカウントを削除しますか？</h2><p class="t-body">アカウントと全記録を削除します。元に戻せません。</p><div class="acts"><span class="btn text">キャンセル</span><span class="btn danger">削除する</span></div></div>
 </div>

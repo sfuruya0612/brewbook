@@ -200,7 +200,7 @@ pub fn PurchaseForm(
                 unmatched_product.set(None);
                 return;
             }
-            let matched = match api.products(None, false, name.as_deref()).await {
+            let matched = match api.products(None, name.as_deref()).await {
                 Ok(page) => page.items.into_iter().next(),
                 Err(_) => {
                     if suggestion_generation() == generation {
@@ -387,20 +387,20 @@ pub fn PurchaseForm(
         });
     });
 
-    // 参照先の選択のシートの一覧 (アーカイブ済みは含めない。FR-9)。
+    // 参照先の選択のシートの一覧 (FR-9)。
     let picker_services = services.clone();
     let product_load = RecordLoader::new({
         let services = picker_services.clone();
-        move |cursor, _include_archived| {
+        move |cursor| {
             let api = RecordsApi::new(services.api.clone());
-            Box::pin(async move { api.products(cursor.as_deref(), false, None).await })
+            Box::pin(async move { api.products(cursor.as_deref(), None).await })
         }
     });
     let shop_load = RecordLoader::new({
         let services = picker_services.clone();
-        move |cursor, _include_archived| {
+        move |cursor| {
             let api = RecordsApi::new(services.api.clone());
-            Box::pin(async move { api.shops(cursor.as_deref(), false).await })
+            Box::pin(async move { api.shops(cursor.as_deref()).await })
         }
     });
     let product_row = Callback::new(move |choice: Product| {

@@ -1,6 +1,6 @@
 //! 全記録のエクスポートの結合テスト (HTTP)。
 //!
-//! FR-14 の受け入れ基準 (6 テーブルのアーカイブ済みを含む全行と全列、パスキーとセッションと
+//! FR-14 の受け入れ基準 (6 テーブルの全行と全列、パスキーとセッションと
 //! チャレンジと登録用トークンの除外、`photo_key` と写真取得 API のパス、写真の実体の除外) と、
 //! 成功指標の測定方法 (テスト専用の復元処理で別の利用者に取り込み、`user_id` と `photo_key` の
 //! 利用者 ID を付け替えた上で 6 テーブルの全行と全列を比較する) を検査する。
@@ -64,7 +64,6 @@ const TABLES: &[Table] = &[
             "address",
             "created_at",
             "updated_at",
-            "archived_at",
         ],
     },
     Table {
@@ -81,7 +80,6 @@ const TABLES: &[Table] = &[
             "variety",
             "created_at",
             "updated_at",
-            "archived_at",
         ],
     },
     Table {
@@ -111,7 +109,6 @@ const TABLES: &[Table] = &[
             "photo_key",
             "created_at",
             "updated_at",
-            "archived_at",
         ],
     },
     Table {
@@ -132,7 +129,6 @@ const TABLES: &[Table] = &[
             "notes",
             "created_at",
             "updated_at",
-            "archived_at",
         ],
     },
 ];
@@ -258,30 +254,30 @@ fn build_data() -> TestData {
 /// 任意の列は NULL の行と値のある行を混ぜ、エクスポートが全列を運ぶことを比較で検出できるようにする。
 /// 写真の `photo_key` は ADR-0003 のキーの形 (`users/<利用者 ID>/purchases/<購入 ID>/<UUID>.jpg`) にする。
 fn records(seed: &mut Seed, user: &str, prefix: &str) {
-    // 店。添字 0 は住所あり、添字 1 は住所なしでアーカイブ済み。
+    // 店。添字 0 は住所あり、添字 1 は住所なし。
     seed.raw(&format!(
-        "INSERT INTO shops (id, user_id, name, address, created_at, updated_at, archived_at) \
-         VALUES ('{}', '{user}', '{prefix} の店 0 O''Brien', '{prefix} の住所 0', '{T21}', '{T21}', NULL)",
+        "INSERT INTO shops (id, user_id, name, address, created_at, updated_at) \
+         VALUES ('{}', '{user}', '{prefix} の店 0 O''Brien', '{prefix} の住所 0', '{T21}', '{T21}')",
         row_id(prefix, "shop", 0)
     ));
     seed.raw(&format!(
-        "INSERT INTO shops (id, user_id, name, address, created_at, updated_at, archived_at) \
-         VALUES ('{}', '{user}', '{prefix} の店 1', NULL, '{T20}', '{T20}', '{T20}')",
+        "INSERT INTO shops (id, user_id, name, address, created_at, updated_at) \
+         VALUES ('{}', '{user}', '{prefix} の店 1', NULL, '{T20}', '{T20}')",
         row_id(prefix, "shop", 1)
     ));
 
-    // 商品。添字 0 は任意の列を埋め、添字 1 は名前以外を NULL にしてアーカイブ済み。
+    // 商品。添字 0 は任意の列を埋め、添字 1 は名前以外を NULL にする。
     seed.raw(&format!(
         "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
-         created_at, updated_at, archived_at) VALUES \
+         created_at, updated_at) VALUES \
          ('{}', '{user}', '{prefix} の商品 0', '{prefix} の生産者 0', 'エチオピア', \
-          'イルガチェフェ', 'ウォッシュト', '在来種', '{T21}', '{T21}', NULL)",
+          'イルガチェフェ', 'ウォッシュト', '在来種', '{T21}', '{T21}')",
         row_id(prefix, "product", 0)
     ));
     seed.raw(&format!(
         "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
-         created_at, updated_at, archived_at) VALUES \
-         ('{}', '{user}', '{prefix} の商品 1', NULL, NULL, NULL, NULL, NULL, '{T20}', '{T20}', '{T20}')",
+         created_at, updated_at) VALUES \
+         ('{}', '{user}', '{prefix} の商品 1', NULL, NULL, NULL, NULL, NULL, '{T20}', '{T20}')",
         row_id(prefix, "product", 1)
     ));
 
@@ -309,12 +305,12 @@ fn records(seed: &mut Seed, user: &str, prefix: &str) {
         row_id(prefix, "tag", 0)
     ));
 
-    // 購入。添字 0 は全列を埋め、添字 1 は店と任意の列を NULL にし、添字 2 はアーカイブ済み。
+    // 購入。添字 0 は全列を埋め、添字 1 は店と任意の列を NULL にし、添字 2 は店を参照する。
     seed.raw(&format!(
         "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, roast_date, \
-         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at, archived_at) \
+         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at) \
          VALUES ('{}', '{user}', '{}', '{}', '{D21}', '中煎り', '{D19}', 1200, 'JPY', 200, '{}', \
-          '{T21}', '{T21}', NULL)",
+          '{T21}', '{T21}')",
         row_id(prefix, "purchase", 0),
         row_id(prefix, "product", 0),
         row_id(prefix, "shop", 0),
@@ -322,48 +318,48 @@ fn records(seed: &mut Seed, user: &str, prefix: &str) {
     ));
     seed.raw(&format!(
         "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, roast_date, \
-         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at, archived_at) \
+         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at) \
          VALUES ('{}', '{user}', '{}', NULL, '{D20}', NULL, NULL, NULL, NULL, NULL, NULL, \
-          '{T20}', '{T20}', NULL)",
+          '{T20}', '{T20}')",
         row_id(prefix, "purchase", 1),
         row_id(prefix, "product", 1)
     ));
     seed.raw(&format!(
         "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, roast_date, \
-         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at, archived_at) \
+         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at) \
          VALUES ('{}', '{user}', '{}', '{}', '{D19}', NULL, NULL, NULL, NULL, NULL, '{}', \
-          '{T19}', '{T19}', '{T19}')",
+          '{T19}', '{T19}')",
         row_id(prefix, "purchase", 2),
         row_id(prefix, "product", 0),
         row_id(prefix, "shop", 1),
         photo_key(user, prefix, 2)
     ));
 
-    // 抽出。添字 0 は全列を埋め、添字 1 は任意の列を NULL にし、添字 2 はアーカイブ済み。
+    // 抽出。添字 0 は全列を埋め、添字 1 と添字 2 は任意の列を NULL にする。
     seed.raw(&format!(
         "INSERT INTO brews (id, user_id, purchase_id, brewed_at, dose_grams, water_grams, \
          water_temp_c, brew_time_seconds, method, grind_setting, rating, notes, created_at, \
-         updated_at, archived_at) VALUES \
+         updated_at) VALUES \
          ('{}', '{user}', '{}', '{B21}', 15.5, 250.5, 92.5, 150, 'ペーパードリップ', '中細', 4, \
-          '良い出来', '{T21}', '{T21}', NULL)",
+          '良い出来', '{T21}', '{T21}')",
         row_id(prefix, "brew", 0),
         row_id(prefix, "purchase", 0)
     ));
     seed.raw(&format!(
         "INSERT INTO brews (id, user_id, purchase_id, brewed_at, dose_grams, water_grams, \
          water_temp_c, brew_time_seconds, method, grind_setting, rating, notes, created_at, \
-         updated_at, archived_at) VALUES \
+         updated_at) VALUES \
          ('{}', '{user}', '{}', '{B20}', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
-          '{T20}', '{T20}', NULL)",
+          '{T20}', '{T20}')",
         row_id(prefix, "brew", 1),
         row_id(prefix, "purchase", 1)
     ));
     seed.raw(&format!(
         "INSERT INTO brews (id, user_id, purchase_id, brewed_at, dose_grams, water_grams, \
          water_temp_c, brew_time_seconds, method, grind_setting, rating, notes, created_at, \
-         updated_at, archived_at) VALUES \
+         updated_at) VALUES \
          ('{}', '{user}', '{}', '{B19}', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, \
-          '{T19}', '{T19}', '{T19}')",
+          '{T19}', '{T19}')",
         row_id(prefix, "brew", 2),
         row_id(prefix, "purchase", 2)
     ));
@@ -649,7 +645,7 @@ fn wrangler_export_ok() {
         "the export must have the six tables: {body}"
     );
 
-    // 6 テーブルのアーカイブ済みを含む全行と全列が含まれる (FR-14)。
+    // 6 テーブルの全行と全列が含まれる (FR-14)。
     for table in TABLES {
         let rows = table_rows(&body, table);
         let count = RECORD_COUNTS
@@ -679,14 +675,6 @@ fn wrangler_export_ok() {
             assert_eq!(
                 row["user_id"], data.export_user,
                 "the {} row must be the caller's: {body}",
-                table.name
-            );
-        }
-        // アーカイブ済みの行も含まれる (FR-14)。
-        if table.columns.contains(&"archived_at") {
-            assert!(
-                rows.iter().any(|row| row["archived_at"].is_string()),
-                "the archived {} rows must be exported: {body}",
                 table.name
             );
         }

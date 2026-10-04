@@ -8,14 +8,12 @@ use dioxus_router::navigator;
 
 use crate::i18n::{current_language, t, Key};
 use crate::records::display::{brew_reference_tiles, count_text, number_text, rating_text};
-use crate::records::{record_error_key, RecordError, RecordServices, RecordsApi};
+use crate::records::{RecordError, RecordServices, RecordsApi};
 use crate::router::Route;
 use crate::screens::ScreenAppBar;
-use crate::ui::{
-    ArchivedBadge, IconButton, Ledger, LedgerRow, Rating, ReferenceChain, ReferenceTile,
-};
+use crate::ui::{IconButton, Ledger, LedgerRow, Rating, ReferenceChain, ReferenceTile};
 
-use super::{archive_button, clear_notice_after, mark_records_changed, retryable_banner};
+use super::{clear_notice_after, retryable_banner};
 
 /// 抽出の詳細 (FR-11)。
 #[component]
@@ -40,8 +38,8 @@ pub fn BrewDetail(
     on_edit: Option<EventHandler<()>>,
 ) -> Element {
     let services = use_context::<RecordServices>();
-    let mut revision = use_context::<Signal<u64>>();
-    let mut notice = use_context::<Signal<Option<String>>>();
+    let revision = use_context::<Signal<u64>>();
+    let notice = use_context::<Signal<Option<String>>>();
     let navigator = navigator();
     let mut brew = use_signal(|| None::<crate::records::Brew>);
     let mut error = use_signal(|| None::<RecordError>);
@@ -69,40 +67,12 @@ pub fn BrewDetail(
         reload.call(());
     });
 
-    let toggle_services = services.clone();
-    let toggle_id = id.clone();
-    let toggle = move |_| {
-        let Some(current) = brew() else {
-            return;
-        };
-        let api = RecordsApi::new(toggle_services.api.clone());
-        let id = toggle_id.clone();
-        let archived = !current.is_archived();
-        spawn(async move {
-            match api.set_brew_archived(&id, archived).await {
-                Ok(updated) => {
-                    let message = if updated.is_archived() {
-                        Key::ArchivedMessage
-                    } else {
-                        Key::UnarchivedMessage
-                    };
-                    brew.set(Some(updated));
-                    notice.set(Some(t(message).to_string()));
-                    mark_records_changed(&mut revision);
-                }
-                Err(failure) => notice.set(Some(t(record_error_key(&failure)).to_string())),
-            }
-        });
-    };
-
     let language = current_language();
     let offset = services.clock.utc_offset_minutes();
     let current = brew();
     let failure = error();
-    let actions = current.as_ref().map(|brew| {
-        let archived = brew.is_archived();
+    let actions = current.as_ref().map(|_| {
         rsx! {
-            {archive_button(archived, false, EventHandler::new(toggle))}
             IconButton {
                 name: "edit".to_string(),
                 label: t(Key::EditButton).to_string(),
@@ -131,12 +101,7 @@ pub fn BrewDetail(
                 if let Some(brew) = current {
                     div { class: "detail",
                         div { class: "detail-head",
-                            div { class: "name",
-                                "{brew.purchase.product.name}"
-                                if brew.is_archived() {
-                                    ArchivedBadge {}
-                                }
-                            }
+                            div { class: "name", "{brew.purchase.product.name}" }
                             div { class: "t-value muted",
                                 {crate::records::values::parse_utc_to_local(&brew.brewed_at, offset)
                                     .map(|datetime| crate::records::values::display_timestamp(datetime, language))

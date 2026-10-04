@@ -139,9 +139,9 @@ proptest! {
         }
     }
 
-    /// 組み立てた文はどれも利用者 ID と archived_at の条件を持ち、値がプレースホルダで渡る。
+    /// 組み立てた文はどれも利用者 ID の条件を持ち、値がプレースホルダで渡る。
     #[test]
-    fn every_generated_stats_query_keeps_the_user_and_archived_conditions(
+    fn every_generated_stats_query_keeps_the_user_condition(
         granularity in a_granularity(),
         offset in an_offset(),
         period in a_period(),
@@ -156,7 +156,6 @@ proptest! {
         ];
         for statement in statements {
             prop_assert!(statement.sql.contains("user_id = ?"), "{}", statement.sql);
-            prop_assert!(statement.sql.contains("archived_at IS NULL"), "{}", statement.sql);
             prop_assert!(statement.params.contains(&Value::Text(USER_ID.to_owned())));
             prop_assert_eq!(statement.sql.matches('?').count(), statement.params.len());
             // 利用者の入力の文字列は SQL に連結しない (ADR-0006)。

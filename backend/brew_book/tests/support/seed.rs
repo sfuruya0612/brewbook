@@ -238,7 +238,7 @@ impl Seed {
         self
     }
 
-    /// 店の行を入れる。住所と `archived_at` は任意。
+    /// 店の行を入れる。住所は任意。
     pub fn shop(
         &mut self,
         user_id: &str,
@@ -246,19 +246,17 @@ impl Seed {
         address: Option<&str>,
         created_at: &str,
         updated_at: &str,
-        archived_at: Option<&str>,
     ) -> SeededShop {
         let id = self.next_id();
         self.push(format!(
-            "INSERT INTO shops (id, user_id, name, address, created_at, updated_at, archived_at) \
-             VALUES ({}, {}, {}, {}, {}, {}, {})",
+            "INSERT INTO shops (id, user_id, name, address, created_at, updated_at) \
+             VALUES ({}, {}, {}, {}, {}, {})",
             literal(&id),
             literal(user_id),
             literal(name),
             address.map_or_else(|| "NULL".to_owned(), literal),
             literal(created_at),
-            literal(updated_at),
-            archived_at.map_or_else(|| "NULL".to_owned(), literal)
+            literal(updated_at)
         ));
         SeededShop {
             id,
@@ -273,7 +271,6 @@ impl Seed {
         name: &str,
         created_at: &str,
         updated_at: &str,
-        archived_at: Option<&str>,
     ) -> SeededProduct {
         self.product_with_texts(
             user_id,
@@ -281,7 +278,6 @@ impl Seed {
             ProductTexts::default(),
             created_at,
             updated_at,
-            archived_at,
         )
     }
 
@@ -294,12 +290,11 @@ impl Seed {
         texts: ProductTexts<'_>,
         created_at: &str,
         updated_at: &str,
-        archived_at: Option<&str>,
     ) -> SeededProduct {
         let id = self.next_id();
         self.push(format!(
             "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
-             created_at, updated_at, archived_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+             created_at, updated_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
             literal(&id),
             literal(user_id),
             literal(name),
@@ -309,8 +304,7 @@ impl Seed {
             texts.process.map_or_else(|| "NULL".to_owned(), literal),
             texts.variety.map_or_else(|| "NULL".to_owned(), literal),
             literal(created_at),
-            literal(updated_at),
-            archived_at.map_or_else(|| "NULL".to_owned(), literal)
+            literal(updated_at)
         ));
         SeededProduct {
             id,
@@ -351,7 +345,6 @@ impl Seed {
         purchased_on: &str,
         created_at: &str,
         updated_at: &str,
-        archived_at: Option<&str>,
     ) -> SeededPurchase {
         self.purchase_with_roast(
             user_id,
@@ -361,7 +354,6 @@ impl Seed {
             None,
             created_at,
             updated_at,
-            archived_at,
         )
     }
 
@@ -376,14 +368,13 @@ impl Seed {
         roast: Option<&str>,
         created_at: &str,
         updated_at: &str,
-        archived_at: Option<&str>,
     ) -> SeededPurchase {
         let id = self.next_id();
         let shop = shop_id.map_or_else(|| "NULL".to_owned(), literal);
         let roast = roast.map_or_else(|| "NULL".to_owned(), literal);
         self.push(format!(
             "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, \
-             created_at, updated_at, archived_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {})",
+             created_at, updated_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {})",
             literal(&id),
             literal(user_id),
             literal(product_id),
@@ -391,8 +382,7 @@ impl Seed {
             literal(purchased_on),
             roast,
             literal(created_at),
-            literal(updated_at),
-            archived_at.map_or_else(|| "NULL".to_owned(), literal)
+            literal(updated_at)
         ));
         SeededPurchase {
             id,
@@ -409,7 +399,6 @@ impl Seed {
         brewed_at: &str,
         created_at: &str,
         updated_at: &str,
-        archived_at: Option<&str>,
     ) -> SeededBrew {
         self.brew_with_texts(
             user_id,
@@ -418,7 +407,6 @@ impl Seed {
             BrewTexts::default(),
             created_at,
             updated_at,
-            archived_at,
         )
     }
 
@@ -432,12 +420,11 @@ impl Seed {
         texts: BrewTexts<'_>,
         created_at: &str,
         updated_at: &str,
-        archived_at: Option<&str>,
     ) -> SeededBrew {
         let id = self.next_id();
         self.push(format!(
             "INSERT INTO brews (id, user_id, purchase_id, brewed_at, method, grind_setting, \
-             created_at, updated_at, archived_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {})",
+             created_at, updated_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {})",
             literal(&id),
             literal(user_id),
             literal(purchase_id),
@@ -447,8 +434,7 @@ impl Seed {
                 .grind_setting
                 .map_or_else(|| "NULL".to_owned(), literal),
             literal(created_at),
-            literal(updated_at),
-            archived_at.map_or_else(|| "NULL".to_owned(), literal)
+            literal(updated_at)
         ));
         SeededBrew {
             id,
@@ -472,13 +458,12 @@ impl Seed {
         rating: Option<i64>,
         created_at: &str,
         updated_at: &str,
-        archived_at: Option<&str>,
     ) -> SeededBrew {
         let id = self.next_id();
         self.push(format!(
             "INSERT INTO brews (id, user_id, purchase_id, brewed_at, dose_grams, water_grams, \
-             water_temp_c, brew_time_seconds, rating, created_at, updated_at, archived_at) \
-             VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+             water_temp_c, brew_time_seconds, rating, created_at, updated_at) \
+             VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
             literal(&id),
             literal(user_id),
             literal(purchase_id),
@@ -489,8 +474,7 @@ impl Seed {
             count(brew_time_seconds),
             count(rating),
             literal(created_at),
-            literal(updated_at),
-            archived_at.map_or_else(|| "NULL".to_owned(), literal)
+            literal(updated_at)
         ));
         SeededBrew {
             id,
@@ -513,13 +497,12 @@ impl Seed {
         weight_grams: Option<i64>,
         created_at: &str,
         updated_at: &str,
-        archived_at: Option<&str>,
     ) -> SeededPurchase {
         let id = self.next_id();
         self.push(format!(
             "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, \
-             price_amount, price_currency, weight_grams, created_at, updated_at, archived_at) \
-             VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+             price_amount, price_currency, weight_grams, created_at, updated_at) \
+             VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
             literal(&id),
             literal(user_id),
             literal(product_id),
@@ -529,8 +512,7 @@ impl Seed {
             price_currency.map_or_else(|| "NULL".to_owned(), literal),
             count(weight_grams),
             literal(created_at),
-            literal(updated_at),
-            archived_at.map_or_else(|| "NULL".to_owned(), literal)
+            literal(updated_at)
         ));
         SeededPurchase {
             id,

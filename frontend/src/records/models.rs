@@ -25,8 +25,6 @@ pub struct Shop {
     pub created_at: String,
     /// 更新日時。
     pub updated_at: String,
-    /// アーカイブした日時。アーカイブ済みでなければ None (FR-12)。
-    pub archived_at: Option<String>,
 }
 
 impl Shop {
@@ -38,13 +36,7 @@ impl Shop {
             address: optional_string(json, "address")?,
             created_at: string_field(json, "created_at")?,
             updated_at: string_field(json, "updated_at")?,
-            archived_at: optional_string(json, "archived_at")?,
         })
-    }
-
-    /// アーカイブ済みか (FR-12)。
-    pub fn is_archived(&self) -> bool {
-        self.archived_at.is_some()
     }
 }
 
@@ -71,8 +63,6 @@ pub struct Product {
     pub created_at: String,
     /// 更新日時。
     pub updated_at: String,
-    /// アーカイブした日時。アーカイブ済みでなければ None (FR-12)。
-    pub archived_at: Option<String>,
 }
 
 impl Product {
@@ -89,13 +79,7 @@ impl Product {
             flavor_notes: string_list(json, "flavor_notes")?,
             created_at: string_field(json, "created_at")?,
             updated_at: string_field(json, "updated_at")?,
-            archived_at: optional_string(json, "archived_at")?,
         })
-    }
-
-    /// アーカイブ済みか (FR-12)。
-    pub fn is_archived(&self) -> bool {
-        self.archived_at.is_some()
     }
 }
 
@@ -126,8 +110,6 @@ pub struct Purchase {
     pub created_at: String,
     /// 更新日時。
     pub updated_at: String,
-    /// アーカイブした日時。アーカイブ済みでなければ None (FR-12)。
-    pub archived_at: Option<String>,
     /// 商品。必須の参照のため常にある (FR-9)。
     pub product: Product,
     /// 店。店が無い購入では None (FR-9)。
@@ -153,15 +135,9 @@ impl Purchase {
             photo_key: optional_string(json, "photo_key")?,
             created_at: string_field(json, "created_at")?,
             updated_at: string_field(json, "updated_at")?,
-            archived_at: optional_string(json, "archived_at")?,
             product: Product::from_json(&object_field(json, "product")?)?,
             shop,
         })
-    }
-
-    /// アーカイブ済みか (FR-12)。
-    pub fn is_archived(&self) -> bool {
-        self.archived_at.is_some()
     }
 }
 
@@ -194,8 +170,6 @@ pub struct Brew {
     pub created_at: String,
     /// 更新日時。
     pub updated_at: String,
-    /// アーカイブした日時。アーカイブ済みでなければ None (FR-12)。
-    pub archived_at: Option<String>,
     /// 購入。必須の参照のため常にある。中に商品と店を含む (FR-11)。
     pub purchase: Purchase,
 }
@@ -217,14 +191,8 @@ impl Brew {
             notes: optional_string(json, "notes")?,
             created_at: string_field(json, "created_at")?,
             updated_at: string_field(json, "updated_at")?,
-            archived_at: optional_string(json, "archived_at")?,
             purchase: Purchase::from_json(&object_field(json, "purchase")?)?,
         })
-    }
-
-    /// アーカイブ済みか (FR-12)。
-    pub fn is_archived(&self) -> bool {
-        self.archived_at.is_some()
     }
 }
 

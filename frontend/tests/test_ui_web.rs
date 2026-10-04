@@ -374,7 +374,7 @@ async fn the_icon_is_material_icons_outlined_at_24_px() {
 fn ListRowProbe() -> Element {
     rsx! {
         ListRow { title: "x", subtitle: rsx! { RowValue { text: "2026-10-02" } } }
-        ListRow { title: "y", archived: true, selected: true }
+        ListRow { title: "y", selected: true }
     }
 }
 
@@ -396,20 +396,12 @@ async fn the_list_row_matches_the_tokens() {
     let value = select(&root, ".row .sub .v");
     assert!(computed(&value, "font-family").contains("IBM Plex Mono"));
     assert_eq!(computed(&value, "font-variant-numeric"), "tabular-nums");
-    // 選択中の地は --roast-soft #e6d6c2、アーカイブ済みの名前は --ink-muted。
+    // 選択中の地は --roast-soft #e6d6c2。
     let selected = select(&root, ".row.selected");
     assert_eq!(
         computed(&selected, "background-color"),
         "rgb(230, 214, 194)"
     );
-    let archived = select(&root, ".row.archived .name");
-    assert_eq!(computed(&archived, "color"), "rgb(106, 88, 71)");
-    // バッジは高さ 20 px、角丸 4 px、地 --paper-sunken。
-    let badge = select(&root, ".badge");
-    assert_eq!(computed(&badge, "height"), "20px");
-    assert_eq!(computed(&badge, "border-top-left-radius"), "4px");
-    assert_eq!(computed(&badge, "background-color"), "rgb(234, 224, 209)");
-    assert_eq!(computed(&badge, "color"), "rgb(106, 88, 71)");
 }
 
 #[component]

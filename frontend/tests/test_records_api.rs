@@ -1,8 +1,8 @@
 //! `records::api` と `records::upload` の単体テスト (0041)。
 //!
-//! 経路、クエリ、本文、応答の型への変換を、偽の送信の実装で確かめる。記録の登録、閲覧、編集、
-//! アーカイブ、アーカイブ解除 (完了条件 1) と、写真のアップロードの 3 回の呼び出し (FR-10)、
-//! サジェスト (FR-13)、推測 (FR-19) を覆う。
+//! 経路、クエリ、本文、応答の型への変換を、偽の送信の実装で確かめる。記録の登録、閲覧、編集
+//! (完了条件 1) と、写真のアップロードの 3 回の呼び出し (FR-10)、サジェスト (FR-13)、
+//! 推測 (FR-19) を覆う。
 
 mod support;
 
@@ -26,7 +26,6 @@ fn shop_json(id: &str, name: &str) -> Value {
         "address": null,
         "created_at": "2026-10-01T00:00:00.000Z",
         "updated_at": "2026-10-01T00:00:00.000Z",
-        "archived_at": null,
     })
 }
 
@@ -44,7 +43,6 @@ fn product_json(id: &str, name: &str) -> Value {
         "flavor_notes": [],
         "created_at": "2026-10-01T00:00:00.000Z",
         "updated_at": "2026-10-01T00:00:00.000Z",
-        "archived_at": null,
     })
 }
 
@@ -64,7 +62,6 @@ fn purchase_json(id: &str, product_id: &str, shop_id: Option<&str>) -> Value {
         "photo_key": null,
         "created_at": "2026-10-01T00:00:00.000Z",
         "updated_at": "2026-10-01T00:00:00.000Z",
-        "archived_at": null,
         "product": product_json(product_id, "豆"),
         "shop": shop_id.map(|id| shop_json(id, "店")),
     })
@@ -87,7 +84,6 @@ fn brew_json(id: &str, purchase_id: &str) -> Value {
         "notes": null,
         "created_at": "2026-10-01T00:00:00.000Z",
         "updated_at": "2026-10-01T00:00:00.000Z",
-        "archived_at": null,
         "purchase": purchase_json(purchase_id, "product", None),
     })
 }
@@ -105,7 +101,7 @@ fn with_response(body: Value) -> (RecordsApi, Rc<support::FakeTransport>) {
 fn the_shops_list_sends_the_paging_query_and_reads_the_page() {
     let (api, transport) =
         with_response(json!({"shops": [shop_json("s1", "店")], "next_cursor": "cur"}));
-    let page = block_on(api.shops(None, false)).expect("the page must be read");
+    let page = block_on(api.shops(None)).expect("the page must be read");
     assert_eq!(page.items.len(), 1);
     assert_eq!(page.items[0].name, "店");
     assert_eq!(page.next_cursor.as_deref(), Some("cur"));
@@ -114,17 +110,17 @@ fn the_shops_list_sends_the_paging_query_and_reads_the_page() {
     assert_eq!(request.path, "/api/shops?limit=50");
 
     let (api, transport) = with_response(json!({"shops": [], "next_cursor": null}));
-    let page = block_on(api.shops(Some("cur"), true)).expect("the page must be read");
+    let page = block_on(api.shops(Some("cur"))).expect("the page must be read");
     assert!(page.items.is_empty());
     assert_eq!(page.next_cursor, None);
     assert_eq!(
         transport.last_request().path,
-        "/api/shops?limit=50&include_archived=true&cursor=cur"
+        "/api/shops?limit=50&cursor=cur"
     );
 }
 
 #[test]
-fn a_shop_is_read_created_updated_and_archived() {
+fn a_shop_is_read_created_and_updated() {
     let (api, transport) = with_response(shop_json("s1", "店"));
     let shop = block_on(api.shop("s1")).expect("the shop must be read");
     assert_eq!(shop.id, "s1");
@@ -147,20 +143,13 @@ fn a_shop_is_read_created_updated_and_archived() {
     let request = transport.last_request();
     assert_eq!(request.method, Method::Patch);
     assert_eq!(request.path, "/api/shops/s1");
-
-    let (api, transport) = with_response(shop_json("s1", "店"));
-    let _ = block_on(api.set_shop_archived("s1", true)).expect("the shop must be archived");
-    assert_eq!(transport.last_request().path, "/api/shops/s1/archive");
-    let (api, transport) = with_response(shop_json("s1", "店"));
-    let _ = block_on(api.set_shop_archived("s1", false)).expect("the shop must be unarchived");
-    assert_eq!(transport.last_request().path, "/api/shops/s1/unarchive");
 }
 
 #[test]
 fn the_products_list_sends_the_name_filter_and_reads_the_page() {
     let (api, transport) =
         with_response(json!({"products": [product_json("p1", "豆")], "next_cursor": null}));
-    let page = block_on(api.products(None, false, Some("豆 山"))).expect("the page must be read");
+    let page = block_on(api.products(None, Some("豆 山"))).expect("the page must be read");
     assert_eq!(page.items[0].name, "豆");
     assert_eq!(
         transport.last_request().path,
@@ -169,7 +158,7 @@ fn the_products_list_sends_the_name_filter_and_reads_the_page() {
 }
 
 #[test]
-fn a_product_is_read_created_updated_and_archived() {
+fn a_product_is_read_created_and_updated() {
     let (api, transport) = with_response(product_json("p1", "豆"));
     let product = block_on(api.product("p1")).expect("the product must be read");
     assert_eq!(product.id, "p1");
@@ -206,20 +195,10 @@ fn a_product_is_read_created_updated_and_archived() {
     let request = transport.last_request();
     assert_eq!(request.method, Method::Patch);
     assert_eq!(request.path, "/api/products/p1");
-
-    let (api, transport) = with_response(product_json("p1", "豆"));
-    let _ = block_on(api.set_product_archived("p1", true)).expect("the product must be archived");
-    assert_eq!(transport.last_request().path, "/api/products/p1/archive");
-
-    // アーカイブ解除も同じ経路の逆向きの操作で行う (完了条件 1)。
-    let (api, transport) = with_response(product_json("p1", "豆"));
-    let _ =
-        block_on(api.set_product_archived("p1", false)).expect("the product must be unarchived");
-    assert_eq!(transport.last_request().path, "/api/products/p1/unarchive");
 }
 
 #[test]
-fn a_purchase_is_read_created_updated_and_archived() {
+fn a_purchase_is_read_created_and_updated() {
     let (api, transport) = with_response(purchase_json("b1", "p1", Some("s1")));
     let purchase = block_on(api.purchase("b1")).expect("the purchase must be read");
     assert_eq!(purchase.product.name, "豆");
@@ -251,37 +230,26 @@ fn a_purchase_is_read_created_updated_and_archived() {
     let (api, transport) = with_response(purchase_json("b1", "p1", None));
     let _ = block_on(api.update_purchase("b1", &input)).expect("the purchase must be updated");
     assert_eq!(transport.last_request().path, "/api/purchases/b1");
-
-    let (api, transport) = with_response(purchase_json("b1", "p1", None));
-    let _ = block_on(api.set_purchase_archived("b1", true)).expect("the purchase must be archived");
-    assert_eq!(transport.last_request().path, "/api/purchases/b1/archive");
-    let (api, transport) = with_response(purchase_json("b1", "p1", None));
-    let _ =
-        block_on(api.set_purchase_archived("b1", false)).expect("the purchase must be unarchived");
-    assert_eq!(transport.last_request().path, "/api/purchases/b1/unarchive");
 }
 
 #[test]
 fn the_purchases_and_brews_lists_send_the_paging_query() {
     let (api, transport) =
         with_response(json!({"purchases": [purchase_json("b1", "p1", None)], "next_cursor": null}));
-    let page = block_on(api.purchases(None, false)).expect("the page must be read");
+    let page = block_on(api.purchases(None)).expect("the page must be read");
     assert_eq!(page.items.len(), 1);
     assert_eq!(transport.last_request().path, "/api/purchases?limit=50");
 
     let (api, transport) =
         with_response(json!({"brews": [brew_json("w1", "b1")], "next_cursor": "c"}));
-    let page = block_on(api.brews(None, true)).expect("the page must be read");
+    let page = block_on(api.brews(None)).expect("the page must be read");
     assert_eq!(page.items[0].purchase.product.name, "豆");
     assert_eq!(page.next_cursor.as_deref(), Some("c"));
-    assert_eq!(
-        transport.last_request().path,
-        "/api/brews?limit=50&include_archived=true"
-    );
+    assert_eq!(transport.last_request().path, "/api/brews?limit=50");
 }
 
 #[test]
-fn a_brew_is_read_created_updated_and_archived() {
+fn a_brew_is_read_created_and_updated() {
     let (api, transport) = with_response(brew_json("w1", "b1"));
     let brew = block_on(api.brew("w1")).expect("the brew must be read");
     assert_eq!(brew.id, "w1");
@@ -311,15 +279,6 @@ fn a_brew_is_read_created_updated_and_archived() {
     let (api, transport) = with_response(brew_json("w1", "b1"));
     let _ = block_on(api.update_brew("w1", &input)).expect("the brew must be updated");
     assert_eq!(transport.last_request().path, "/api/brews/w1");
-
-    let (api, transport) = with_response(brew_json("w1", "b1"));
-    let _ = block_on(api.set_brew_archived("w1", true)).expect("the brew must be archived");
-    assert_eq!(transport.last_request().path, "/api/brews/w1/archive");
-
-    // アーカイブ解除も同じ経路の逆向きの操作で行う (完了条件 1)。
-    let (api, transport) = with_response(brew_json("w1", "b1"));
-    let _ = block_on(api.set_brew_archived("w1", false)).expect("the brew must be unarchived");
-    assert_eq!(transport.last_request().path, "/api/brews/w1/unarchive");
 }
 
 #[test]
@@ -411,7 +370,7 @@ fn the_suggestions_query_is_encoded_and_the_values_are_read() {
 #[test]
 fn a_broken_response_is_a_format_error() {
     let (api, _) = with_response(json!({"shops": "not an array"}));
-    let error = block_on(api.shops(None, false)).expect_err("the response must be rejected");
+    let error = block_on(api.shops(None)).expect_err("the response must be rejected");
     assert!(matches!(error, RecordError::Format(_)), "{error:?}");
 }
 

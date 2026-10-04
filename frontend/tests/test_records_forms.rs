@@ -23,7 +23,6 @@ fn product(id: &str, name: &str) -> Product {
         flavor_notes: Vec::new(),
         created_at: "2026-10-01T00:00:00.000Z".to_string(),
         updated_at: "2026-10-01T00:00:00.000Z".to_string(),
-        archived_at: None,
     }
 }
 
@@ -42,7 +41,6 @@ fn purchase(id: &str) -> Purchase {
         photo_key: None,
         created_at: "2026-10-01T00:00:00.000Z".to_string(),
         updated_at: "2026-10-01T00:00:00.000Z".to_string(),
-        archived_at: None,
         product: product("p1", "豆"),
         shop: None,
     }

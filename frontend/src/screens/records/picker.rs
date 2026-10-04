@@ -45,7 +45,6 @@ pub fn RecordPickerSheet<T: Clone + PartialEq + 'static>(
                 RecordListView::<T> {
                     load,
                     row,
-                    show_archived_toggle: false,
                 }
                 div { class: "acts",
                     if let Some(label) = clear_label {

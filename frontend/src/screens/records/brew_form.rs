@@ -188,11 +188,11 @@ pub fn BrewForm(
         });
     });
 
-    // 購入の選択のシートの一覧 (アーカイブ済みは含めない。FR-11)。
+    // 購入の選択のシートの一覧 (FR-11)。
     let picker_services = services.clone();
-    let picker_load = RecordLoader::new(move |cursor, _include_archived| {
+    let picker_load = RecordLoader::new(move |cursor| {
         let api = RecordsApi::new(picker_services.api.clone());
-        Box::pin(async move { api.purchases(cursor.as_deref(), false).await })
+        Box::pin(async move { api.purchases(cursor.as_deref()).await })
     });
     let picker_row = Callback::new(move |choice: Purchase| {
         let caption = purchase_row_subtitle(&choice, current_language());

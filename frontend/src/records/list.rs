@@ -1,8 +1,8 @@
-//! カーソル方式の一覧の状態 (FR-12、PRD の性能)。
+//! カーソル方式の一覧の状態 (PRD の性能)。
 //!
-//! 一覧の画面と選択のシートが共有する、ページングと「アーカイブ済みを含める」の切り替えの
-//! 状態機械。Dioxus に依存しない純粋な型にして、native の単体テストと PBT で守る (ADR-0013)。
-//! Flutter の `frontend/lib/widgets/record_list_view.dart` と同じ動きにする。
+//! 一覧の画面と選択のシートが共有する、ページングの状態機械。Dioxus に依存しない純粋な型に
+//! して、native の単体テストと PBT で守る (ADR-0013)。Flutter の
+//! `frontend/lib/widgets/record_list_view.dart` と同じ動きにする。
 
 use super::RecordError;
 
@@ -14,17 +14,11 @@ pub const LOAD_MORE_THRESHOLD: f64 = 200.0;
 pub struct PageRequest {
     /// 読むページのカーソル。先頭から読むときは None。
     pub cursor: Option<String>,
-
-    /// アーカイブ済みの行を含めるか (FR-12)。
-    pub include_archived: bool,
 }
 
 /// カーソル方式の一覧の状態。
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RecordList {
-    /// アーカイブ済みを含めるか。
-    include_archived: bool,
-
     /// 1 ページ以上読めたか (読み込み中の表示と、記録が無い表示の区別に使う)。
     loaded: bool,
 
@@ -54,7 +48,6 @@ impl RecordList {
     /// 初期状態を作る。最初の読み込みは [`RecordList::reset`] で始める。
     pub fn new() -> Self {
         Self {
-            include_archived: false,
             loaded: false,
             next_cursor: None,
             loading: false,
@@ -62,11 +55,6 @@ impl RecordList {
             item_count: 0,
             error: None,
         }
-    }
-
-    /// アーカイブ済みを含めるか (FR-12)。
-    pub fn include_archived(&self) -> bool {
-        self.include_archived
     }
 
     /// 1 ページ以上読めたか。
@@ -96,12 +84,6 @@ impl RecordList {
 
     /// 先頭からの読み直しを始める。読み込み中なら完了後に実行する。
     pub fn reset(&mut self) -> Option<PageRequest> {
-        self.begin_load(true)
-    }
-
-    /// アーカイブ済みを含める切り替えを反転し、先頭から読み直す (FR-12)。
-    pub fn toggle_include_archived(&mut self) -> Option<PageRequest> {
-        self.include_archived = !self.include_archived;
         self.begin_load(true)
     }
 
@@ -145,7 +127,6 @@ impl RecordList {
             } else {
                 self.next_cursor.clone()
             },
-            include_archived: self.include_archived,
         })
     }
 

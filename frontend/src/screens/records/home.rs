@@ -1,4 +1,4 @@
-//! ホーム (抽出の一覧。FR-11、FR-12)。
+//! ホーム (抽出の一覧。FR-11)。
 //!
 //! 一覧から抽出の詳細を開き、末尾までスクロールすると次のページを読む。抽出の登録は
 //! この画面から始め、保存完了までの最短経路を短く保つ (PRD の成功指標)。幅 840 px 以上では
@@ -30,9 +30,9 @@ pub fn HomeScreen() -> Element {
 
     let offset = services.clock.utc_offset_minutes();
     let load_services = services.clone();
-    let load = RecordLoader::new(move |cursor, include_archived| {
+    let load = RecordLoader::new(move |cursor| {
         let api = RecordsApi::new(load_services.api.clone());
-        Box::pin(async move { api.brews(cursor.as_deref(), include_archived).await })
+        Box::pin(async move { api.brews(cursor.as_deref()).await })
     });
 
     let row = Callback::new(move |brew: crate::records::Brew| {
@@ -45,7 +45,6 @@ pub fn HomeScreen() -> Element {
                 title: brew.purchase.product.name.clone(),
                 subtitle: Some(rsx! { span { RowValue { text: subtitle } } }),
                 trailing: Some(rsx! { Rating { value: brew.rating } }),
-                archived: brew.is_archived(),
                 selected: selected_now,
                 on_click: Some(EventHandler::new(move |_| {
                     if wide() {

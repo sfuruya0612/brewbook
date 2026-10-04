@@ -1,14 +1,12 @@
-//! 店の API (FR-6、FR-12)。
+//! 店の API (FR-6)。
 //!
 //! 一覧はカーソル方式で、並び順は作成日時の降順と ID の昇順とする。応答には続きを引く
 //! `next_cursor` を含める (ページが `limit` に満たないときは null)。
-//! 単件取得はアーカイブ済みでも返し、更新もアーカイブ済みの店にできる。
 //! 更新は項目が無ければ変更せず、`null` で NULL にする (店名は必須のため `null` を拒否する)。
-//! アーカイブと解除は繰り返し呼んでも 200 を返す。
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
-//! `updated_at` は更新、アーカイブ、アーカイブ解除で現在時刻にする (ADR-0006)。
+//! `updated_at` は更新で現在時刻にする (ADR-0006)。
 
-use brew_book_core::query::{self, Archived, OrderKind, ShopValues};
+use brew_book_core::query::{self, OrderKind, ShopValues};
 use brew_book_core::records::{trim_optional, validate_name};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Database;
@@ -28,7 +26,6 @@ pub struct ShopResponse {
     pub address: Option<String>,
     pub created_at: String,
     pub updated_at: String,
-    pub archived_at: Option<String>,
 }
 
 /// 店の一覧の応答。
@@ -69,12 +66,7 @@ pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Respons
         Err(response) => return Ok(response),
     };
     let d1 = db::database(env)?;
-    let statement = match query::shops_list(
-        &session.user_id,
-        params.archived,
-        params.cursor.clone(),
-        params.limit,
-    ) {
+    let statement = match query::shops_list(&session.user_id, params.cursor.clone(), params.limit) {
         Ok(statement) => statement,
         Err(error) => return Ok(query_error_response(error)),
     };
@@ -118,11 +110,10 @@ pub async fn create(req: &mut Request, env: &Env, session: &Session) -> Result<R
         address,
         created_at: now.clone(),
         updated_at: now,
-        archived_at: None,
     })
 }
 
-/// 店を 1 件返す。認証が必要。アーカイブ済みでも返す (FR-12)。
+/// 店を 1 件返す。認証が必要。
 pub async fn get(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
     let d1 = db::database(env)?;
     match find(&d1, &session.user_id, id).await? {
@@ -175,44 +166,14 @@ pub async fn update(
         address,
         created_at: shop.created_at,
         updated_at: now,
-        archived_at: shop.archived_at,
     })
 }
 
-/// 店をアーカイブする、またはアーカイブ解除する。認証が必要。
-/// 同じ状態への遷移はエラーにしない (繰り返し呼んでも 200 を返す)。
-pub async fn archive(
-    env: &Env,
-    session: &Session,
-    id: Option<&str>,
-    archived: bool,
-) -> Result<Response> {
-    let Some(id) = id else {
-        return Ok(not_found("the shop does not exist"));
-    };
-    let d1 = db::database(env)?;
-    let Some(shop) = find(&d1, &session.user_id, Some(id)).await? else {
-        return Ok(not_found("the shop does not exist"));
-    };
-    let now = db::now_text()?;
-    let archived_at = if archived { Some(now.as_str()) } else { None };
-    let statement = match query::shop_set_archived(id, &session.user_id, archived_at, &now) {
-        Ok(statement) => statement,
-        Err(error) => return Ok(query_error_response(error)),
-    };
-    db::prepared(&d1, &statement)?.run().await?;
-    respond::json(&ShopResponse {
-        archived_at: archived_at.map(str::to_owned),
-        updated_at: now,
-        ..shop
-    })
-}
-
-/// 店を 1 件引く。アーカイブ済みも返す (FR-12)。ID が無いときと行が無いときは None。
+/// 店を 1 件引く。ID が無いときと行が無いときは None。
 async fn find(d1: &D1Database, user_id: &str, id: Option<&str>) -> Result<Option<ShopResponse>> {
     let Some(id) = id else {
         return Ok(None);
     };
-    let statement = query::shop_find(user_id, id, Archived::Include);
+    let statement = query::shop_find(user_id, id);
     db::prepared(d1, &statement)?.first(None).await
 }

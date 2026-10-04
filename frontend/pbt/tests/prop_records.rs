@@ -18,8 +18,6 @@ enum Op {
     Reset,
     /// 次のページを読む。
     LoadMore,
-    /// アーカイブ済みを含める切り替えを反転する。
-    Toggle,
     /// ページが読めたことにする。
     FinishPage(usize, Option<String>),
     /// 読み込みが失敗したことにする。
@@ -31,7 +29,6 @@ fn op() -> impl Strategy<Value = Op> {
     prop_oneof![
         Just(Op::Reset),
         Just(Op::LoadMore),
-        Just(Op::Toggle),
         (0..60usize, prop::option::of("[a-z0-9]{0,8}"))
             .prop_map(|(count, cursor)| Op::FinishPage(count, cursor)),
         Just(Op::FinishError),
@@ -39,17 +36,15 @@ fn op() -> impl Strategy<Value = Op> {
 }
 
 proptest! {
-    /// 読み込み中の要求は重ねず、要求のアーカイブの指定は常に現在の切り替えと同じにする。
+    /// 読み込み中の要求は重ねない。
     #[test]
     fn a_page_is_never_requested_twice_at_once(ops in prop::collection::vec(op(), 0..40)) {
         let mut list = RecordList::new();
         for op in ops {
             let was_loading = list.is_loading();
-            let include_archived = list.include_archived();
             let request = match op {
                 Op::Reset => list.reset(),
                 Op::LoadMore => list.load_more(),
-                Op::Toggle => list.toggle_include_archived(),
                 Op::FinishPage(count, cursor) => {
                     list.finish_load(Ok((count, cursor)));
                     continue;
@@ -59,11 +54,8 @@ proptest! {
                     continue;
                 }
             };
-            if let Some(request) = request {
+            if request.is_some() {
                 prop_assert!(!was_loading, "a page was requested while loading");
-                // 要求のアーカイブの指定は、反転の直後の状態と一致する。
-                let expected = if matches!(op, Op::Toggle) { !include_archived } else { include_archived };
-                prop_assert_eq!(request.include_archived, expected);
             } else {
                 prop_assert!(was_loading || matches!(op, Op::LoadMore) || list.next_cursor().is_none());
             }
@@ -163,7 +155,6 @@ proptest! {
             flavor_notes: Vec::new(),
             created_at: "2026-10-01T00:00:00.000Z".to_string(),
             updated_at: "2026-10-01T00:00:00.000Z".to_string(),
-            archived_at: None,
         });
         prop_assert_eq!(product_match(true, &suggestion, matched_product), ProductMatch::None);
     }

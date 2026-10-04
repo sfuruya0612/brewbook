@@ -1,16 +1,14 @@
-//! 商品の API (FR-7、FR-8、FR-12)。
+//! 商品の API (FR-7、FR-8)。
 //!
 //! 一覧はカーソル方式で、並び順は作成日時の降順と ID の昇順とする。応答には続きを引く
 //! `next_cursor` を含める (ページが `limit` に満たないときは null)。
 //! 応答にはタグ名の配列 (`flavor_notes`) を含め、並びは名前の昇順にする (FR-8)。
 //! Flavor Notes はタグ名の配列で置き換え、タグの行は利用者ごとに名前で共有する (FR-8)。
-//! 単件取得はアーカイブ済みでも返し、更新もアーカイブ済みの商品にできる。
 //! 更新は項目が無ければ変更せず、`null` で NULL にする (商品名は必須のため `null` を拒否する)。
-//! アーカイブと解除は繰り返し呼んでも 200 を返す。
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
-//! `updated_at` は更新、アーカイブ、アーカイブ解除で現在時刻にする (ADR-0006)。
+//! `updated_at` は更新で現在時刻にする (ADR-0006)。
 
-use brew_book_core::query::{self, Archived, OrderKind, ProductValues};
+use brew_book_core::query::{self, OrderKind, ProductValues};
 use brew_book_core::records::{trim_optional, validate_flavor_notes, validate_name};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Database;
@@ -40,7 +38,6 @@ pub struct ProductResponse {
     pub flavor_notes: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
-    pub archived_at: Option<String>,
 }
 
 /// 商品の一覧の応答。
@@ -161,7 +158,6 @@ pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Respons
     let d1 = db::database(env)?;
     let statement = match query::products_list(
         &session.user_id,
-        params.archived,
         params.cursor.clone(),
         params.limit,
         name.as_deref(),
@@ -243,11 +239,10 @@ pub async fn create(req: &mut Request, env: &Env, session: &Session) -> Result<R
         flavor_notes,
         created_at: now.clone(),
         updated_at: now,
-        archived_at: None,
     })
 }
 
-/// 商品を 1 件返す。認証が必要。アーカイブ済みでも返す (FR-12)。
+/// 商品を 1 件返す。認証が必要。
 pub async fn get(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
     let d1 = db::database(env)?;
     let Some(id) = id else {
@@ -332,43 +327,12 @@ pub async fn update(
         flavor_notes,
         created_at: product.created_at,
         updated_at: now,
-        archived_at: product.archived_at,
     })
 }
 
-/// 商品をアーカイブする、またはアーカイブ解除する。認証が必要。
-/// 同じ状態への遷移はエラーにしない (繰り返し呼んでも 200 を返す)。
-pub async fn archive(
-    env: &Env,
-    session: &Session,
-    id: Option<&str>,
-    archived: bool,
-) -> Result<Response> {
-    let Some(id) = id else {
-        return Ok(not_found("the product does not exist"));
-    };
-    let d1 = db::database(env)?;
-    let Some(mut product) = find(&d1, &session.user_id, id).await? else {
-        return Ok(not_found("the product does not exist"));
-    };
-    let now = db::now_text()?;
-    let archived_at = if archived { Some(now.as_str()) } else { None };
-    let statement = match query::product_set_archived(id, &session.user_id, archived_at, &now) {
-        Ok(statement) => statement,
-        Err(error) => return Ok(query_error_response(error)),
-    };
-    db::prepared(&d1, &statement)?.run().await?;
-    product.flavor_notes = flavor_notes(&d1, &session.user_id, id).await?;
-    respond::json(&ProductResponse {
-        archived_at: archived_at.map(str::to_owned),
-        updated_at: now,
-        ..product
-    })
-}
-
-/// 商品を 1 件引く。アーカイブ済みも返す (FR-12)。
+/// 商品を 1 件引く。
 async fn find(d1: &D1Database, user_id: &str, id: &str) -> Result<Option<ProductResponse>> {
-    let statement = query::product_find(user_id, id, Archived::Include);
+    let statement = query::product_find(user_id, id);
     db::prepared(d1, &statement)?.first(None).await
 }
 

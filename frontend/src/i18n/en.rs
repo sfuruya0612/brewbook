@@ -65,17 +65,12 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "Cancel",                                                     // cancelButton
     "Edit",                                                       // editButton
     "Delete",                                                     // deleteButton
-    "Archive",                                                    // archiveButton
-    "Unarchive",                                                  // unarchiveButton
     "Select",                                                     // selectButton
     "Add",                                                        // addButton
-    "Include archived",                                           // includeArchivedLabel
     " / ",                                                        // rowSubtitleSeparator
     "No records",                                                 // noRecords
     "Not set",                                                    // unsetLabel
     "Saved.",                                                     // savedMessage
-    "Archived.",                                                  // archivedMessage
-    "Unarchived.",                                                // unarchivedMessage
     "Shop name",                                                  // shopNameLabel
     "Product name",                                               // productNameLabel
     "Address",                                                    // addressLabel
@@ -203,7 +198,6 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "Required",                                                                     // requiredLabel
     "Brews",                                                                        // brewsLabel
     "Beans used",                                                       // usedBeansLabel
-    "Archived",                                                         // archivedBadge
     "No address",                                                       // addressUnset
     "Not rated",                                                        // ratingNone
     "Use the button at the bottom right to log your first cup.",        // homeEmptyHint

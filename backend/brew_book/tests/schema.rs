@@ -1,21 +1,27 @@
-//! マイグレーションの SQL と、ADR-0006 の列と本 issue の設計判断の一覧の照合。
+//! マイグレーションの SQL と、ADR-0018 が定める最終スキーマの照合。
 //!
-//! 初期スキーマ (`migrations/0001_initial_schema.sql`) を読み、次を確認する。
+//! 0001、0002、0003 を順に適用した最終スキーマを読み、次を確認する。
 //!
-//! - 11 テーブルの列が ADR-0006 の表と一致する (過不足のどちらも許さない)。
+//! - 11 テーブルの列が ADR-0018 の表と一致する (過不足のどちらも許さない)。
 //! - ADR-0006 の参照 (外部キー) がある。
 //! - 設計判断の UNIQUE 制約 (利用者ごとのタグ名、全利用者で一意の credential_id) がある。
-//! - 設計判断の複合インデックス (利用者 ID、`archived_at`、並び順のキーの降順、ID) がある。
+//! - 複合インデックス (利用者 ID、並び順のキーの降順、ID) があり、`archived_at` を含まない。
+//! - 店、商品、購入、抽出の 4 テーブルに `archived_at` が無い (ADR-0018)。
 //!
 //! 期待値は issue 本文と ADR の一覧を写したテストデータとして、SQL の解析結果と突き合わせる。
+//! 列の比較は並び順を問わない (0002 と 0003 の `ALTER TABLE` が列の位置を変えるため)。
 
 use std::collections::BTreeMap;
 use std::path::Path;
 
-/// 初期スキーマのマイグレーション。
-const MIGRATION: &str = "migrations/0001_initial_schema.sql";
+/// 最終スキーマを作るマイグレーション。この順に適用する。
+const MIGRATIONS: &[&str] = &[
+    "migrations/0001_initial_schema.sql",
+    "migrations/0002_purchases_price_currency_nullable.sql",
+    "migrations/0003_remove_archive.sql",
+];
 
-/// ADR-0006 の 11 テーブルと列。列の順は ADR-0006 の表に合わせる。
+/// ADR-0018 の 11 テーブルと列。列の順は ADR-0018 の表に合わせる。
 const EXPECTED_TABLES: &[(&str, &[&str])] = &[
     ("users", &["id", "display_name", "created_at"]),
     (
@@ -52,7 +58,6 @@ const EXPECTED_TABLES: &[(&str, &[&str])] = &[
             "address",
             "created_at",
             "updated_at",
-            "archived_at",
         ],
     ),
     (
@@ -68,7 +73,6 @@ const EXPECTED_TABLES: &[(&str, &[&str])] = &[
             "variety",
             "created_at",
             "updated_at",
-            "archived_at",
         ],
     ),
     ("flavor_tags", &["id", "user_id", "name"]),
@@ -89,7 +93,6 @@ const EXPECTED_TABLES: &[(&str, &[&str])] = &[
             "photo_key",
             "created_at",
             "updated_at",
-            "archived_at",
         ],
     ),
     (
@@ -109,10 +112,12 @@ const EXPECTED_TABLES: &[(&str, &[&str])] = &[
             "notes",
             "created_at",
             "updated_at",
-            "archived_at",
         ],
     ),
 ];
+
+/// `archived_at` を持たない 4 テーブル (ADR-0018)。
+const TABLES_WITHOUT_ARCHIVED_AT: &[&str] = &["shops", "products", "purchases", "brews"];
 
 /// 本 issue の設計判断の UNIQUE 制約。
 const EXPECTED_UNIQUE: &[(&str, &[&[&str]])] = &[
@@ -122,33 +127,33 @@ const EXPECTED_UNIQUE: &[(&str, &[&[&str]])] = &[
     ("passkey_credentials", &[&["credential_id"]]),
 ];
 
-/// 本 issue の設計判断の複合インデックス (利用者 ID、archived_at、並び順のキー)。
+/// ADR-0018 の複合インデックス (利用者 ID、並び順のキー)。
 const EXPECTED_INDEXES: &[(&str, &str, &[&str])] = &[
     (
-        "idx_shops_user_archived_created_at",
+        "idx_shops_user_created_at",
         "shops",
-        &["user_id", "archived_at", "created_at DESC", "id"],
+        &["user_id", "created_at DESC", "id"],
     ),
     (
-        "idx_products_user_archived_created_at",
+        "idx_products_user_created_at",
         "products",
-        &["user_id", "archived_at", "created_at DESC", "id"],
+        &["user_id", "created_at DESC", "id"],
     ),
     (
-        "idx_purchases_user_archived_purchased_on",
+        "idx_purchases_user_purchased_on",
         "purchases",
-        &["user_id", "archived_at", "purchased_on DESC", "id"],
+        &["user_id", "purchased_on DESC", "id"],
     ),
     (
-        "idx_brews_user_archived_brewed_at",
+        "idx_brews_user_brewed_at",
         "brews",
-        &["user_id", "archived_at", "brewed_at DESC", "id"],
+        &["user_id", "brewed_at DESC", "id"],
     ),
 ];
 
 #[test]
-fn the_migration_has_the_eleven_tables_with_the_adr_columns() {
-    let parsed = parse_migration(&read_migration());
+fn the_final_schema_has_the_eleven_tables_with_the_adr_columns() {
+    let parsed = apply_migrations(&read_migrations());
     let expected: Vec<(&str, &[&str])> = EXPECTED_TABLES.to_vec();
     let actual: Vec<(&str, Vec<String>)> = parsed
         .tables
@@ -158,7 +163,7 @@ fn the_migration_has_the_eleven_tables_with_the_adr_columns() {
     assert_eq!(
         actual.len(),
         expected.len(),
-        "the migration must have exactly {} tables but has {}: {:?}",
+        "the migrations must produce exactly {} tables but produce {}: {:?}",
         expected.len(),
         actual.len(),
         actual.iter().map(|(name, _)| name).collect::<Vec<_>>()
@@ -168,21 +173,50 @@ fn the_migration_has_the_eleven_tables_with_the_adr_columns() {
             .tables
             .iter()
             .find(|table| table.name == *name)
-            .unwrap_or_else(|| panic!("the migration must have the table {name}"));
+            .unwrap_or_else(|| panic!("the migrations must produce the table {name}"));
+        let mut expected_columns: Vec<String> =
+            columns.iter().map(|column| (*column).to_owned()).collect();
+        let mut actual_columns = table.columns.clone();
+        expected_columns.sort();
+        actual_columns.sort();
         assert_eq!(
-            table.columns,
-            columns
-                .iter()
-                .map(|column| column.to_string())
-                .collect::<Vec<_>>(),
-            "the columns of {name} must match ADR-0006"
+            actual_columns, expected_columns,
+            "the columns of {name} must match ADR-0018"
+        );
+    }
+}
+
+#[test]
+fn the_final_schema_has_no_archived_column() {
+    let parsed = apply_migrations(&read_migrations());
+    for name in TABLES_WITHOUT_ARCHIVED_AT {
+        let table = parsed
+            .tables
+            .iter()
+            .find(|table| table.name == *name)
+            .unwrap_or_else(|| panic!("the migrations must produce the table {name}"));
+        assert!(
+            !table.columns.iter().any(|column| column == "archived_at"),
+            "the table {name} must not have archived_at (ADR-0018)"
+        );
+    }
+}
+
+#[test]
+fn the_final_schema_indexes_do_not_contain_the_archived_column() {
+    let parsed = apply_migrations(&read_migrations());
+    for index in &parsed.indexes {
+        assert!(
+            !index.columns.iter().any(|column| column == "archived_at"),
+            "the index {} must not contain archived_at (ADR-0018)",
+            index.name
         );
     }
 }
 
 #[test]
 fn the_migration_keeps_the_primary_keys() {
-    let parsed = parse_migration(&read_migration());
+    let parsed = apply_migrations(&read_migrations());
     for table in &parsed.tables {
         // product_flavor_tags は id 列を持たないため、列の組を主キーにする。
         let expected: Vec<String> = if table.name == "product_flavor_tags" {
@@ -219,7 +253,7 @@ const EXPECTED_FOREIGN_KEYS: &[(&str, &str, &str, &str)] = &[
 
 #[test]
 fn the_migration_has_the_unique_constraints_of_the_design_decisions() {
-    let parsed = parse_migration(&read_migration());
+    let parsed = apply_migrations(&read_migrations());
     for table in &parsed.tables {
         let expected: Vec<Vec<String>> = EXPECTED_UNIQUE
             .iter()
@@ -245,7 +279,7 @@ fn the_migration_has_the_unique_constraints_of_the_design_decisions() {
 
 #[test]
 fn the_migration_has_the_foreign_keys_of_the_adr() {
-    let parsed = parse_migration(&read_migration());
+    let parsed = apply_migrations(&read_migrations());
     let actual: Vec<(String, String, String, String)> = parsed
         .tables
         .iter()
@@ -289,8 +323,8 @@ fn the_migration_has_the_foreign_keys_of_the_adr() {
 }
 
 #[test]
-fn the_migration_has_the_composite_indexes_for_lists_and_suggestions_and_stats() {
-    let parsed = parse_migration(&read_migration());
+fn the_final_schema_has_the_composite_indexes_for_lists_and_suggestions_and_stats() {
+    let parsed = apply_migrations(&read_migrations());
     let expected: Vec<(String, String, Vec<String>)> = EXPECTED_INDEXES
         .iter()
         .map(|(name, table, columns)| {
@@ -318,10 +352,79 @@ fn the_migration_has_the_composite_indexes_for_lists_and_suggestions_and_stats()
     );
 }
 
-fn read_migration() -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(MIGRATION);
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+/// 適用する順にマイグレーションの SQL を読む。
+fn read_migrations() -> Vec<String> {
+    MIGRATIONS
+        .iter()
+        .map(|migration| {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(migration);
+            std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+        })
+        .collect()
+}
+
+/// マイグレーションを順に適用し、最終スキーマを解析する。
+///
+/// SQLite を起動せずにスキーマの変化を追うため、このテストが使う DDL
+/// (`CREATE TABLE`、`CREATE [UNIQUE] INDEX`、`DROP INDEX`、`ALTER TABLE ... DROP COLUMN`、
+/// `ALTER TABLE ... ADD COLUMN`) だけを解釈する。
+fn apply_migrations(migrations: &[String]) -> ParsedMigration {
+    let mut parsed = ParsedMigration::default();
+    for migration in migrations {
+        for statement in statements(migration) {
+            if let Some(rest) = strip_prefix_ignoring_case(&statement, "CREATE TABLE") {
+                parsed.tables.push(parse_table(rest));
+            } else if let Some(rest) = strip_prefix_ignoring_case(&statement, "CREATE UNIQUE INDEX")
+            {
+                parsed.indexes.push(parse_index(rest));
+            } else if let Some(rest) = strip_prefix_ignoring_case(&statement, "CREATE INDEX") {
+                parsed.indexes.push(parse_index(rest));
+            } else if let Some(rest) = strip_prefix_ignoring_case(&statement, "DROP INDEX") {
+                let name = rest.trim();
+                parsed.indexes.retain(|index| index.name != name);
+            } else if let Some(rest) = strip_prefix_ignoring_case(&statement, "ALTER TABLE") {
+                apply_alter_table(&mut parsed, rest);
+            } else {
+                panic!("the migration has an unsupported statement: {statement}");
+            }
+        }
+    }
+    parsed
+}
+
+/// `ALTER TABLE` の `DROP COLUMN` と `ADD COLUMN` を適用する。
+fn apply_alter_table(parsed: &mut ParsedMigration, rest: &str) {
+    let mut words = rest.split_whitespace();
+    let table_name = words
+        .next()
+        .expect("an ALTER TABLE statement names the table");
+    let table = parsed
+        .tables
+        .iter_mut()
+        .find(|table| table.name == table_name)
+        .unwrap_or_else(|| panic!("the ALTER TABLE target {table_name} must exist"));
+    let action = words
+        .next()
+        .expect("an ALTER TABLE statement has an action");
+    let keyword = words
+        .next()
+        .expect("an ALTER TABLE statement names the action's keyword");
+    assert!(
+        keyword.eq_ignore_ascii_case("COLUMN"),
+        "the ALTER TABLE action must be {action} COLUMN but was {action} {keyword}"
+    );
+    let column = words
+        .next()
+        .expect("an ALTER TABLE statement names the column")
+        .to_owned();
+    if action.eq_ignore_ascii_case("DROP") {
+        table.columns.retain(|existing| *existing != column);
+    } else if action.eq_ignore_ascii_case("ADD") {
+        table.columns.push(column);
+    } else {
+        panic!("the ALTER TABLE action must be ADD COLUMN or DROP COLUMN but was {action}");
+    }
 }
 
 /// マイグレーション 1 つを解析した結果。
@@ -346,21 +449,6 @@ struct ParsedIndex {
     name: String,
     table: String,
     columns: Vec<String>,
-}
-
-/// `CREATE TABLE` と `CREATE INDEX` の文を解析する。SQL はこのテスト専用の単純な解析で扱う。
-fn parse_migration(sql: &str) -> ParsedMigration {
-    let mut parsed = ParsedMigration::default();
-    for statement in statements(sql) {
-        if let Some(rest) = strip_prefix_ignoring_case(&statement, "CREATE TABLE") {
-            parsed.tables.push(parse_table(rest));
-        } else if let Some(rest) = strip_prefix_ignoring_case(&statement, "CREATE UNIQUE INDEX") {
-            parsed.indexes.push(parse_index(rest));
-        } else if let Some(rest) = strip_prefix_ignoring_case(&statement, "CREATE INDEX") {
-            parsed.indexes.push(parse_index(rest));
-        }
-    }
-    parsed
 }
 
 fn parse_table(rest: &str) -> ParsedTable {

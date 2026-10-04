@@ -1,7 +1,6 @@
 //! 記録のクエリの組み立て (ADR-0006)。
 //!
-//! 全てのクエリに `user_id` の条件を必ず付け、一覧のクエリには `archived_at` の条件を付ける
-//! (サジェストはアーカイブ済みの行の値も候補に含めるため付けない。FR-13)。
+//! 全てのクエリに `user_id` の条件を必ず付ける。
 //! 値は必ずプレースホルダ (`?`) で渡し、SQL に値を連結しない。テーブル名と列名はコード内の
 //! 定数だけを使い、利用者の入力は渡せない。
 //!
@@ -25,43 +24,6 @@ pub enum Value {
     Integer(i64),
     /// 小数 (豆の量、湯量、湯の温度に使う)。
     Real(f64),
-}
-
-/// アーカイブ済みの行の扱い。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Archived {
-    /// 既定。アーカイブ済みを除く (`archived_at IS NULL`)。
-    Exclude,
-    /// アーカイブ済みも返す (`include_archived=true` のときだけ指定する)。
-    Include,
-}
-
-/// `include_archived` のクエリパラメータの誤り。応答は 400 にする。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IncludeArchivedError {
-    /// `true` と `false` 以外の値。
-    NotABoolean,
-}
-
-impl IncludeArchivedError {
-    /// 応答のエラーの種別 (400 Bad Request)。
-    pub fn code(self) -> ErrorCode {
-        ErrorCode::BadRequest
-    }
-
-    /// 応答に載せる英語のメッセージ。
-    pub fn message(self) -> &'static str {
-        "include_archived must be true or false"
-    }
-}
-
-/// `include_archived` のクエリパラメータを解釈する。省略時は既定 (アーカイブ済みを除く) を返す。
-pub fn parse_include_archived(text: Option<&str>) -> Result<Archived, IncludeArchivedError> {
-    match text {
-        None | Some("false") => Ok(Archived::Exclude),
-        Some("true") => Ok(Archived::Include),
-        Some(_) => Err(IncludeArchivedError::NotABoolean),
-    }
 }
 
 /// サジェスト (FR-13) の対象の項目。
@@ -173,8 +135,6 @@ pub struct ListQuery<'a> {
     pub order_column: &'static str,
     /// 並び順のキーの種類。
     pub order_kind: OrderKind,
-    /// アーカイブ済みの行の扱い。
-    pub archived: Archived,
     /// 直前のページの最後の行を指すカーソル。先頭から引くときは None。
     pub cursor: Option<CursorKey>,
     /// 取得件数。
@@ -195,8 +155,6 @@ pub struct FindQuery<'a> {
     pub user_id: &'a str,
     /// 取得する行の ID。
     pub id: &'a str,
-    /// アーカイブ済みの行の扱い。アーカイブ済みも返すときは Include (FR-12)。
-    pub archived: Archived,
 }
 
 /// 行の挿入のクエリの入力。
@@ -270,7 +228,7 @@ impl QueryError {
 
 /// 一覧の SQL を組み立てる。
 ///
-/// `SELECT <columns> FROM <table> WHERE user_id = ? [AND archived_at IS NULL]
+/// `SELECT <columns> FROM <table> WHERE user_id = ?
 /// [AND (<order_column> < ? OR (<order_column> = ? AND id > ?))]
 /// ORDER BY <order_column> DESC, id ASC LIMIT ?`
 pub fn list(query: &ListQuery<'_>) -> Result<Statement, QueryError> {
@@ -282,7 +240,6 @@ pub fn list(query: &ListQuery<'_>) -> Result<Statement, QueryError> {
             order_column: query.order_column,
             order_kind: query.order_kind,
             user_id: query.user_id,
-            archived: query.archived,
             name: query.name,
         },
         query.cursor.clone(),
@@ -292,16 +249,9 @@ pub fn list(query: &ListQuery<'_>) -> Result<Statement, QueryError> {
 
 /// 1 件の取得の SQL を組み立てる。
 ///
-/// `SELECT <columns> FROM <table> WHERE id = ? AND user_id = ? [AND archived_at IS NULL]`
+/// `SELECT <columns> FROM <table> WHERE id = ? AND user_id = ?`
 pub fn find_one(query: &FindQuery<'_>) -> Statement {
-    find_qualified(
-        query.table,
-        query.columns,
-        "",
-        query.user_id,
-        query.id,
-        query.archived,
-    )
+    find_qualified(query.table, query.columns, "", query.user_id, query.id)
 }
 
 /// 別名を付けた一覧の入力。`from` にはテーブルと結合の並びを渡せる。
@@ -318,8 +268,6 @@ struct QualifiedList<'a> {
     order_kind: OrderKind,
     /// 絞り込む利用者の ID。
     user_id: &'a str,
-    /// アーカイブ済みの行の扱い。
-    archived: Archived,
     /// 名前の完全一致の絞り込み (FR-19)。絞り込まないときは None。
     name: Option<&'a str>,
 }
@@ -344,12 +292,6 @@ fn list_qualified(
     sql.push_str(&qualified(query.alias, "user_id"));
     sql.push_str(" = ?");
     params.push(Value::Text(query.user_id.to_owned()));
-
-    if query.archived == Archived::Exclude {
-        sql.push_str(" AND ");
-        sql.push_str(&qualified(query.alias, "archived_at"));
-        sql.push_str(" IS NULL");
-    }
 
     // 名前の完全一致の絞り込み (FR-19)。値は前後の空白を除いて渡す。
     // `COLLATE NOCASE` で大文字と小文字を区別せずに比べる (SQLite は ASCII だけを畳む)。
@@ -392,14 +334,7 @@ fn list_qualified(
 }
 
 /// 別名を付けた 1 件の取得の SQL を組み立てる。`from` にはテーブルと結合の並びを渡せる。
-fn find_qualified(
-    from: &str,
-    columns: &str,
-    alias: &str,
-    user_id: &str,
-    id: &str,
-    archived: Archived,
-) -> Statement {
+fn find_qualified(from: &str, columns: &str, alias: &str, user_id: &str, id: &str) -> Statement {
     let mut sql = String::new();
     sql.push_str("SELECT ");
     sql.push_str(columns);
@@ -410,11 +345,6 @@ fn find_qualified(
     sql.push_str(" = ? AND ");
     sql.push_str(&qualified(alias, "user_id"));
     sql.push_str(" = ?");
-    if archived == Archived::Exclude {
-        sql.push_str(" AND ");
-        sql.push_str(&qualified(alias, "archived_at"));
-        sql.push_str(" IS NULL");
-    }
     Statement {
         sql,
         params: vec![Value::Text(id.to_owned()), Value::Text(user_id.to_owned())],
@@ -488,24 +418,24 @@ pub fn update(query: &UpdateQuery<'_>) -> Result<Statement, QueryError> {
 /// 店のテーブル名。
 pub const SHOPS_TABLE: &str = "shops";
 /// 店の列の並び。応答の JSON の項目と同じ。
-pub const SHOP_COLUMNS: &str = "id, user_id, name, address, created_at, updated_at, archived_at";
+pub const SHOP_COLUMNS: &str = "id, user_id, name, address, created_at, updated_at";
 /// 商品のテーブル名。
 pub const PRODUCTS_TABLE: &str = "products";
 /// 商品の列の並び。応答の JSON の項目と同じ。
 pub const PRODUCT_COLUMNS: &str = "id, user_id, name, producer, origin, region, process, variety, \
-                                   created_at, updated_at, archived_at";
+                                   created_at, updated_at";
 /// 購入のテーブル名。
 pub const PURCHASES_TABLE: &str = "purchases";
 /// 購入の列の並び。応答の JSON の項目と同じ。
 pub const PURCHASE_COLUMNS: &str = "id, user_id, product_id, shop_id, purchased_on, roast, \
                                     roast_date, price_amount, price_currency, weight_grams, \
-                                    photo_key, created_at, updated_at, archived_at";
+                                    photo_key, created_at, updated_at";
 /// 抽出のテーブル名。
 pub const BREWS_TABLE: &str = "brews";
 /// 抽出の列の並び。応答の JSON の項目と同じ。
 pub const BREW_COLUMNS: &str = "id, user_id, purchase_id, brewed_at, dose_grams, water_grams, \
                                 water_temp_c, brew_time_seconds, method, grind_setting, rating, \
-                                notes, created_at, updated_at, archived_at";
+                                notes, created_at, updated_at";
 /// Flavor Notes のタグのテーブル名。
 pub const FLAVOR_TAGS_TABLE: &str = "flavor_tags";
 /// Flavor Notes のタグの列の並び。応答の JSON の項目と同じ。
@@ -647,8 +577,6 @@ const BREW_UPDATE_COLUMNS: &[&str] = &[
     "notes",
     "updated_at",
 ];
-/// アーカイブとアーカイブ解除の `UPDATE` の列 (ADR-0006)。
-const ARCHIVED_COLUMNS: &[&str] = &["archived_at", "updated_at"];
 /// 購入の写真の `UPDATE` の列 (0009)。`photo_key` は付け外しの両方がある。
 const PHOTO_KEY_COLUMNS: &[&str] = &["photo_key", "updated_at"];
 
@@ -727,7 +655,6 @@ pub struct BrewValues<'a> {
 /// 店の一覧を組み立てる。並び順は作成日時の降順と ID の昇順。
 pub fn shops_list(
     user_id: &str,
-    archived: Archived,
     cursor: Option<CursorKey>,
     limit: u32,
 ) -> Result<Statement, QueryError> {
@@ -737,7 +664,6 @@ pub fn shops_list(
         user_id,
         order_column: "created_at",
         order_kind: OrderKind::DateTime,
-        archived,
         cursor,
         limit,
         name: None,
@@ -745,13 +671,12 @@ pub fn shops_list(
 }
 
 /// 店を 1 件取得する SQL を組み立てる。
-pub fn shop_find(user_id: &str, id: &str, archived: Archived) -> Statement {
+pub fn shop_find(user_id: &str, id: &str) -> Statement {
     find_one(&FindQuery {
         table: SHOPS_TABLE,
         columns: SHOP_COLUMNS,
         user_id,
         id,
-        archived,
     })
 }
 
@@ -797,23 +722,11 @@ pub fn shop_update(
     })
 }
 
-/// 店のアーカイブとアーカイブ解除の SQL を組み立てる。
-/// `archived_at` が None のときはアーカイブ解除になる。
-pub fn shop_set_archived(
-    id: &str,
-    user_id: &str,
-    archived_at: Option<&str>,
-    updated_at: &str,
-) -> Result<Statement, QueryError> {
-    set_archived(SHOPS_TABLE, id, user_id, archived_at, updated_at)
-}
-
 /// 商品の一覧を組み立てる。並び順は作成日時の降順と ID の昇順。
 /// `name` を指定したときは、名前の完全一致 (前後の空白を除き、大文字と小文字を区別しない) で
 /// 絞り込む (FR-19)。
 pub fn products_list(
     user_id: &str,
-    archived: Archived,
     cursor: Option<CursorKey>,
     limit: u32,
     name: Option<&str>,
@@ -824,7 +737,6 @@ pub fn products_list(
         user_id,
         order_column: "created_at",
         order_kind: OrderKind::DateTime,
-        archived,
         cursor,
         limit,
         name,
@@ -832,13 +744,12 @@ pub fn products_list(
 }
 
 /// 商品を 1 件取得する SQL を組み立てる。
-pub fn product_find(user_id: &str, id: &str, archived: Archived) -> Statement {
+pub fn product_find(user_id: &str, id: &str) -> Statement {
     find_one(&FindQuery {
         table: PRODUCTS_TABLE,
         columns: PRODUCT_COLUMNS,
         user_id,
         id,
-        archived,
     })
 }
 
@@ -880,20 +791,9 @@ pub fn product_update(
     })
 }
 
-/// 商品のアーカイブとアーカイブ解除の SQL を組み立てる。
-pub fn product_set_archived(
-    id: &str,
-    user_id: &str,
-    archived_at: Option<&str>,
-    updated_at: &str,
-) -> Result<Statement, QueryError> {
-    set_archived(PRODUCTS_TABLE, id, user_id, archived_at, updated_at)
-}
-
 /// 購入と商品と店を結合した一覧を組み立てる。並び順は購入日の降順と ID の昇順 (FR-9)。
 pub fn purchases_list(
     user_id: &str,
-    archived: Archived,
     cursor: Option<CursorKey>,
     limit: u32,
 ) -> Result<Statement, QueryError> {
@@ -905,7 +805,6 @@ pub fn purchases_list(
             order_column: "purchased_on",
             order_kind: OrderKind::Date,
             user_id,
-            archived,
             name: None,
         },
         cursor,
@@ -914,14 +813,13 @@ pub fn purchases_list(
 }
 
 /// 購入と商品と店を結合した 1 件の取得の SQL を組み立てる。
-pub fn purchase_find(user_id: &str, id: &str, archived: Archived) -> Statement {
+pub fn purchase_find(user_id: &str, id: &str) -> Statement {
     find_qualified(
         PURCHASES_FROM,
         &purchases_columns(),
         PURCHASE_ALIAS,
         user_id,
         id,
-        archived,
     )
 }
 
@@ -963,16 +861,6 @@ pub fn purchase_update(
     })
 }
 
-/// 購入のアーカイブとアーカイブ解除の SQL を組み立てる。
-pub fn purchase_set_archived(
-    id: &str,
-    user_id: &str,
-    archived_at: Option<&str>,
-    updated_at: &str,
-) -> Result<Statement, QueryError> {
-    set_archived(PURCHASES_TABLE, id, user_id, archived_at, updated_at)
-}
-
 /// 購入の写真の参照を付け外しする SQL を組み立てる (0009)。`None` のときは NULL にする。
 pub fn purchase_set_photo_key(
     id: &str,
@@ -992,7 +880,6 @@ pub fn purchase_set_photo_key(
 /// 抽出と、購入、商品、店を結合した一覧を組み立てる。並び順は抽出日時の降順と ID の昇順 (FR-11)。
 pub fn brews_list(
     user_id: &str,
-    archived: Archived,
     cursor: Option<CursorKey>,
     limit: u32,
 ) -> Result<Statement, QueryError> {
@@ -1004,7 +891,6 @@ pub fn brews_list(
             order_column: "brewed_at",
             order_kind: OrderKind::DateTime,
             user_id,
-            archived,
             name: None,
         },
         cursor,
@@ -1013,15 +899,8 @@ pub fn brews_list(
 }
 
 /// 抽出と、購入、商品、店を結合した 1 件の取得の SQL を組み立てる。
-pub fn brew_find(user_id: &str, id: &str, archived: Archived) -> Statement {
-    find_qualified(
-        BREWS_FROM,
-        &brews_columns(),
-        BREW_ALIAS,
-        user_id,
-        id,
-        archived,
-    )
+pub fn brew_find(user_id: &str, id: &str) -> Statement {
+    find_qualified(BREWS_FROM, &brews_columns(), BREW_ALIAS, user_id, id)
 }
 
 /// 抽出を挿入する SQL を組み立てる。
@@ -1062,16 +941,6 @@ pub fn brew_update(
     })
 }
 
-/// 抽出のアーカイブとアーカイブ解除の SQL を組み立てる。
-pub fn brew_set_archived(
-    id: &str,
-    user_id: &str,
-    archived_at: Option<&str>,
-    updated_at: &str,
-) -> Result<Statement, QueryError> {
-    set_archived(BREWS_TABLE, id, user_id, archived_at, updated_at)
-}
-
 /// 利用者の Flavor Notes のタグの一覧を組み立てる。並び順は名前の昇順。
 pub fn flavor_tags_list(user_id: &str) -> Statement {
     let mut sql = String::new();
@@ -1090,7 +959,7 @@ pub fn flavor_tags_list(user_id: &str) -> Statement {
 ///
 /// 値ごとに `updated_at` の最大を取り、その降順、同じときは値の昇順 (Unicode コードポイント) で
 /// 並べ、先頭の [`SUGGESTION_LIMIT`] 件にする。
-/// アーカイブ済みの行の値も候補に含めるため `archived_at` の条件は付けず、利用者 ID の条件は付ける。
+/// 利用者 ID の条件は付ける。
 /// `q` には前後の空白を除いた値を渡す。比較は `lower(列) LIKE lower(?) || '%' ESCAPE '\'` で行い、
 /// 大文字と小文字を区別しない。`q` の中の `%` と `_` と `\` は文字として扱う。
 ///
@@ -1137,7 +1006,6 @@ fn escape_like(text: &str) -> String {
 ///
 /// `SELECT <columns> FROM <table> WHERE user_id = ? ORDER BY <order_by>`
 ///
-/// アーカイブ済みの行も含める (FR-14。既定の一覧の `archived_at IS NULL` を付けない)。
 /// 件数の上限も付けず、並び順は `order_by` の昇順にする。
 pub fn export_rows(
     table: &'static str,
@@ -1357,24 +1225,4 @@ fn optional_real(value: Option<f64>) -> Value {
 /// 任意の文字列を値にする。None は NULL にする。
 fn optional_text(value: Option<&str>) -> Value {
     value.map_or(Value::Null, |text| Value::Text(text.to_owned()))
-}
-
-/// アーカイブとアーカイブ解除の SQL を組み立てる。
-fn set_archived(
-    table: &'static str,
-    id: &str,
-    user_id: &str,
-    archived_at: Option<&str>,
-    updated_at: &str,
-) -> Result<Statement, QueryError> {
-    update(&UpdateQuery {
-        table,
-        columns: ARCHIVED_COLUMNS,
-        values: vec![
-            optional_text(archived_at),
-            Value::Text(updated_at.to_owned()),
-        ],
-        id,
-        user_id,
-    })
 }

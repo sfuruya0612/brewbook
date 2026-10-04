@@ -1,4 +1,4 @@
-//! 店と商品と Flavor Notes のタグと、購入と抽出と写真の API (FR-6 から FR-12) と、
+//! 店と商品と Flavor Notes のタグと、購入と抽出と写真の API (FR-6 から FR-11) と、
 //! 過去の入力値のサジェストの API (FR-13)。
 //!
 //! 入力の検証は `brew_book_core::records`、SQL の組み立ては `brew_book_core::query` が持つ。
@@ -19,7 +19,7 @@ use std::collections::HashMap;
 
 use brew_book_core::cursor::{parse_page_size, CursorKey};
 use brew_book_core::error::ErrorCode;
-use brew_book_core::query::{self, parse_include_archived, Archived, OrderKind, QueryError};
+use brew_book_core::query::{self, OrderKind, QueryError};
 use brew_book_core::records::validate_name;
 use worker::d1::D1Database;
 use worker::{console_error, Request, Response, Result};
@@ -28,20 +28,20 @@ use crate::db;
 use crate::respond;
 
 use self::products::ProductResponse;
+use self::purchases::PurchaseJoinRow;
 use self::shops::ShopResponse;
 
-/// 一覧のクエリパラメータ (limit、cursor、include_archived)。
+/// 一覧のクエリパラメータ (limit、cursor)。
 pub struct ListParams {
     /// 取得件数。既定は 50、最大は 200 (PRD の性能)。
     pub limit: u32,
     /// 直前のページの最後の行を指すカーソル。
     pub cursor: Option<CursorKey>,
-    /// アーカイブ済みの行の扱い。
-    pub archived: Archived,
 }
 
 impl ListParams {
     /// リクエストのクエリ文字列から読む。誤りは 400 の応答にする。
+    /// 受け取らないパラメータ (`include_archived` など) は未知のパラメータとして無視する。
     pub fn from_request(req: &Request) -> Result<Self, Response> {
         let url = match req.url() {
             Ok(url) => url,
@@ -52,12 +52,10 @@ impl ListParams {
         };
         let mut limit = None;
         let mut cursor = None;
-        let mut include_archived = None;
         for (name, value) in url.query_pairs() {
             match name.as_ref() {
                 "limit" => limit = Some(value.into_owned()),
                 "cursor" => cursor = Some(value.into_owned()),
-                "include_archived" => include_archived = Some(value.into_owned()),
                 _ => {}
             }
         }
@@ -69,13 +67,7 @@ impl ListParams {
             }
             None => None,
         };
-        let archived = parse_include_archived(include_archived.as_deref())
-            .map_err(|error| invalid_input(error.message()))?;
-        Ok(Self {
-            limit,
-            cursor,
-            archived,
-        })
+        Ok(Self { limit, cursor })
     }
 
     /// ページの続きのカーソル。最後の行の並び順のキーと ID を指す。
@@ -116,16 +108,11 @@ pub fn not_found(message: &str) -> Response {
     respond::error(ErrorCode::NotFound, message)
 }
 
-/// 409 の応答を組み立てる。アーカイブ済みの親を参照先に指定したときなどに使う (FR-9、FR-11)。
-pub fn conflict(message: &str) -> Response {
-    respond::error(ErrorCode::Conflict, message)
-}
-
 /// 参照先の検証の結果 (FR-9、FR-11)。拒否したときはそのまま返す応答を持つ。
 pub enum Reference<T> {
     /// 参照できる。
     Found(T),
-    /// 存在しないか他の利用者のもの (404)、またはアーカイブ済み (409)。
+    /// 存在しないか他の利用者のもの (404)。
     Rejected(Response),
 }
 
@@ -139,73 +126,55 @@ impl<T> Reference<T> {
     }
 }
 
-/// 参照先の商品を検証する。存在しないか他の利用者のものは 404、アーカイブ済みは 409 (FR-9)。
+/// 参照先の商品を検証する。存在しないか他の利用者のものは 404 (FR-9)。
 pub async fn require_product(
     d1: &D1Database,
     user_id: &str,
     id: &str,
 ) -> Result<Reference<ProductResponse>> {
-    let statement = query::product_find(user_id, id, Archived::Include);
+    let statement = query::product_find(user_id, id);
     match db::prepared(d1, &statement)?
         .first::<ProductResponse>(None)
         .await?
     {
         None => Ok(Reference::Rejected(not_found("the product does not exist"))),
-        Some(product) if product.archived_at.is_some() => {
-            Ok(Reference::Rejected(conflict("the product is archived")))
-        }
         Some(product) => Ok(Reference::Found(product)),
     }
 }
 
-/// 参照先の店を検証する。存在しないか他の利用者のものは 404、アーカイブ済みは 409 (FR-9)。
+/// 参照先の店を検証する。存在しないか他の利用者のものは 404 (FR-9)。
 pub async fn require_shop(
     d1: &D1Database,
     user_id: &str,
     id: &str,
 ) -> Result<Reference<ShopResponse>> {
-    let statement = query::shop_find(user_id, id, Archived::Include);
+    let statement = query::shop_find(user_id, id);
     match db::prepared(d1, &statement)?
         .first::<ShopResponse>(None)
         .await?
     {
         None => Ok(Reference::Rejected(not_found("the shop does not exist"))),
-        Some(shop) if shop.archived_at.is_some() => {
-            Ok(Reference::Rejected(conflict("the shop is archived")))
-        }
         Some(shop) => Ok(Reference::Found(shop)),
     }
 }
 
-/// 参照先の購入を検証する。存在しないか他の利用者のものは 404、アーカイブ済みは 409 (FR-11)。
+/// 参照先の購入を検証する。存在しないか他の利用者のものは 404 (FR-11)。
 pub async fn require_purchase(d1: &D1Database, user_id: &str, id: &str) -> Result<Reference<()>> {
-    let statement = query::purchase_find(user_id, id, Archived::Include);
-    let row: Option<PurchaseReferenceRow> = db::prepared(d1, &statement)?.first(None).await?;
+    let statement = query::purchase_find(user_id, id);
+    let row: Option<PurchaseJoinRow> = db::prepared(d1, &statement)?.first(None).await?;
     match row {
         None => Ok(Reference::Rejected(not_found(
             "the purchase does not exist",
         ))),
-        Some(row) if row.p_archived_at.is_some() => {
-            Ok(Reference::Rejected(conflict("the purchase is archived")))
-        }
         Some(_) => Ok(Reference::Found(())),
     }
 }
 
 /// 参照先の購入が存在するかを確かめる。存在しないか他の利用者のものは false にする。
-///
-/// アーカイブ済みでも存在として扱う (評価の推移は単件取得と同じくアーカイブ済みの購入を
-/// 指定できる。FR-12)。
 pub async fn purchase_exists(d1: &D1Database, user_id: &str, id: &str) -> Result<bool> {
-    let statement = query::purchase_find(user_id, id, Archived::Include);
-    let row: Option<PurchaseReferenceRow> = db::prepared(d1, &statement)?.first(None).await?;
+    let statement = query::purchase_find(user_id, id);
+    let row: Option<PurchaseJoinRow> = db::prepared(d1, &statement)?.first(None).await?;
     Ok(row.is_some())
-}
-
-/// 参照先の購入の検証に使う、結合した行のうち購入の状態だけの列。
-#[derive(Debug, serde::Deserialize)]
-struct PurchaseReferenceRow {
-    p_archived_at: Option<String>,
 }
 
 /// 応答の商品に Flavor Notes を付ける (FR-8)。商品のタグは 1 つのクエリでまとめて引く。

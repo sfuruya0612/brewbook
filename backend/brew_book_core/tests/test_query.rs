@@ -1,12 +1,10 @@
-//! `query` の単体テスト。組み立てた SQL が利用者 ID と `archived_at` の条件を必ず含むこと、
+//! `query` の単体テスト。組み立てた SQL が利用者 ID の条件を必ず含むこと、
 //! 値がプレースホルダで渡ることを確認する。
 //!
 //! 組み立てる関数ごとの SQL は [`record_queries`]、条件の付け忘れの検出は [`conditions`] が検査する。
 
 use brew_book_core::cursor::CursorKey;
-use brew_book_core::query::{
-    parse_include_archived, Archived, IncludeArchivedError, QueryError, Statement, Value,
-};
+use brew_book_core::query::{QueryError, Statement, Value};
 
 const USER_ID: &str = "9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60";
 const SHOP_ID: &str = "0d2b6f5e-3a4c-4a7b-9c8d-7e6f5a4b3c2d";
@@ -16,14 +14,13 @@ mod list_builders {
     use super::*;
     use brew_book_core::query::{list, ListQuery, OrderKind};
 
-    fn shop_query(archived: Archived, cursor: Option<CursorKey>, limit: u32) -> ListQuery<'static> {
+    fn shop_query(cursor: Option<CursorKey>, limit: u32) -> ListQuery<'static> {
         ListQuery {
             table: "shops",
-            columns: "id, user_id, name, address, created_at, updated_at, archived_at",
+            columns: "id, user_id, name, address, created_at, updated_at",
             user_id: USER_ID,
             order_column: "created_at",
             order_kind: OrderKind::DateTime,
-            archived,
             cursor,
             limit,
             name: None,
@@ -31,12 +28,12 @@ mod list_builders {
     }
 
     #[test]
-    fn a_list_query_filters_by_the_user_and_excludes_archived_rows() {
-        let statement = list(&shop_query(Archived::Exclude, None, 50)).unwrap();
+    fn a_list_query_filters_by_the_user() {
+        let statement = list(&shop_query(None, 50)).unwrap();
         assert_eq!(
             statement.sql,
-            "SELECT id, user_id, name, address, created_at, updated_at, archived_at FROM shops \
-             WHERE user_id = ? AND archived_at IS NULL ORDER BY created_at DESC, id ASC LIMIT ?"
+            "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
+             WHERE user_id = ? ORDER BY created_at DESC, id ASC LIMIT ?"
         );
         assert_eq!(
             statement.params,
@@ -50,27 +47,16 @@ mod list_builders {
     }
 
     #[test]
-    fn a_list_query_with_include_archived_has_no_archived_filter() {
-        let statement = list(&shop_query(Archived::Include, None, 50)).unwrap();
-        assert!(
-            !statement.sql.contains("archived_at IS NULL"),
-            "include_archived must not add the archived filter: {}",
-            statement.sql
-        );
-        assert!(statement.sql.contains("WHERE user_id = ?"));
-    }
-
-    #[test]
     fn a_list_query_with_a_cursor_adds_the_keyset_condition() {
         let cursor = CursorKey::DateTime {
             at: "2026-09-21T12:34:56.789Z".to_owned(),
             id: SHOP_ID.to_owned(),
         };
-        let statement = list(&shop_query(Archived::Exclude, Some(cursor), 10)).unwrap();
+        let statement = list(&shop_query(Some(cursor), 10)).unwrap();
         assert_eq!(
             statement.sql,
-            "SELECT id, user_id, name, address, created_at, updated_at, archived_at FROM shops \
-             WHERE user_id = ? AND archived_at IS NULL \
+            "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
+             WHERE user_id = ? \
              AND (created_at < ? OR (created_at = ? AND id > ?)) \
              ORDER BY created_at DESC, id ASC LIMIT ?"
         );
@@ -98,7 +84,6 @@ mod list_builders {
             user_id: USER_ID,
             order_column: "purchased_on",
             order_kind: OrderKind::Date,
-            archived: Archived::Exclude,
             cursor: Some(cursor),
             limit: 200,
             name: None,
@@ -116,13 +101,13 @@ mod list_builders {
 
     #[test]
     fn a_list_query_with_a_name_filters_by_the_exact_name_ignoring_case() {
-        let mut query = shop_query(Archived::Exclude, None, 50);
+        let mut query = shop_query(None, 50);
         query.name = Some("Ethiopia");
         let statement = list(&query).unwrap();
         assert_eq!(
             statement.sql,
-            "SELECT id, user_id, name, address, created_at, updated_at, archived_at FROM shops \
-             WHERE user_id = ? AND archived_at IS NULL AND name = ? COLLATE NOCASE \
+            "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
+             WHERE user_id = ? AND name = ? COLLATE NOCASE \
              ORDER BY created_at DESC, id ASC LIMIT ?"
         );
         assert_eq!(
@@ -142,49 +127,39 @@ mod list_builders {
             id: SHOP_ID.to_owned(),
         };
         assert_eq!(
-            list(&shop_query(Archived::Exclude, Some(date_cursor), 50)),
+            list(&shop_query(Some(date_cursor), 50)),
             Err(QueryError::CursorKindMismatch)
         );
     }
 
     #[test]
-    fn every_list_query_keeps_the_user_and_archived_conditions() {
-        for archived in [Archived::Exclude, Archived::Include] {
-            for order_kind in [OrderKind::DateTime, OrderKind::Date] {
-                for cursor in [None, Some(cursor_for(order_kind))] {
-                    let query = ListQuery {
-                        table: "brews",
-                        columns: "id, user_id, brewed_at",
-                        user_id: USER_ID,
-                        order_column: "brewed_at",
-                        order_kind,
-                        archived,
-                        cursor,
-                        limit: 50,
-                        name: None,
-                    };
-                    let statement = list(&query).unwrap();
-                    assert!(
-                        statement.sql.contains("WHERE user_id = ?"),
-                        "the user filter is missing: {}",
-                        statement.sql
-                    );
-                    assert_eq!(statement.params[0], Value::Text(USER_ID.to_owned()));
-                    if archived == Archived::Exclude {
-                        assert!(
-                            statement.sql.contains("archived_at IS NULL"),
-                            "the archived filter is missing: {}",
-                            statement.sql
-                        );
-                    }
-                    let placeholders = statement.sql.matches('?').count();
-                    assert_eq!(
-                        placeholders,
-                        statement.params.len(),
-                        "every placeholder must have a value: {}",
-                        statement.sql
-                    );
-                }
+    fn every_list_query_keeps_the_user_condition() {
+        for order_kind in [OrderKind::DateTime, OrderKind::Date] {
+            for cursor in [None, Some(cursor_for(order_kind))] {
+                let query = ListQuery {
+                    table: "brews",
+                    columns: "id, user_id, brewed_at",
+                    user_id: USER_ID,
+                    order_column: "brewed_at",
+                    order_kind,
+                    cursor,
+                    limit: 50,
+                    name: None,
+                };
+                let statement = list(&query).unwrap();
+                assert!(
+                    statement.sql.contains("WHERE user_id = ?"),
+                    "the user filter is missing: {}",
+                    statement.sql
+                );
+                assert_eq!(statement.params[0], Value::Text(USER_ID.to_owned()));
+                let placeholders = statement.sql.matches('?').count();
+                assert_eq!(
+                    placeholders,
+                    statement.params.len(),
+                    "every placeholder must have a value: {}",
+                    statement.sql
+                );
             }
         }
     }
@@ -226,10 +201,10 @@ mod record_queries {
 
     #[test]
     fn a_shop_find_query_filters_by_the_id_and_the_user() {
-        let statement = query::shop_find(USER_ID, SHOP_ID, Archived::Include);
+        let statement = query::shop_find(USER_ID, SHOP_ID);
         assert_eq!(
             statement.sql,
-            "SELECT id, user_id, name, address, created_at, updated_at, archived_at FROM shops \
+            "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
              WHERE id = ? AND user_id = ?"
         );
         assert_eq!(
@@ -238,17 +213,6 @@ mod record_queries {
                 Value::Text(SHOP_ID.to_owned()),
                 Value::Text(USER_ID.to_owned()),
             ]
-        );
-    }
-
-    #[test]
-    fn a_find_query_can_restrict_to_active_rows() {
-        // アーカイブ済みの親を参照先に指定したときの 409 の判定 (0007) に使う。
-        let statement = query::product_find(USER_ID, SHOP_ID, Archived::Exclude);
-        assert!(
-            statement.sql.contains("AND archived_at IS NULL"),
-            "the active rows must be selectable: {}",
-            statement.sql
         );
     }
 
@@ -337,23 +301,6 @@ mod record_queries {
                 Value::Text(USER_ID.to_owned()),
             ]
         );
-    }
-
-    #[test]
-    fn an_archive_statement_sets_the_archived_at_and_the_updated_at() {
-        let statement = query::shop_set_archived(SHOP_ID, USER_ID, Some(AT), AT).unwrap();
-        assert_eq!(
-            statement.sql,
-            "UPDATE shops SET archived_at = ?, updated_at = ? WHERE id = ? AND user_id = ?"
-        );
-        assert_eq!(statement.params[0], Value::Text(AT.to_owned()));
-        // アーカイブ解除は archived_at を NULL に戻す。
-        let statement = query::product_set_archived(SHOP_ID, USER_ID, None, AT).unwrap();
-        assert_eq!(
-            statement.sql,
-            "UPDATE products SET archived_at = ?, updated_at = ? WHERE id = ? AND user_id = ?"
-        );
-        assert_eq!(statement.params[0], Value::Null);
     }
 
     #[test]
@@ -490,17 +437,15 @@ mod purchase_and_brew_queries {
         p.product_id AS p_product_id, p.shop_id AS p_shop_id, p.purchased_on AS p_purchased_on, \
         p.roast AS p_roast, p.roast_date AS p_roast_date, p.price_amount AS p_price_amount, \
         p.price_currency AS p_price_currency, p.weight_grams AS p_weight_grams, \
-        p.photo_key AS p_photo_key, p.created_at AS p_created_at, p.updated_at AS p_updated_at, \
-        p.archived_at AS p_archived_at";
+        p.photo_key AS p_photo_key, p.created_at AS p_created_at, p.updated_at AS p_updated_at";
     /// 商品の列の別名。
     const PRODUCT_COLUMNS: &str = "pr.id AS pr_id, pr.user_id AS pr_user_id, pr.name AS pr_name, \
         pr.producer AS pr_producer, pr.origin AS pr_origin, pr.region AS pr_region, \
         pr.process AS pr_process, pr.variety AS pr_variety, pr.created_at AS pr_created_at, \
-        pr.updated_at AS pr_updated_at, pr.archived_at AS pr_archived_at";
+        pr.updated_at AS pr_updated_at";
     /// 店の列の別名。
     const SHOP_COLUMNS: &str = "sh.id AS sh_id, sh.user_id AS sh_user_id, sh.name AS sh_name, \
-        sh.address AS sh_address, sh.created_at AS sh_created_at, sh.updated_at AS sh_updated_at, \
-        sh.archived_at AS sh_archived_at";
+        sh.address AS sh_address, sh.created_at AS sh_created_at, sh.updated_at AS sh_updated_at";
 
     fn purchase_values<'a>(product_id: &'a str, shop_id: Option<&'a str>) -> PurchaseValues<'a> {
         PurchaseValues {
@@ -532,7 +477,7 @@ mod purchase_and_brew_queries {
 
     #[test]
     fn a_purchases_list_query_joins_the_product_and_the_shop() {
-        let statement = query::purchases_list(USER_ID, Archived::Exclude, None, 50).unwrap();
+        let statement = query::purchases_list(USER_ID, None, 50).unwrap();
         assert_eq!(
             statement.sql,
             format!(
@@ -540,7 +485,7 @@ mod purchase_and_brew_queries {
                  FROM purchases AS p \
                  INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
                  LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id \
-                 WHERE p.user_id = ? AND p.archived_at IS NULL \
+                 WHERE p.user_id = ? \
                  ORDER BY p.purchased_on DESC, p.id ASC LIMIT ?"
             )
         );
@@ -556,8 +501,7 @@ mod purchase_and_brew_queries {
             on: "2026-09-21".to_owned(),
             id: SHOP_ID.to_owned(),
         };
-        let statement =
-            query::purchases_list(USER_ID, Archived::Exclude, Some(cursor), 10).unwrap();
+        let statement = query::purchases_list(USER_ID, Some(cursor), 10).unwrap();
         assert!(
             statement
                 .sql
@@ -571,31 +515,20 @@ mod purchase_and_brew_queries {
     }
 
     #[test]
-    fn a_purchases_list_query_with_include_archived_has_no_archived_filter() {
-        let statement = query::purchases_list(USER_ID, Archived::Include, None, 50).unwrap();
-        assert!(
-            !statement.sql.contains("archived_at IS NULL"),
-            "include_archived must not add the archived filter: {}",
-            statement.sql
-        );
-        assert!(statement.sql.contains("WHERE p.user_id = ?"));
-    }
-
-    #[test]
     fn a_purchases_cursor_of_another_kind_is_rejected() {
         let cursor = CursorKey::DateTime {
             at: AT.to_owned(),
             id: SHOP_ID.to_owned(),
         };
         assert_eq!(
-            query::purchases_list(USER_ID, Archived::Exclude, Some(cursor), 50),
+            query::purchases_list(USER_ID, Some(cursor), 50),
             Err(QueryError::CursorKindMismatch)
         );
     }
 
     #[test]
     fn a_brews_list_query_joins_the_purchase_the_product_and_the_shop() {
-        let statement = query::brews_list(USER_ID, Archived::Exclude, None, 200).unwrap();
+        let statement = query::brews_list(USER_ID, None, 200).unwrap();
         assert_eq!(
             statement.sql,
             format!(
@@ -605,13 +538,12 @@ mod purchase_and_brew_queries {
                  b.brew_time_seconds AS b_brew_time_seconds, b.method AS b_method, \
                  b.grind_setting AS b_grind_setting, b.rating AS b_rating, b.notes AS b_notes, \
                  b.created_at AS b_created_at, b.updated_at AS b_updated_at, \
-                 b.archived_at AS b_archived_at, {PURCHASE_COLUMNS}, {PRODUCT_COLUMNS}, \
-                 {SHOP_COLUMNS} \
+                 {PURCHASE_COLUMNS}, {PRODUCT_COLUMNS}, {SHOP_COLUMNS} \
                  FROM brews AS b \
                  INNER JOIN purchases AS p ON p.id = b.purchase_id AND p.user_id = b.user_id \
                  INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
                  LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id \
-                 WHERE b.user_id = ? AND b.archived_at IS NULL \
+                 WHERE b.user_id = ? \
                  ORDER BY b.brewed_at DESC, b.id ASC LIMIT ?"
             )
         );
@@ -623,7 +555,7 @@ mod purchase_and_brew_queries {
 
     #[test]
     fn a_brew_find_query_filters_by_the_id_and_the_user() {
-        let statement = query::brew_find(USER_ID, SHOP_ID, Archived::Include);
+        let statement = query::brew_find(USER_ID, SHOP_ID);
         assert_eq!(
             statement.sql,
             format!(
@@ -633,8 +565,7 @@ mod purchase_and_brew_queries {
                  b.brew_time_seconds AS b_brew_time_seconds, b.method AS b_method, \
                  b.grind_setting AS b_grind_setting, b.rating AS b_rating, b.notes AS b_notes, \
                  b.created_at AS b_created_at, b.updated_at AS b_updated_at, \
-                 b.archived_at AS b_archived_at, {PURCHASE_COLUMNS}, {PRODUCT_COLUMNS}, \
-                 {SHOP_COLUMNS} \
+                 {PURCHASE_COLUMNS}, {PRODUCT_COLUMNS}, {SHOP_COLUMNS} \
                  FROM brews AS b \
                  INNER JOIN purchases AS p ON p.id = b.purchase_id AND p.user_id = b.user_id \
                  INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
@@ -653,7 +584,7 @@ mod purchase_and_brew_queries {
 
     #[test]
     fn a_purchase_find_query_joins_the_product_and_the_shop() {
-        let statement = query::purchase_find(USER_ID, SHOP_ID, Archived::Include);
+        let statement = query::purchase_find(USER_ID, SHOP_ID);
         assert!(
             statement
                 .sql
@@ -792,22 +723,6 @@ mod purchase_and_brew_queries {
         assert_eq!(update.params[2], Value::Null);
         assert_eq!(update.params.len(), 13);
     }
-
-    #[test]
-    fn the_archive_statements_of_the_purchases_and_the_brews_keep_the_user() {
-        let archive = query::purchase_set_archived(SHOP_ID, USER_ID, Some(AT), AT).unwrap();
-        assert_eq!(
-            archive.sql,
-            "UPDATE purchases SET archived_at = ?, updated_at = ? WHERE id = ? AND user_id = ?"
-        );
-        assert_eq!(archive.params[0], Value::Text(AT.to_owned()));
-        let unarchive = query::brew_set_archived(SHOP_ID, USER_ID, None, AT).unwrap();
-        assert_eq!(
-            unarchive.sql,
-            "UPDATE brews SET archived_at = ?, updated_at = ? WHERE id = ? AND user_id = ?"
-        );
-        assert_eq!(unarchive.params[0], Value::Null);
-    }
 }
 
 mod suggestions {
@@ -903,12 +818,6 @@ mod suggestions {
                 Value::Integer(20),
             ]
         );
-        // アーカイブ済みの記録の値も候補に含めるため、archived_at の条件は付けない (FR-13)。
-        assert!(
-            !statement.sql.contains("archived_at"),
-            "the suggestion query must not filter the archived rows: {}",
-            statement.sql
-        );
         assert_eq!(SUGGESTION_LIMIT, 20);
     }
 
@@ -930,20 +839,15 @@ mod export_queries {
     use brew_book_core::query;
 
     #[test]
-    fn an_export_query_carries_every_column_of_the_table_without_the_archived_filter_and_a_limit() {
+    fn an_export_query_carries_every_column_of_the_table_without_a_limit() {
         let statement =
             query::export_rows(query::SHOPS_TABLE, query::SHOP_COLUMNS, "id ASC", USER_ID);
         assert_eq!(
             statement.sql,
-            "SELECT id, user_id, name, address, created_at, updated_at, archived_at FROM shops \
+            "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
              WHERE user_id = ? ORDER BY id ASC"
         );
         assert_eq!(statement.params, vec![Value::Text(USER_ID.to_owned())]);
-        assert!(
-            !statement.sql.contains("archived_at IS NULL"),
-            "the export must include the archived rows: {}",
-            statement.sql
-        );
         assert!(
             !statement.sql.contains("LIMIT"),
             "the export must carry every row: {}",
@@ -1012,34 +916,6 @@ mod export_queries {
     }
 }
 
-mod include_archived_parameter {
-    use super::*;
-
-    #[test]
-    fn the_parameter_defaults_to_excluding_archived_rows() {
-        assert_eq!(parse_include_archived(None), Ok(Archived::Exclude));
-        assert_eq!(parse_include_archived(Some("false")), Ok(Archived::Exclude));
-    }
-
-    #[test]
-    fn the_parameter_accepts_true() {
-        assert_eq!(parse_include_archived(Some("true")), Ok(Archived::Include));
-    }
-
-    #[test]
-    fn another_value_is_rejected_as_a_bad_request() {
-        for text in ["", " ", "1", "0", "TRUE", "True", "yes", "true "] {
-            assert_eq!(
-                parse_include_archived(Some(text)),
-                Err(IncludeArchivedError::NotABoolean),
-                "{text} must be rejected"
-            );
-        }
-        assert_eq!(IncludeArchivedError::NotABoolean.code().status(), 400);
-        assert!(!IncludeArchivedError::NotABoolean.message().is_empty());
-    }
-}
-
 mod conditions {
     use super::*;
     use brew_book_core::query::{self, BrewValues, ProductValues, PurchaseValues, ShopValues};
@@ -1047,12 +923,11 @@ mod conditions {
     /// 検査の対象にする文の種類。
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum Kind {
-        /// 一覧。既定では `archived_at IS NULL` を必ず付ける。
+        /// 一覧。
         List,
         /// 1 件の取得と更新、削除。`id` と `user_id` の両方で絞る。
         Row,
-        /// エクスポート (FR-14)。利用者の全行を引くため、`user_id` だけで絞り、
-        /// アーカイブ済みの条件を付けない。
+        /// エクスポート (FR-14)。利用者の全行を引くため、`user_id` だけで絞る。
         Export,
         /// 挿入。`id` と `user_id` の列と値を必ず持つ。
         Insert,
@@ -1063,18 +938,11 @@ mod conditions {
         name: &'static str,
         statement: Statement,
         kind: Kind,
-        /// 既定の一覧か (`archived_at` の条件を検査するか)。
-        default_archived: bool,
     }
 
     /// 利用者 ID の条件があるか。
     fn has_user_condition(statement: &Statement) -> bool {
         statement.sql.contains("user_id = ?")
-    }
-
-    /// アーカイブ済みを除く条件があるか。
-    fn has_archived_condition(statement: &Statement) -> bool {
-        statement.sql.contains("archived_at IS NULL")
     }
 
     /// 挿入の列と値に利用者 ID があるか。
@@ -1086,55 +954,39 @@ mod conditions {
     /// モジュールが組み立てる文の一覧。
     fn every_statement() -> Vec<Checked> {
         let mut checked = Vec::new();
-        for (name, archived, default_archived) in [
-            ("shops list", Archived::Exclude, true),
-            ("shops list with archived", Archived::Include, false),
-        ] {
-            checked.push(Checked {
-                name,
-                statement: query::shops_list(USER_ID, archived, None, 50).unwrap(),
-                kind: Kind::List,
-                default_archived,
-            });
-            checked.push(Checked {
-                name: "products list",
-                statement: query::products_list(USER_ID, archived, None, 50, None).unwrap(),
-                kind: Kind::List,
-                default_archived,
-            });
-            checked.push(Checked {
-                name: "products list with a name",
-                statement: query::products_list(USER_ID, archived, None, 50, Some("名前")).unwrap(),
-                kind: Kind::List,
-                default_archived,
-            });
-        }
+        checked.push(Checked {
+            name: "shops list",
+            statement: query::shops_list(USER_ID, None, 50).unwrap(),
+            kind: Kind::List,
+        });
+        checked.push(Checked {
+            name: "products list",
+            statement: query::products_list(USER_ID, None, 50, None).unwrap(),
+            kind: Kind::List,
+        });
+        checked.push(Checked {
+            name: "products list with a name",
+            statement: query::products_list(USER_ID, None, 50, Some("名前")).unwrap(),
+            kind: Kind::List,
+        });
         let cursor = CursorKey::DateTime {
             at: AT.to_owned(),
             id: SHOP_ID.to_owned(),
         };
-        for (name, archived, default_archived) in [
-            ("purchases list", Archived::Exclude, true),
-            ("purchases list with archived", Archived::Include, false),
-            ("brews list", Archived::Exclude, true),
-            ("brews list with archived", Archived::Include, false),
-        ] {
-            checked.push(Checked {
-                name,
-                statement: if name.starts_with("purchases") {
-                    query::purchases_list(USER_ID, archived, None, 50).unwrap()
-                } else {
-                    query::brews_list(USER_ID, archived, None, 50).unwrap()
-                },
-                kind: Kind::List,
-                default_archived,
-            });
-        }
+        checked.push(Checked {
+            name: "purchases list",
+            statement: query::purchases_list(USER_ID, None, 50).unwrap(),
+            kind: Kind::List,
+        });
+        checked.push(Checked {
+            name: "brews list",
+            statement: query::brews_list(USER_ID, None, 50).unwrap(),
+            kind: Kind::List,
+        });
         checked.push(Checked {
             name: "purchases list with a date cursor",
             statement: query::purchases_list(
                 USER_ID,
-                Archived::Exclude,
                 Some(CursorKey::Date {
                     on: "2026-09-21".to_owned(),
                     id: SHOP_ID.to_owned(),
@@ -1143,26 +995,21 @@ mod conditions {
             )
             .unwrap(),
             kind: Kind::List,
-            default_archived: true,
         });
         checked.push(Checked {
             name: "brews list with a cursor",
-            statement: query::brews_list(USER_ID, Archived::Exclude, Some(cursor.clone()), 50)
-                .unwrap(),
+            statement: query::brews_list(USER_ID, Some(cursor.clone()), 50).unwrap(),
             kind: Kind::List,
-            default_archived: true,
         });
         checked.push(Checked {
             name: "purchase find",
-            statement: query::purchase_find(USER_ID, SHOP_ID, Archived::Include),
+            statement: query::purchase_find(USER_ID, SHOP_ID),
             kind: Kind::Row,
-            default_archived: false,
         });
         checked.push(Checked {
-            name: "brew find of the active rows",
-            statement: query::brew_find(USER_ID, SHOP_ID, Archived::Exclude),
+            name: "brew find",
+            statement: query::brew_find(USER_ID, SHOP_ID),
             kind: Kind::Row,
-            default_archived: true,
         });
         checked.push(Checked {
             name: "purchase insert",
@@ -1184,7 +1031,6 @@ mod conditions {
             )
             .unwrap(),
             kind: Kind::Insert,
-            default_archived: false,
         });
         checked.push(Checked {
             name: "purchase update",
@@ -1205,13 +1051,6 @@ mod conditions {
             )
             .unwrap(),
             kind: Kind::Row,
-            default_archived: false,
-        });
-        checked.push(Checked {
-            name: "purchase archive",
-            statement: query::purchase_set_archived(SHOP_ID, USER_ID, Some(AT), AT).unwrap(),
-            kind: Kind::Row,
-            default_archived: false,
         });
         checked.push(Checked {
             name: "brew insert",
@@ -1235,7 +1074,6 @@ mod conditions {
             )
             .unwrap(),
             kind: Kind::Insert,
-            default_archived: false,
         });
         checked.push(Checked {
             name: "brew update",
@@ -1258,39 +1096,26 @@ mod conditions {
             )
             .unwrap(),
             kind: Kind::Row,
-            default_archived: false,
-        });
-        checked.push(Checked {
-            name: "brew unarchive",
-            statement: query::brew_set_archived(SHOP_ID, USER_ID, None, AT).unwrap(),
-            kind: Kind::Row,
-            default_archived: false,
         });
         checked.push(Checked {
             name: "shops list with a cursor",
-            statement: query::shops_list(USER_ID, Archived::Exclude, Some(cursor.clone()), 50)
-                .unwrap(),
+            statement: query::shops_list(USER_ID, Some(cursor.clone()), 50).unwrap(),
             kind: Kind::List,
-            default_archived: true,
         });
         checked.push(Checked {
             name: "products list with a cursor",
-            statement: query::products_list(USER_ID, Archived::Exclude, Some(cursor), 50, None)
-                .unwrap(),
+            statement: query::products_list(USER_ID, Some(cursor), 50, None).unwrap(),
             kind: Kind::List,
-            default_archived: true,
         });
         checked.push(Checked {
             name: "shop find",
-            statement: query::shop_find(USER_ID, SHOP_ID, Archived::Include),
+            statement: query::shop_find(USER_ID, SHOP_ID),
             kind: Kind::Row,
-            default_archived: false,
         });
         checked.push(Checked {
-            name: "product find of the active rows",
-            statement: query::product_find(USER_ID, SHOP_ID, Archived::Exclude),
+            name: "product find",
+            statement: query::product_find(USER_ID, SHOP_ID),
             kind: Kind::Row,
-            default_archived: true,
         });
         checked.push(Checked {
             name: "shop insert",
@@ -1306,7 +1131,6 @@ mod conditions {
             )
             .unwrap(),
             kind: Kind::Insert,
-            default_archived: false,
         });
         checked.push(Checked {
             name: "product insert",
@@ -1326,7 +1150,6 @@ mod conditions {
             )
             .unwrap(),
             kind: Kind::Insert,
-            default_archived: false,
         });
         checked.push(Checked {
             name: "shop update",
@@ -1341,7 +1164,6 @@ mod conditions {
             )
             .unwrap(),
             kind: Kind::Row,
-            default_archived: false,
         });
         checked.push(Checked {
             name: "product update",
@@ -1360,60 +1182,40 @@ mod conditions {
             )
             .unwrap(),
             kind: Kind::Row,
-            default_archived: false,
-        });
-        checked.push(Checked {
-            name: "shop archive",
-            statement: query::shop_set_archived(SHOP_ID, USER_ID, Some(AT), AT).unwrap(),
-            kind: Kind::Row,
-            default_archived: false,
-        });
-        checked.push(Checked {
-            name: "product unarchive",
-            statement: query::product_set_archived(SHOP_ID, USER_ID, None, AT).unwrap(),
-            kind: Kind::Row,
-            default_archived: false,
         });
         checked.push(Checked {
             name: "delete the product flavor tags",
             statement: query::delete_product_flavor_tags(USER_ID, SHOP_ID),
             kind: Kind::Row,
-            default_archived: false,
         });
         checked.push(Checked {
             name: "insert a flavor tag",
             statement: query::insert_flavor_tag(SHOP_ID, USER_ID, "チョコ"),
             kind: Kind::Insert,
-            default_archived: false,
         });
         checked.push(Checked {
             name: "insert a product flavor tag",
             statement: query::insert_product_flavor_tag(USER_ID, SHOP_ID, "チョコ"),
             kind: Kind::Insert,
-            default_archived: false,
         });
         checked.push(Checked {
             name: "flavor tags list",
             statement: query::flavor_tags_list(USER_ID),
             kind: Kind::Row,
-            default_archived: false,
         });
         for statement in query::product_flavor_notes(USER_ID, &[SHOP_ID]) {
             checked.push(Checked {
                 name: "product flavor notes",
                 statement,
                 kind: Kind::Row,
-                default_archived: false,
             });
         }
-        // サジェストはアーカイブ済みの値も候補に含めるため、既定の一覧の条件を検査しない (FR-13)。
         checked.push(Checked {
             name: "suggestions",
             statement: query::suggestions(USER_ID, query::SuggestionItem::Producer, "エチ"),
             kind: Kind::List,
-            default_archived: false,
         });
-        // エクスポート (FR-14)。6 テーブルの全行を引くため、`archived_at` の条件は付かない。
+        // エクスポート (FR-14)。6 テーブルの全行を引く。
         for (name, table, columns, order_by) in [
             (
                 "export the shops",
@@ -1456,14 +1258,13 @@ mod conditions {
                 name,
                 statement: query::export_rows(table, columns, order_by, USER_ID),
                 kind: Kind::Export,
-                default_archived: false,
             });
         }
         checked
     }
 
     #[test]
-    fn every_record_query_keeps_the_user_and_archived_conditions() {
+    fn every_record_query_keeps_the_user_condition() {
         for checked in every_statement() {
             match checked.kind {
                 Kind::List | Kind::Row | Kind::Export => assert!(
@@ -1478,14 +1279,6 @@ mod conditions {
                     checked.name,
                     checked.statement.sql
                 ),
-            }
-            if checked.default_archived {
-                assert!(
-                    has_archived_condition(&checked.statement),
-                    "the archived filter is missing in {}: {}",
-                    checked.name,
-                    checked.statement.sql
-                );
             }
             let placeholders = checked.statement.sql.matches('?').count();
             assert_eq!(
@@ -1512,22 +1305,5 @@ mod conditions {
             !carries_user_id(&statement, USER_ID),
             "an insert without the user id must be detected"
         );
-    }
-
-    #[test]
-    fn the_checker_detects_an_omitted_archived_condition() {
-        let statement = Statement {
-            sql: "SELECT id FROM shops WHERE user_id = ?".to_owned(),
-            params: vec![Value::Text(USER_ID.to_owned())],
-        };
-        assert!(
-            !has_archived_condition(&statement),
-            "a default list without the archived filter must be detected"
-        );
-        // 条件がある文は通る (検査そのものが常に失敗するわけではない)。
-        assert!(has_archived_condition(&Statement {
-            sql: "SELECT id FROM shops WHERE user_id = ? AND archived_at IS NULL".to_owned(),
-            params: vec![Value::Text(USER_ID.to_owned())],
-        }));
     }
 }

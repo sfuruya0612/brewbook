@@ -10,7 +10,7 @@
 use brew_book_core::datetime::format_epoch_millis;
 use brew_book_core::error::{envelope, ErrorCode};
 use brew_book_core::ids::uuid_v4_from_bytes;
-use brew_book_core::query::{self, Archived, ShopValues};
+use brew_book_core::query::{self, ShopValues};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Type;
 use worker::{Date, Env, Error, Method, Request, Response, Result};
@@ -87,7 +87,7 @@ async fn handle(req: &mut Request, env: &Env) -> Result<Response> {
     db::prepared(&d1, &insert)?.run().await?;
 
     // 一覧の SQL は共通部分を通して組み立て、値はプレースホルダで渡す。
-    let statement = query::shops_list(&user_id, Archived::Exclude, None, 50).map_err(|error| {
+    let statement = query::shops_list(&user_id, None, 50).map_err(|error| {
         Error::RustError(format!(
             "failed to build the list query: {}",
             error.message()
@@ -139,5 +139,4 @@ struct ShopRow {
     address: Option<String>,
     created_at: String,
     updated_at: String,
-    archived_at: Option<String>,
 }

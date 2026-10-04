@@ -62,7 +62,7 @@ fn build_data() -> TestData {
         .passkey(&user, "表示名の検査のパスキー", CREATED, None)
         .id;
     // 一覧とエクスポートが実際の行を返すように、記録を 1 つ入れる。
-    seed.shop(&user, "表示名の検査の店", None, CREATED, CREATED, None);
+    seed.shop(&user, "表示名の検査の店", None, CREATED, CREATED);
     TestData {
         seed_sql: seed.sql(),
         session,

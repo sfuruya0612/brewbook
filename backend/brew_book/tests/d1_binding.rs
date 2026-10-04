@@ -1,12 +1,17 @@
 //! D1 のバインディングの結合テスト。
 //!
 //! `wrangler dev` を起動し、D1 のバインディングを通したプレースホルダ付きの INSERT と
-//! SELECT が成功することを確認する (0003 の完了条件)。テスト名の `wrangler_` は、
+//! SELECT が成功することを確認する (0003 の完了条件)。0003 のマイグレーションがアーカイブ済み
+//! だった行を残すことも確認する (ADR-0018)。テスト名の `wrangler_` は、
 //! `wrangler dev` を起動するテストを `backend:test` が名前で除外するための規約。
 
 mod support;
 
+use std::path::Path;
 use std::time::Duration;
+
+use support::http::ApiClient;
+use support::seed::{user_id, Seed};
 
 /// D1 の検証用の経路を有効にする vars。本番の vars には無い。
 const D1_CHECK_VAR: (&str, &str) = ("D1_CHECK", "true");
@@ -70,7 +75,7 @@ fn wrangler_d1_binding_inserts_and_selects_with_placeholders() {
     );
     assert_eq!(shop["address"].as_str(), Some(address));
     assert_eq!(shop["user_id"].as_str(), Some(user_id));
-    assert_eq!(shop["archived_at"], serde_json::Value::Null);
+    assert!(shop.get("archived_at").is_none(), "{shop:?}");
     let created_at = shop["created_at"]
         .as_str()
         .expect("the selected row must carry created_at");
@@ -99,6 +104,100 @@ fn wrangler_d1_check_is_disabled_without_its_var() {
         json_body(response),
         serde_json::json!({"error": {"code": "not_found", "message": "route not found"}})
     );
+}
+
+/// 0002 の状態で `archived_at` を設定した行を入れ、0003 を適用した後に行が残り、
+/// 一覧の API が返すことを確認する (ADR-0018)。
+#[test]
+fn wrangler_the_migration_removing_the_archive_keeps_the_rows() {
+    let server = support::DevServer::start().expect("wrangler dev must start");
+    // 適用済みのテーブルを、外部キーの参照元 (子) から順に消して空のデータベースにする。
+    let drops = [
+        "DROP TABLE brews",
+        "DROP TABLE purchases",
+        "DROP TABLE product_flavor_tags",
+        "DROP TABLE flavor_tags",
+        "DROP TABLE products",
+        "DROP TABLE shops",
+        "DROP TABLE sessions",
+        "DROP TABLE passkey_credentials",
+        "DROP TABLE registration_tokens",
+        "DROP TABLE webauthn_challenges",
+        "DROP TABLE users",
+    ];
+    let drops: Vec<String> = drops.iter().map(|sql| (*sql).to_owned()).collect();
+    server
+        .execute_sql_file(&drops)
+        .expect("the tables must be dropped");
+    server
+        .execute_sql_file(&[migration("0001_initial_schema.sql")])
+        .expect("the initial schema must apply");
+    server
+        .execute_sql_file(&[migration("0002_purchases_price_currency_nullable.sql")])
+        .expect("the second migration must apply");
+
+    // 0002 の状態では archived_at があり、アーカイブ済みの行を入れられる。
+    let at = "2026-09-21T00:00:00.000Z";
+    let future = "2099-01-01T00:00:00.000Z";
+    let user = user_id(1);
+    let mut seed = Seed::new();
+    seed.user(&user, "migration user", at);
+    let session = seed.session(&user, future, at);
+    let shop = "00000000-0000-4000-8000-000000000001";
+    let product = "00000000-0000-4000-8000-000000000002";
+    let purchase = "00000000-0000-4000-8000-000000000003";
+    let brew = "00000000-0000-4000-8000-000000000004";
+    seed.raw(&format!(
+        "INSERT INTO shops (id, user_id, name, address, created_at, updated_at, archived_at) \
+         VALUES ('{shop}', '{user}', 'archived shop', NULL, '{at}', '{at}', '{at}')"
+    ));
+    seed.raw(&format!(
+        "INSERT INTO products (id, user_id, name, created_at, updated_at, archived_at) \
+         VALUES ('{product}', '{user}', 'archived product', '{at}', '{at}', '{at}')"
+    ));
+    seed.raw(&format!(
+        "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, created_at, \
+         updated_at, archived_at) \
+         VALUES ('{purchase}', '{user}', '{product}', '{shop}', '2026-09-21', '{at}', '{at}', '{at}')"
+    ));
+    seed.raw(&format!(
+        "INSERT INTO brews (id, user_id, purchase_id, brewed_at, created_at, updated_at, archived_at) \
+         VALUES ('{brew}', '{user}', '{purchase}', '{at}', '{at}', '{at}', '{at}')"
+    ));
+    server
+        .execute_sql_file(&[seed.sql()])
+        .expect("the archived rows must be inserted");
+
+    server
+        .execute_sql_file(&[migration("0003_remove_archive.sql")])
+        .expect("the third migration must apply");
+
+    // 4 つのテーブルの行は残る。
+    for table in ["shops", "products", "purchases", "brews"] {
+        let count = server
+            .query_int(&format!("SELECT COUNT(*) FROM {table}"))
+            .expect("the count must be read");
+        assert_eq!(count, 1, "the row of {table} must be kept");
+    }
+    // アーカイブ済みだった店は、通常の記録として一覧の API が返す。
+    let client = ApiClient::for_server(&server, Some(&session));
+    let (status, body) = support::http::read(client.get("/api/shops"));
+    assert_eq!(status, 200, "the response body was {body}");
+    let shops = body["shops"]
+        .as_array()
+        .expect("the response must have shops");
+    assert_eq!(shops.len(), 1, "{body}");
+    assert_eq!(shops[0]["id"], shop, "{body}");
+    assert!(shops[0].get("archived_at").is_none(), "{body}");
+}
+
+/// マイグレーションのファイルを読む。
+fn migration(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("migrations")
+        .join(name);
+    std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
 }
 
 fn client() -> reqwest::blocking::Client {

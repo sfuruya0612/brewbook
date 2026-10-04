@@ -135,8 +135,8 @@ fn seeded_user(seed: &mut Seed, index: u32) -> SeededUser {
     let user_id = user_id(index);
     seed.user(&user_id, "写真の利用者", CREATED);
     let session = seed.session(&user_id, FUTURE, CREATED);
-    let product = seed.product(&user_id, "写真の豆", CREATED, CREATED, None);
-    let purchase = seed.purchase(&user_id, &product.id, None, D21, CREATED, CREATED, None);
+    let product = seed.product(&user_id, "写真の豆", CREATED, CREATED);
+    let purchase = seed.purchase(&user_id, &product.id, None, D21, CREATED, CREATED);
     SeededUser {
         user_id,
         session,

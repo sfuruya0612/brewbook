@@ -1,7 +1,6 @@
-//! カーソル方式の一覧の共通の枠 (FR-12)。
+//! カーソル方式の一覧の共通の枠。
 //!
-//! アーカイブ済みを含める切り替え、末尾までのスクロールでの追加読み込みを持つ。中身の表示は
-//! `row` が決める。行ごとのアーカイブは詳細の画面から行う。Flutter の
+//! 末尾までのスクロールでの追加読み込みを持つ。中身の表示は `row` が決める。Flutter の
 //! `frontend/lib/widgets/record_list_view.dart` と同じ動きにする。
 
 use std::future::Future;
@@ -20,7 +19,7 @@ use super::{error_banner, retryable_banner};
 pub type LoadFuture<T> = Pin<Box<dyn Future<Output = Result<RecordPage<T>, RecordError>>>>;
 
 /// 一覧の 1 ページを読む関数。画面ごとに API の呼び出しを閉じ込める。
-pub struct RecordLoader<T>(Rc<dyn Fn(Option<String>, bool) -> LoadFuture<T>>);
+pub struct RecordLoader<T>(Rc<dyn Fn(Option<String>) -> LoadFuture<T>>);
 
 impl<T> Clone for RecordLoader<T> {
     fn clone(&self) -> Self {
@@ -36,13 +35,13 @@ impl<T> PartialEq for RecordLoader<T> {
 
 impl<T> RecordLoader<T> {
     /// ページを読む関数から作る。
-    pub fn new(load: impl Fn(Option<String>, bool) -> LoadFuture<T> + 'static) -> Self {
+    pub fn new(load: impl Fn(Option<String>) -> LoadFuture<T> + 'static) -> Self {
         Self(Rc::new(load))
     }
 
     /// 1 ページを読む。
-    pub fn call(&self, cursor: Option<String>, include_archived: bool) -> LoadFuture<T> {
-        (self.0)(cursor, include_archived)
+    pub fn call(&self, cursor: Option<String>) -> LoadFuture<T> {
+        (self.0)(cursor)
     }
 }
 
@@ -56,10 +55,6 @@ pub fn RecordListView<T: Clone + PartialEq + 'static>(
 
     /// 行の組み立て。広い画面の選択中の地は親が決める。
     row: Callback<T, Element>,
-
-    /// アーカイブ済みを含める切り替えを置くか (選択のシートでは置かない)。
-    #[props(default = true)]
-    show_archived_toggle: bool,
 
     /// 記録が無いときに、次にすることを示す 1 文 (ARB から取る)。
     #[props(default)]
@@ -84,43 +79,17 @@ pub fn RecordListView<T: Clone + PartialEq + 'static>(
 
     let state = list();
     let error = state.error().cloned();
-    let include_archived = state.include_archived();
     let loaded = state.is_loaded();
     let loading = state.is_loading();
     let has_more = state.next_cursor().is_some();
     drop(state);
     let rows: Vec<T> = items.read().clone();
-    let switch_class = if include_archived {
-        "switch on"
-    } else {
-        "switch"
-    };
 
-    let toggle_load = load.clone();
     let retry_load = load.clone();
     let scroll_load = load.clone();
 
     rsx! {
         div { class: "list-view",
-            if show_archived_toggle {
-                div { class: "toolbar",
-                    button {
-                        class: switch_class,
-                        r#type: "button",
-                        onclick: move |_| {
-                            let request = list.write().toggle_include_archived();
-                            if let Some(request) = request {
-                                let load = toggle_load.clone();
-                                spawn(async move {
-                                    load_pages(load, list, items, Some(request)).await;
-                                });
-                            }
-                        },
-                        span { class: "track" }
-                        "{t(Key::IncludeArchivedLabel)}"
-                    }
-                }
-            }
             if let Some(error) = error {
                 div { class: "list-error",
                     if crate::records::record_error_retry(&error) {
@@ -197,9 +166,7 @@ async fn load_pages<T: Clone + 'static>(
             // 0041 のレビューの指摘)。
             items.write().clear();
         }
-        let result = load
-            .call(page_request.cursor.clone(), page_request.include_archived)
-            .await;
+        let result = load.call(page_request.cursor.clone()).await;
         let outcome = match result {
             Ok(page) => {
                 let count = page.items.len();

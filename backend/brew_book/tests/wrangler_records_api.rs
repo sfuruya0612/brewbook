@@ -1,6 +1,6 @@
 //! 店と商品と Flavor Notes のタグの API の結合テスト (HTTP)。
 //!
-//! 一覧と単件の取得、登録、更新、アーカイブと解除、入力の検証、他の利用者の記録の 404、
+//! 一覧と単件の取得、登録、更新、入力の検証、他の利用者の記録の 404、
 //! タグの共有と残存、カーソルの並び順を検査する。記録の内容がログに出ないことも確認する。
 //!
 //! テスト名の `wrangler_` は、`wrangler dev` を起動するテストを `backend:test` が名前で除外するための規約。
@@ -26,25 +26,22 @@ const T19: &str = "2026-09-19T00:00:00.000Z";
 /// このテストファイルの下ごしらえと、テストが使う値。
 struct TestData {
     seed_sql: String,
-    /// 一覧のテストの利用者 (有効な店 2 件が同じ作成日時、古い店 1 件、アーカイブ済みの店 1 件)。
+    /// 一覧のテストの利用者 (有効な店 2 件が同じ作成日時、古い店 1 件)。
     list_user: String,
     list_session: String,
     /// 同じ作成日時の 2 件。ID の昇順で返ることを確かめる (作った順に ID が増える)。
     list_shops: Vec<SeededShop>,
     list_old_shop: SeededShop,
-    list_archived_shop: SeededShop,
     /// 店の書き換えのテストの利用者。
     shop_write_user: String,
     shop_write_session: String,
-    /// 商品の一覧のテストの利用者 (有効な商品 2 件とアーカイブ済みの商品 1 件)。
+    /// 商品の一覧のテストの利用者 (商品 2 件)。
     product_list_user: String,
     product_list_session: String,
     product_list_products: Vec<SeededProduct>,
-    product_list_archived: SeededProduct,
     /// 名前の絞り込みのテストの利用者 (FR-19)。
     name_filter_session: String,
     name_filter_products: Vec<SeededProduct>,
-    name_filter_archived: SeededProduct,
     name_filter_other_session: String,
     /// 商品の書き換えのテストの利用者。
     product_write_user: String,
@@ -85,12 +82,11 @@ fn build_data() -> TestData {
     seed.user(&list_user, "list user", created);
     let list_session = seed.session(&list_user, future, created);
     let list_shops = vec![
-        seed.shop(&list_user, "新しい店", Some("東京都"), T21, T21, None),
-        seed.shop(&list_user, "同じ時刻の店", None, T21, T21, None),
-        seed.shop(&list_user, "古い店", None, T20, T20, None),
+        seed.shop(&list_user, "新しい店", Some("東京都"), T21, T21),
+        seed.shop(&list_user, "同じ時刻の店", None, T21, T21),
+        seed.shop(&list_user, "古い店", None, T20, T20),
     ];
     let list_old_shop = list_shops[2].clone();
-    let list_archived_shop = seed.shop(&list_user, "しまった店", None, T19, T19, Some(T19));
 
     // 店の書き換えのテストの利用者。
     let shop_write_user = user_id(2);
@@ -102,10 +98,9 @@ fn build_data() -> TestData {
     seed.user(&product_list_user, "product list user", created);
     let product_list_session = seed.session(&product_list_user, future, created);
     let product_list_products = vec![
-        seed.product(&product_list_user, "新しい豆", T21, T21, None),
-        seed.product(&product_list_user, "古い豆", T20, T20, None),
+        seed.product(&product_list_user, "新しい豆", T21, T21),
+        seed.product(&product_list_user, "古い豆", T20, T20),
     ];
-    let product_list_archived = seed.product(&product_list_user, "しまった豆", T19, T19, Some(T19));
     let chocolate = seed.flavor_tag(&product_list_user, "chocolate");
     let berry = seed.flavor_tag(&product_list_user, "berry");
     seed.flavor_tag(&product_list_user, "vanilla");
@@ -124,24 +119,22 @@ fn build_data() -> TestData {
     seed.user(&name_filter_user, "name filter user", created);
     let name_filter_session = seed.session(&name_filter_user, future, created);
     let name_filter_products = vec![
-        seed.product(&name_filter_user, "Ethiopia Guji", T21, T21, None),
-        seed.product(&name_filter_user, "Ethiopia", T20, T20, None),
-        seed.product(&name_filter_user, "ethiopia guji", T19, T19, None),
+        seed.product(&name_filter_user, "Ethiopia Guji", T21, T21),
+        seed.product(&name_filter_user, "Ethiopia", T20, T20),
+        seed.product(&name_filter_user, "ethiopia guji", T19, T19),
     ];
-    let name_filter_archived =
-        seed.product(&name_filter_user, "Ethiopia Guji", T19, T19, Some(T19));
     // 他の利用者の同じ名前の商品は、絞り込みでも返らない (FR-5)。
     let name_filter_other_user = user_id(9);
     seed.user(&name_filter_other_user, "name filter other user", created);
     let name_filter_other_session = seed.session(&name_filter_other_user, future, created);
-    seed.product(&name_filter_other_user, "Ethiopia Guji", T21, T21, None);
+    seed.product(&name_filter_other_user, "Ethiopia Guji", T21, T21);
 
     // 他の利用者。店と商品とタグを 1 つずつ持つ。
     let other_user = user_id(5);
     seed.user(&other_user, "other user", created);
     let other_session = seed.session(&other_user, future, created);
-    let other_shop = seed.shop(&other_user, "他人の店", None, T21, T21, None);
-    let other_product = seed.product(&other_user, "他人の豆", T21, T21, None);
+    let other_shop = seed.shop(&other_user, "他人の店", None, T21, T21);
+    let other_product = seed.product(&other_user, "他人の豆", T21, T21);
     let other_tag = seed.flavor_tag(&other_user, "other tag");
     seed.product_flavor_tag(&other_user, &other_product.id, &other_tag);
 
@@ -161,16 +154,13 @@ fn build_data() -> TestData {
         list_session,
         list_shops,
         list_old_shop,
-        list_archived_shop,
         shop_write_user,
         shop_write_session,
         product_list_user,
         product_list_session,
         product_list_products,
-        product_list_archived,
         name_filter_session,
         name_filter_products,
-        name_filter_archived,
         name_filter_other_session,
         product_write_user,
         product_write_session,
@@ -257,7 +247,7 @@ fn encode_query(value: &str) -> String {
 }
 
 mod shops {
-    //! 店の経路のテスト (FR-6、FR-12、FR-5)。
+    //! 店の経路のテスト (FR-6、FR-5)。
 
     use super::*;
 
@@ -285,29 +275,25 @@ mod shops {
             shops.iter().all(|shop| shop["user_id"] == data.list_user),
             "the list must carry only the caller's records: {body}"
         );
-        // 既定では、アーカイブ済みの店は含まれない (FR-12)。
-        assert!(
-            !shops
-                .iter()
-                .any(|shop| shop["id"] == data.list_archived_shop.id),
-            "the archived shop must not be listed: {body}"
-        );
         assert_eq!(body["next_cursor"], Value::Null);
+        // 応答に archived_at は無い。
+        for shop in shops {
+            assert!(
+                shop.get("archived_at").is_none(),
+                "the response must not carry archived_at: {shop}"
+            );
+        }
+        // include_archived は未知のパラメータとして無視され、挙動が変わらない。
+        let with_parameter = assert_status(client.get("/api/shops?include_archived=true"), 200);
+        assert_eq!(with_parameter, body, "{with_parameter}");
     }
 
     #[test]
-    fn wrangler_shops_list_ok_with_include_archived_and_a_cursor() {
+    fn wrangler_shops_list_ok_with_a_cursor() {
         let data = data();
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
         let client = ApiClient::new(&base_url, Some(&data.list_session));
-
-        // アーカイブ済みを含めると、アーカイブ済みの店も返る (FR-12)。
-        let body = assert_status(client.get("/api/shops?include_archived=true"), 200);
-        let shops = body["shops"].as_array().expect("shops");
-        assert_eq!(shops.len(), 4, "{body}");
-        assert_eq!(shops[3]["id"], data.list_archived_shop.id);
-        assert_timestamp(&shops[3]["archived_at"]);
 
         // カーソルで続きを引く。同じ行が重複せず、並び順が保たれる。
         let first = assert_status(client.get("/api/shops?limit=2"), 200);
@@ -369,8 +355,6 @@ mod shops {
             "limit=201",
             "limit=999999999999",
             "limit=",
-            "include_archived=yes",
-            "include_archived=",
             "cursor=not-base64url!",
             "cursor=",
         ] {
@@ -378,6 +362,10 @@ mod shops {
         }
         // 200 ぴったりは受け付ける。
         assert_status(client.get("/api/shops?limit=200"), 200);
+        // 受け取らないパラメータは未知のパラメータとして無視する (400 にしない)。
+        for query in ["include_archived=yes", "include_archived=", "unknown=1"] {
+            assert_status(client.get(&format!("/api/shops?{query}")), 200);
+        }
     }
 
     #[test]
@@ -404,7 +392,7 @@ mod shops {
         );
         // 前後の空白は除いて保存する (FR-6)。
         assert_shop(&body, &data.shop_write_user, "はじめての店", Some("住所"));
-        assert_eq!(body["archived_at"], Value::Null);
+        assert!(body.get("archived_at").is_none(), "{body}");
         let id = body["id"].as_str().expect("the id must be present");
         assert_eq!(id.len(), 36, "the id must be a UUID: {id}");
         assert_eq!(&id[14..15], "4", "the id must be UUID v4: {id}");
@@ -475,12 +463,7 @@ mod shops {
         );
         assert_eq!(body["id"], data.list_shops[0].id);
         assert_eq!(body["name"], data.list_shops[0].name);
-        // アーカイブ済みでも単件では返す (FR-12)。
-        let body = assert_status(
-            client.get(&format!("/api/shops/{}", data.list_archived_shop.id)),
-            200,
-        );
-        assert_timestamp(&body["archived_at"]);
+        assert!(body.get("archived_at").is_none(), "{body}");
     }
 
     #[test]
@@ -581,7 +564,6 @@ mod shops {
             json!({ "name": "   " }),
             json!({ "name": null }),
             json!({ "created_at": T21 }),
-            json!({ "archived_at": T21 }),
             json!([1]),
         ] {
             assert_bad_request(client.patch_json(&format!("/api/shops/{id}"), &body));
@@ -624,131 +606,10 @@ mod shops {
         );
         assert_eq!(other["name"], data.other_shop.name);
     }
-
-    // 店のアーカイブと解除 (認証が必要、入力なし)。
-
-    #[test]
-    fn wrangler_shops_archive_and_unarchive_ok() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.shop_write_session));
-        let created = assert_status(
-            client.post_json("/api/shops", &json!({ "name": "アーカイブの店" })),
-            200,
-        );
-        let id = created["id"].as_str().expect("the id must be present");
-        sleep_millis(10);
-
-        let body = assert_status(client.post(&format!("/api/shops/{id}/archive")), 200);
-        assert_timestamp(&body["archived_at"]);
-        assert!(
-            body["updated_at"].as_str() > created["updated_at"].as_str(),
-            "updated_at must advance on archive: {body}"
-        );
-        // アーカイブした店は既定の一覧に含まれない (FR-12)。
-        let list = assert_status(client.get("/api/shops"), 200);
-        assert!(
-            !list["shops"]
-                .as_array()
-                .expect("shops")
-                .iter()
-                .any(|shop| shop["id"] == created["id"]),
-            "the archived shop must not be listed: {list}"
-        );
-        // アーカイブ済みの店は include_archived で取得でき、単件でも取得できる (FR-12)。
-        let list = assert_status(client.get("/api/shops?include_archived=true"), 200);
-        assert!(
-            list["shops"]
-                .as_array()
-                .expect("shops")
-                .iter()
-                .any(|shop| shop["id"] == created["id"]),
-            "the archived shop must be listed: {list}"
-        );
-        assert_status(client.get(&format!("/api/shops/{id}")), 200);
-
-        // 繰り返しのアーカイブも 200 を返す (同じ状態への遷移はエラーにしない)。
-        assert_status(client.post(&format!("/api/shops/{id}/archive")), 200);
-
-        // アーカイブ済みの店も更新できる (単件の取得と同じくアーカイブ済みを引くため)。
-        let body = assert_status(
-            client.patch_json(
-                &format!("/api/shops/{id}"),
-                &json!({ "name": "名前だけ変更" }),
-            ),
-            200,
-        );
-        assert_eq!(body["name"], "名前だけ変更", "{body}");
-        assert!(
-            body["archived_at"].as_str().is_some(),
-            "the archived_at must be kept: {body}"
-        );
-
-        // アーカイブ解除で既定の一覧に戻る (FR-12)。
-        let body = assert_status(client.post(&format!("/api/shops/{id}/unarchive")), 200);
-        assert_eq!(body["archived_at"], Value::Null, "{body}");
-        let list = assert_status(client.get("/api/shops"), 200);
-        assert!(
-            list["shops"]
-                .as_array()
-                .expect("shops")
-                .iter()
-                .any(|shop| shop["id"] == created["id"]),
-            "the unarchived shop must be listed: {list}"
-        );
-        // 繰り返しのアーカイブ解除も 200 を返す。
-        assert_status(client.post(&format!("/api/shops/{id}/unarchive")), 200);
-    }
-
-    #[test]
-    fn wrangler_shops_archive_unauthenticated_401() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(
-            anonymous(&base_url).post(&format!("/api/shops/{}/archive", data.list_shops[0].id)),
-        );
-    }
-
-    #[test]
-    fn wrangler_shops_unarchive_unauthenticated_401() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(
-            anonymous(&base_url).post(&format!("/api/shops/{}/unarchive", data.list_shops[0].id)),
-        );
-    }
-
-    #[test]
-    fn wrangler_shops_archive_other_user_404() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.list_session));
-        assert_not_found(client.post(&format!("/api/shops/{}/archive", data.other_shop.id)));
-        assert_not_found(client.post(&format!("/api/shops/{}/unarchive", data.other_shop.id)));
-        let other = assert_status(
-            ApiClient::new(&base_url, Some(&data.other_session))
-                .get(&format!("/api/shops/{}", data.other_shop.id)),
-            200,
-        );
-        assert_eq!(other["archived_at"], Value::Null);
-    }
-
-    #[test]
-    fn wrangler_shops_unarchive_other_user_404() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.list_session));
-        assert_not_found(client.post("/api/shops/no-such-id/unarchive"));
-    }
 }
 
 mod products {
-    //! 商品の経路のテスト (FR-7、FR-8、FR-12、FR-5)。
+    //! 商品の経路のテスト (FR-7、FR-8、FR-5)。
 
     use super::*;
 
@@ -772,22 +633,17 @@ mod products {
         assert_eq!(products[0]["flavor_notes"], json!(["berry", "chocolate"]));
         assert_eq!(products[1]["flavor_notes"], json!(["chocolate"]));
         assert_eq!(products[0]["producer"], Value::Null, "{body}");
-        // アーカイブ済みの商品は既定の一覧に含まれない (FR-12)。
-        assert!(
-            !products
-                .iter()
-                .any(|product| product["id"] == data.product_list_archived.id),
-            "the archived product must not be listed: {body}"
-        );
         assert_eq!(body["next_cursor"], Value::Null);
-
-        // include_archived ではアーカイブ済みも返る (FR-12)。
-        let body = assert_status(client.get("/api/products?include_archived=true"), 200);
-        let products = body["products"].as_array().expect("products");
-        assert_eq!(products.len(), 3, "{body}");
-        assert_eq!(products[2]["id"], data.product_list_archived.id);
-        assert_timestamp(&products[2]["archived_at"]);
-        assert_eq!(products[2]["flavor_notes"], json!([]));
+        // 応答に archived_at は無い。
+        for product in products {
+            assert!(
+                product.get("archived_at").is_none(),
+                "the response must not carry archived_at: {product}"
+            );
+        }
+        // include_archived は未知のパラメータとして無視され、挙動が変わらない。
+        let with_parameter = assert_status(client.get("/api/products?include_archived=true"), 200);
+        assert_eq!(with_parameter, body, "{with_parameter}");
     }
 
     #[test]
@@ -852,15 +708,11 @@ mod products {
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
         let client = ApiClient::new(&base_url, Some(&data.product_list_session));
-        for query in [
-            "limit=0",
-            "limit=abc",
-            "limit=201",
-            "include_archived=1",
-            "cursor=x",
-        ] {
+        for query in ["limit=0", "limit=abc", "limit=201", "cursor=x"] {
             assert_bad_request(client.get(&format!("/api/products?{query}")));
         }
+        // 受け取らないパラメータは未知のパラメータとして無視する (400 にしない)。
+        assert_status(client.get("/api/products?include_archived=1"), 200);
     }
 
     // 名前の絞り込み (FR-19)。
@@ -892,7 +744,7 @@ mod products {
     }
 
     #[test]
-    fn wrangler_products_list_name_ignores_trim_and_case_and_excludes_archived() {
+    fn wrangler_products_list_name_ignores_trim_and_case() {
         let data = data();
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
@@ -917,26 +769,6 @@ mod products {
                 "{query}"
             );
         }
-        // 既定ではアーカイブ済みの商品を含めない (FR-12、FR-19)。
-        assert!(
-            !list_by_name(&client, "Ethiopia Guji")["products"]
-                .as_array()
-                .expect("products")
-                .iter()
-                .any(|product| product["id"] == data.name_filter_archived.id),
-            "the archived product must not be listed"
-        );
-        // include_archived=true ではアーカイブ済みも含める。
-        let body = assert_status(
-            client.get(&format!(
-                "/api/products?name={}&include_archived=true",
-                encode_query("Ethiopia Guji")
-            )),
-            200,
-        );
-        let products = body["products"].as_array().expect("products");
-        assert_eq!(products.len(), 3, "{body}");
-        assert_eq!(products[2]["id"], data.name_filter_archived.id, "{body}");
     }
 
     #[test]
@@ -983,7 +815,8 @@ mod products {
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
         let client = ApiClient::new(&base_url, Some(&data.name_filter_session));
-        // 名前の絞り込みを付けても、limit と include_archived は同じように働く (FR-19)。
+        // 名前の絞り込みを付けても、limit は同じように働く (FR-19)。
+        // 受け取らないパラメータは無視される。
         let body = assert_status(
             client.get(&format!(
                 "/api/products?limit=1&name={}&include_archived=true",
@@ -1027,7 +860,7 @@ mod products {
             assert_eq!(body[field], Value::Null, "{field}: {body}");
         }
         assert_eq!(body["flavor_notes"], json!([]), "{body}");
-        assert_eq!(body["archived_at"], Value::Null);
+        assert!(body.get("archived_at").is_none(), "{body}");
         assert_timestamp(&body["created_at"]);
         assert_eq!(body["created_at"], body["updated_at"], "{body}");
         let id = body["id"].as_str().expect("the id must be present");
@@ -1152,13 +985,7 @@ mod products {
         assert_eq!(body["id"], data.product_list_products[0].id);
         assert_eq!(body["name"], data.product_list_products[0].name);
         assert_eq!(body["flavor_notes"], json!(["berry", "chocolate"]));
-
-        // アーカイブ済みでも単件では返す (FR-12)。
-        let body = assert_status(
-            client.get(&format!("/api/products/{}", data.product_list_archived.id)),
-            200,
-        );
-        assert_timestamp(&body["archived_at"]);
+        assert!(body.get("archived_at").is_none(), "{body}");
     }
 
     #[test]
@@ -1301,7 +1128,6 @@ mod products {
             json!({ "flavor_notes": ["  "] }),
             json!({ "id": "no-such-id" }),
             json!({ "created_at": T21 }),
-            json!({ "archived_at": T21 }),
             json!([1]),
         ] {
             assert_bad_request(client.patch_json(&format!("/api/products/{id}"), &body));
@@ -1343,113 +1169,6 @@ mod products {
             200,
         );
         assert_eq!(other["name"], data.other_product.name);
-    }
-
-    // 商品のアーカイブと解除 (認証が必要、入力なし)。
-
-    #[test]
-    fn wrangler_products_archive_and_unarchive_ok() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_write_session));
-        let created = assert_status(
-            client.post_json(
-                "/api/products",
-                &json!({ "name": "アーカイブの豆", "flavor_notes": ["berry"] }),
-            ),
-            200,
-        );
-        let id = created["id"].as_str().expect("the id must be present");
-        sleep_millis(10);
-
-        let body = assert_status(client.post(&format!("/api/products/{id}/archive")), 200);
-        assert_timestamp(&body["archived_at"]);
-        assert!(
-            body["updated_at"].as_str() > created["updated_at"].as_str(),
-            "updated_at must advance on archive: {body}"
-        );
-        // アーカイブしてもタグは残り、商品からたどれる (FR-12)。
-        assert_eq!(body["flavor_notes"], json!(["berry"]), "{body}");
-        // アーカイブした商品は既定の一覧に含まれない (FR-12)。
-        let list = assert_status(client.get("/api/products"), 200);
-        assert!(
-            !list["products"]
-                .as_array()
-                .expect("products")
-                .iter()
-                .any(|product| product["id"] == created["id"]),
-            "the archived product must not be listed: {list}"
-        );
-        assert_status(client.get(&format!("/api/products/{id}")), 200);
-        // 繰り返しのアーカイブも 200 を返す。
-        assert_status(client.post(&format!("/api/products/{id}/archive")), 200);
-
-        // アーカイブ解除で既定の一覧に戻る (FR-12)。
-        let body = assert_status(client.post(&format!("/api/products/{id}/unarchive")), 200);
-        assert_eq!(body["archived_at"], Value::Null, "{body}");
-        let list = assert_status(client.get("/api/products"), 200);
-        assert!(
-            list["products"]
-                .as_array()
-                .expect("products")
-                .iter()
-                .any(|product| product["id"] == created["id"]),
-            "the unarchived product must be listed: {list}"
-        );
-        assert_status(client.post(&format!("/api/products/{id}/unarchive")), 200);
-    }
-
-    #[test]
-    fn wrangler_products_archive_unauthenticated_401() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(anonymous(&base_url).post(&format!(
-            "/api/products/{}/archive",
-            data.product_list_products[0].id
-        )));
-    }
-
-    #[test]
-    fn wrangler_products_unarchive_unauthenticated_401() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(anonymous(&base_url).post(&format!(
-            "/api/products/{}/unarchive",
-            data.product_list_products[0].id
-        )));
-    }
-
-    #[test]
-    fn wrangler_products_archive_other_user_404() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_list_session));
-        assert_not_found(client.post(&format!("/api/products/{}/archive", data.other_product.id)));
-        assert_not_found(client.post(&format!(
-            "/api/products/{}/unarchive",
-            data.other_product.id
-        )));
-        let other = assert_status(
-            ApiClient::new(&base_url, Some(&data.other_session))
-                .get(&format!("/api/products/{}", data.other_product.id)),
-            200,
-        );
-        assert_eq!(other["archived_at"], Value::Null);
-    }
-
-    #[test]
-    fn wrangler_products_unarchive_other_user_404() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_not_found(
-            ApiClient::new(&base_url, Some(&data.product_list_session))
-                .post("/api/products/no-such-id/unarchive"),
-        );
     }
 }
 

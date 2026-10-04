@@ -1,7 +1,7 @@
 //! 全記録のエクスポート (FR-14)。
 //!
 //! ADR-0006 の利用者データの 6 テーブル (shops、products、flavor_tags、product_flavor_tags、
-//! purchases、brews) の、アーカイブ済みを含む全行と全列を 1 つの JSON にまとめる。
+//! purchases、brews) の全行と全列を 1 つの JSON にまとめる。
 //! パスキー、セッション、チャレンジ、登録用トークンは含めない。
 //! 購入の行は `photo_key` に加えて写真取得 API のパスを `photo_path` として持ち、写真の実体と
 //! 署名付き GET URL は含めない (ADR-0003)。
@@ -30,7 +30,6 @@ struct ShopRow {
     address: Option<String>,
     created_at: String,
     updated_at: String,
-    archived_at: Option<String>,
 }
 
 /// 商品の行。列は products テーブルと同じ。
@@ -46,7 +45,6 @@ struct ProductRow {
     variety: Option<String>,
     created_at: String,
     updated_at: String,
-    archived_at: Option<String>,
 }
 
 /// Flavor Notes のタグの行。列は flavor_tags テーブルと同じ。
@@ -81,7 +79,6 @@ struct PurchaseRow {
     photo_key: Option<String>,
     created_at: String,
     updated_at: String,
-    archived_at: Option<String>,
 }
 
 /// エクスポートの購入の行。テーブルの列に写真取得 API のパスを加える (ADR-0003)。
@@ -118,7 +115,6 @@ struct BrewRow {
     notes: Option<String>,
     created_at: String,
     updated_at: String,
-    archived_at: Option<String>,
 }
 
 /// `GET /api/export` の応答。トップレベルに 6 テーブルの名前を持つ配列を並べる (FR-14)。

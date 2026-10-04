@@ -91,14 +91,10 @@ impl RecordsApi {
     }
 
     /// 店の一覧を引く (FR-6)。
-    pub async fn shops(
-        &self,
-        cursor: Option<&str>,
-        include_archived: bool,
-    ) -> Result<RecordPage<Shop>, RecordError> {
+    pub async fn shops(&self, cursor: Option<&str>) -> Result<RecordPage<Shop>, RecordError> {
         let json = self
             .api
-            .get_json(&list_path("/shops", cursor, include_archived, None))
+            .get_json(&list_path("/shops", cursor, None))
             .await?;
         Ok(RecordPage {
             items: items_field(&json, "shops", Shop::from_json)?,
@@ -106,7 +102,7 @@ impl RecordsApi {
         })
     }
 
-    /// 店を 1 件引く (FR-6)。アーカイブ済みでも返る (FR-12)。
+    /// 店を 1 件引く (FR-6)。
     pub async fn shop(&self, id: &str) -> Result<Shop, RecordError> {
         Shop::from_json(&self.api.get_json(&format!("/shops/{id}")).await?)
     }
@@ -126,16 +122,6 @@ impl RecordsApi {
         )
     }
 
-    /// 店をアーカイブする、またはアーカイブ解除する (FR-12)。
-    pub async fn set_shop_archived(&self, id: &str, archived: bool) -> Result<Shop, RecordError> {
-        Shop::from_json(
-            &self
-                .api
-                .post_json(&archive_path("/shops", id, archived), &json!({}))
-                .await?,
-        )
-    }
-
     /// 商品の一覧を引く (FR-7、FR-8)。
     ///
     /// `name` を指定したときは、前後の空白を除いて大文字と小文字を区別しない名前の完全一致で
@@ -143,12 +129,11 @@ impl RecordsApi {
     pub async fn products(
         &self,
         cursor: Option<&str>,
-        include_archived: bool,
         name: Option<&str>,
     ) -> Result<RecordPage<Product>, RecordError> {
         let json = self
             .api
-            .get_json(&list_path("/products", cursor, include_archived, name))
+            .get_json(&list_path("/products", cursor, name))
             .await?;
         Ok(RecordPage {
             items: items_field(&json, "products", Product::from_json)?,
@@ -156,7 +141,7 @@ impl RecordsApi {
         })
     }
 
-    /// 商品を 1 件引く (FR-7)。アーカイブ済みでも返る (FR-12)。
+    /// 商品を 1 件引く (FR-7)。
     pub async fn product(&self, id: &str) -> Result<Product, RecordError> {
         Product::from_json(&self.api.get_json(&format!("/products/{id}")).await?)
     }
@@ -180,29 +165,14 @@ impl RecordsApi {
         )
     }
 
-    /// 商品をアーカイブする、またはアーカイブ解除する (FR-12)。
-    pub async fn set_product_archived(
-        &self,
-        id: &str,
-        archived: bool,
-    ) -> Result<Product, RecordError> {
-        Product::from_json(
-            &self
-                .api
-                .post_json(&archive_path("/products", id, archived), &json!({}))
-                .await?,
-        )
-    }
-
     /// 購入の一覧を引く (FR-9)。
     pub async fn purchases(
         &self,
         cursor: Option<&str>,
-        include_archived: bool,
     ) -> Result<RecordPage<Purchase>, RecordError> {
         let json = self
             .api
-            .get_json(&list_path("/purchases", cursor, include_archived, None))
+            .get_json(&list_path("/purchases", cursor, None))
             .await?;
         Ok(RecordPage {
             items: items_field(&json, "purchases", Purchase::from_json)?,
@@ -210,7 +180,7 @@ impl RecordsApi {
         })
     }
 
-    /// 購入を 1 件引く (FR-9)。アーカイブ済みでも返る (FR-12)。
+    /// 購入を 1 件引く (FR-9)。
     pub async fn purchase(&self, id: &str) -> Result<Purchase, RecordError> {
         Purchase::from_json(&self.api.get_json(&format!("/purchases/{id}")).await?)
     }
@@ -234,29 +204,11 @@ impl RecordsApi {
         )
     }
 
-    /// 購入をアーカイブする、またはアーカイブ解除する (FR-12)。
-    pub async fn set_purchase_archived(
-        &self,
-        id: &str,
-        archived: bool,
-    ) -> Result<Purchase, RecordError> {
-        Purchase::from_json(
-            &self
-                .api
-                .post_json(&archive_path("/purchases", id, archived), &json!({}))
-                .await?,
-        )
-    }
-
     /// 抽出の一覧を引く (FR-11)。
-    pub async fn brews(
-        &self,
-        cursor: Option<&str>,
-        include_archived: bool,
-    ) -> Result<RecordPage<Brew>, RecordError> {
+    pub async fn brews(&self, cursor: Option<&str>) -> Result<RecordPage<Brew>, RecordError> {
         let json = self
             .api
-            .get_json(&list_path("/brews", cursor, include_archived, None))
+            .get_json(&list_path("/brews", cursor, None))
             .await?;
         Ok(RecordPage {
             items: items_field(&json, "brews", Brew::from_json)?,
@@ -264,7 +216,7 @@ impl RecordsApi {
         })
     }
 
-    /// 抽出を 1 件引く (FR-11)。アーカイブ済みでも返る (FR-12)。
+    /// 抽出を 1 件引く (FR-11)。
     pub async fn brew(&self, id: &str) -> Result<Brew, RecordError> {
         Brew::from_json(&self.api.get_json(&format!("/brews/{id}")).await?)
     }
@@ -280,16 +232,6 @@ impl RecordsApi {
             &self
                 .api
                 .patch_json(&format!("/brews/{id}"), &input.to_json())
-                .await?,
-        )
-    }
-
-    /// 抽出をアーカイブする、またはアーカイブ解除する (FR-12)。
-    pub async fn set_brew_archived(&self, id: &str, archived: bool) -> Result<Brew, RecordError> {
-        Brew::from_json(
-            &self
-                .api
-                .post_json(&archive_path("/brews", id, archived), &json!({}))
                 .await?,
         )
     }
@@ -387,17 +329,9 @@ impl RecordsApi {
     }
 }
 
-/// 一覧の経路に、件数とカーソルとアーカイブの指定を付ける。
-fn list_path(
-    path: &str,
-    cursor: Option<&str>,
-    include_archived: bool,
-    name: Option<&str>,
-) -> String {
+/// 一覧の経路に、件数とカーソルと名前の絞り込みを付ける。
+fn list_path(path: &str, cursor: Option<&str>, name: Option<&str>) -> String {
     let mut query = format!("?limit={PAGE_SIZE}");
-    if include_archived {
-        query.push_str("&include_archived=true");
-    }
     if let Some(cursor) = cursor {
         query.push_str("&cursor=");
         query.push_str(&encode_query(cursor));
@@ -407,12 +341,6 @@ fn list_path(
         query.push_str(&encode_query(name));
     }
     format!("{path}{query}")
-}
-
-/// アーカイブと解除の経路 (FR-12)。
-fn archive_path(path: &str, id: &str, archived: bool) -> String {
-    let action = if archived { "archive" } else { "unarchive" };
-    format!("{path}/{id}/{action}")
 }
 
 /// クエリ文字列の値をパーセントエンコードする (RFC 3986 の unreserved 以外を `%XX` にする)。

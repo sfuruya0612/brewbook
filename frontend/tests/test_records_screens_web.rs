@@ -182,7 +182,6 @@ fn purchase_json() -> serde_json::Value {
         "photo_key": null,
         "created_at": "2026-10-01T00:00:00.000Z",
         "updated_at": "2026-10-01T00:00:00.000Z",
-        "archived_at": null,
         "product": {
             "id": "pr1",
             "name": "豆",
@@ -194,7 +193,6 @@ fn purchase_json() -> serde_json::Value {
             "flavor_notes": [],
             "created_at": "2026-10-01T00:00:00.000Z",
             "updated_at": "2026-10-01T00:00:00.000Z",
-            "archived_at": null,
         },
         "shop": null,
     })
@@ -216,7 +214,6 @@ fn brew_json() -> serde_json::Value {
         "notes": null,
         "created_at": "2026-10-01T00:00:00.000Z",
         "updated_at": "2026-10-01T00:00:00.000Z",
-        "archived_at": null,
         "purchase": purchase_json(),
     })
 }

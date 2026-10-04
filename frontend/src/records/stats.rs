@@ -233,7 +233,7 @@ impl StatsApi {
         items_field(&json, "brew_ratings", BrewRating::from_json)
     }
 
-    /// 購入ごとの評価の推移を引く (FR-18)。期間で絞らず、アーカイブ済みの購入も指定できる。
+    /// 購入ごとの評価の推移を引く (FR-18)。期間で絞らず、購入を指定できる。
     pub async fn rating_history(
         &self,
         purchase_id: &str,

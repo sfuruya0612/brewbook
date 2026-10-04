@@ -1,4 +1,4 @@
-//! 商品の一覧の画面 (FR-7、FR-8、FR-12)。
+//! 商品の一覧の画面 (FR-7、FR-8)。
 //!
 //! 行から商品の編集を開く。幅 840 px 以上では一覧とフォームを 2 段組にし、行を押すと右の面に
 //! フォームを出す。
@@ -28,12 +28,9 @@ pub fn ProductListScreen() -> Element {
     let mut creating = use_signal(|| false);
 
     let load_services = services.clone();
-    let load = RecordLoader::new(move |cursor, include_archived| {
+    let load = RecordLoader::new(move |cursor| {
         let api = RecordsApi::new(load_services.api.clone());
-        Box::pin(async move {
-            api.products(cursor.as_deref(), include_archived, None)
-                .await
-        })
+        Box::pin(async move { api.products(cursor.as_deref(), None).await })
     });
 
     let row = Callback::new(move |product: crate::records::Product| {
@@ -51,7 +48,6 @@ pub fn ProductListScreen() -> Element {
                         TagChip { label: note }
                     }
                 }),
-                archived: product.is_archived(),
                 selected: selected_now,
                 on_click: Some(EventHandler::new(move |_| {
                     if wide() {

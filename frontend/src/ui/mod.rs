@@ -47,7 +47,7 @@ pub use feedback::{Banner, ConfirmDialog, Snackbar};
 pub use field::{Field, TextField, TextFieldKind};
 pub use icon::Icon;
 pub use ledger::{Ledger, LedgerRow};
-pub use list_row::{ArchivedBadge, ListRow, ListThumb, RowValue};
+pub use list_row::{ListRow, ListThumb, RowValue};
 pub use mark::BrewbookMark;
 pub use rating::{lit_dots, Rating, RatingInput, RatingSize};
 pub use reference_tile::{PickerTile, ReferenceChain, ReferenceTile};

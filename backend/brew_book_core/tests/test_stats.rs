@@ -1,6 +1,6 @@
 //! `stats` の単体テスト。
 //!
-//! 組み立てた SQL が利用者 ID と `archived_at` の条件を必ず含むこと、値がプレースホルダで
+//! 組み立てた SQL が利用者 ID の条件を必ず含むこと、値がプレースホルダで
 //! 渡ること、期間の端を UTC の瞬間に直すこと、入力の検証の誤りが 400 になることを確認する。
 //!
 //! 組み立てる関数ごとの SQL は [`queries`]、条件の付け忘れの検出は [`conditions`] が検査する。
@@ -175,7 +175,7 @@ mod queries {
             statement.sql,
             "SELECT strftime('%Y-%m-%d', b.brewed_at, '+540 minutes') AS period, \
              COUNT(*) AS brew_count, COALESCE(ROUND(SUM(b.dose_grams), 1), 0) AS dose_grams \
-             FROM brews AS b WHERE b.user_id = ? AND b.archived_at IS NULL \
+             FROM brews AS b WHERE b.user_id = ? \
              AND b.brewed_at >= ? AND b.brewed_at < ? \
              GROUP BY strftime('%Y-%m-%d', b.brewed_at, '+540 minutes') ORDER BY period ASC"
         );
@@ -199,7 +199,7 @@ mod queries {
             statement.sql,
             "SELECT strftime('%Y-%m', b.brewed_at, '-300 minutes') AS period, \
              COUNT(*) AS brew_count, COALESCE(ROUND(SUM(b.dose_grams), 1), 0) AS dose_grams \
-             FROM brews AS b WHERE b.user_id = ? AND b.archived_at IS NULL \
+             FROM brews AS b WHERE b.user_id = ? \
              GROUP BY strftime('%Y-%m', b.brewed_at, '-300 minutes') ORDER BY period ASC"
         );
         assert_eq!(statement.params, vec![Value::Text(USER_ID.to_owned())]);
@@ -260,7 +260,7 @@ mod queries {
         assert_eq!(
             statement.sql,
             "SELECT b.id, b.dose_grams, b.water_grams, b.water_temp_c, b.brew_time_seconds, \
-             b.rating FROM brews AS b WHERE b.user_id = ? AND b.archived_at IS NULL \
+             b.rating FROM brews AS b WHERE b.user_id = ? \
              AND b.rating IS NOT NULL AND b.brewed_at >= ? AND b.brewed_at < ? \
              ORDER BY b.brewed_at ASC, b.id ASC"
         );
@@ -287,7 +287,7 @@ mod queries {
             "SELECT strftime('%Y-%m-%d', p.purchased_on) AS period, p.price_currency, \
              COALESCE(SUM(p.price_amount), 0) AS price_amount, \
              COALESCE(SUM(p.weight_grams), 0) AS weight_grams, COUNT(*) AS purchase_count \
-             FROM purchases AS p WHERE p.user_id = ? AND p.archived_at IS NULL \
+             FROM purchases AS p WHERE p.user_id = ? \
              AND p.purchased_on >= ? AND p.purchased_on <= ? \
              GROUP BY strftime('%Y-%m-%d', p.purchased_on), p.price_currency \
              ORDER BY period ASC, p.price_currency ASC"
@@ -312,7 +312,7 @@ mod queries {
             "SELECT strftime('%Y-%m', p.purchased_on) AS period, p.price_currency, \
              COALESCE(SUM(p.price_amount), 0) AS price_amount, \
              COALESCE(SUM(p.weight_grams), 0) AS weight_grams, COUNT(*) AS purchase_count \
-             FROM purchases AS p WHERE p.user_id = ? AND p.archived_at IS NULL \
+             FROM purchases AS p WHERE p.user_id = ? \
              GROUP BY strftime('%Y-%m', p.purchased_on), p.price_currency \
              ORDER BY period ASC, p.price_currency ASC"
         );
@@ -326,7 +326,7 @@ mod queries {
         assert_eq!(
             statement.sql,
             "SELECT b.id, b.brewed_at, b.rating FROM brews AS b WHERE b.user_id = ? \
-             AND b.archived_at IS NULL AND b.purchase_id = ? AND b.rating IS NOT NULL \
+             AND b.purchase_id = ? AND b.rating IS NOT NULL \
              ORDER BY b.brewed_at ASC, b.id ASC"
         );
         assert_eq!(
@@ -426,7 +426,7 @@ mod conditions {
         statements
     }
 
-    /// 文が利用者とアーカイブの条件を保つかを確かめる。誤りは理由を返す。
+    /// 文が利用者の条件を保つかを確かめる。誤りは理由を返す。
     fn missing_condition(name: &str, statement: &Statement) -> Option<String> {
         if !statement.sql.contains("user_id = ?") {
             return Some(format!("the user filter is missing in {name}"));
@@ -434,14 +434,11 @@ mod conditions {
         if !statement.params.contains(&Value::Text(USER_ID.to_owned())) {
             return Some(format!("the user id is missing in {name}"));
         }
-        if !statement.sql.contains("archived_at IS NULL") {
-            return Some(format!("the archived filter is missing in {name}"));
-        }
         None
     }
 
     #[test]
-    fn every_stats_query_keeps_the_user_and_archived_conditions() {
+    fn every_stats_query_keeps_the_user_condition() {
         for (name, statement) in every_statement() {
             assert_eq!(missing_condition(name, &statement), None);
             let placeholders = statement.sql.matches('?').count();
@@ -463,7 +460,7 @@ mod conditions {
     #[test]
     fn the_checker_detects_an_omitted_user_condition() {
         let statement = Statement {
-            sql: "SELECT id FROM brews WHERE archived_at IS NULL".to_owned(),
+            sql: "SELECT id FROM brews WHERE id = ?".to_owned(),
             params: Vec::new(),
         };
         assert_eq!(
@@ -473,21 +470,9 @@ mod conditions {
     }
 
     #[test]
-    fn the_checker_detects_an_omitted_archived_condition() {
+    fn the_checker_accepts_a_query_with_the_user_condition() {
         let statement = Statement {
-            sql: "SELECT id FROM brews WHERE user_id = ? AND archived_at IS NOT NULL".to_owned(),
-            params: vec![Value::Text(USER_ID.to_owned())],
-        };
-        assert_eq!(
-            missing_condition("test", &statement),
-            Some("the archived filter is missing in test".to_owned())
-        );
-    }
-
-    #[test]
-    fn the_checker_accepts_a_query_with_every_condition() {
-        let statement = Statement {
-            sql: "SELECT id FROM brews WHERE user_id = ? AND archived_at IS NULL".to_owned(),
+            sql: "SELECT id FROM brews WHERE user_id = ?".to_owned(),
             params: vec![Value::Text(USER_ID.to_owned())],
         };
         assert_eq!(missing_condition("test", &statement), None);

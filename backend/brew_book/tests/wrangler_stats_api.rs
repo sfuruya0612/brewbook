@@ -4,8 +4,7 @@
 //! 昇順 (null が先頭)、条件が NULL の項目の null、評価の推移の昇順と NULL の除外を確認する。
 //! 日と月の境界をまたぐ抽出日時を投入し、UTC オフセット +540 (日本標準時) と -300 で区切る
 //! 区間が変わることと、期間の端が端末のローカル時刻の日付になることを確認する。
-//! 他の利用者の記録とアーカイブ済みの記録が結果に含まれないこと、参照先の購入がアーカイブ
-//! 済みでも抽出自身がアーカイブ済みでなければ統計に含まれることも確認する。
+//! 他の利用者の記録が結果に含まれないことも確認する。
 //!
 //! テスト名の `wrangler_` は、`wrangler dev` を起動するテストを `backend:test` が名前で除外するための規約。
 //! サーバーは 1 つのテストファイルで 1 回だけ起動し、下ごしらえの SQL を先に実行する。
@@ -26,8 +25,6 @@ use support::ServerLease;
 const CREATED: &str = "2026-09-01T00:00:00.000Z";
 /// セッションの有効期限 (十分に先の時刻)。
 const FUTURE: &str = "2099-01-01T00:00:00.000Z";
-/// アーカイブの日時。
-const ARCHIVED: &str = "2026-09-22T00:00:00.000Z";
 
 /// このテストファイルの下ごしらえと、テストが使う値。
 struct TestData {
@@ -38,8 +35,8 @@ struct TestData {
     stats_purchase_a: SeededPurchase,
     /// 同一の購入日の購入 B。
     stats_purchase_b: SeededPurchase,
-    /// アーカイブ済みの購入 (参照先がアーカイブ済みでも抽出を統計に含めることの検査に使う)。
-    stats_archived_purchase: SeededPurchase,
+    /// 抽出 I が参照する購入 (価格と重量を持たない)。
+    stats_brew_i_purchase: SeededPurchase,
     /// 評価を持つ抽出 (2026-09-20T15:00:00.000Z。+540 では 09-21、-300 では 09-20 の区間)。
     brew_a: SeededBrew,
     /// 評価が NULL の抽出 (2026-09-21T14:59:59.999Z。両方のオフセットで 09-21 の区間)。
@@ -50,10 +47,8 @@ struct TestData {
     brew_d: SeededBrew,
     /// 評価を持つ抽出 (2026-09-20T14:59:59.999Z。豆の量が NULL)。
     brew_f: SeededBrew,
-    /// 評価を持つ抽出 (2026-09-21T01:00:00.000Z。豆の量が NULL。購入がアーカイブ済み)。
+    /// 評価を持つ抽出 (2026-09-21T01:00:00.000Z。豆の量が NULL)。
     brew_i: SeededBrew,
-    /// アーカイブ済みの抽出 (統計と評価の推移に含まれない)。
-    brew_archived: SeededBrew,
     /// 購入金額と重量の統計の利用者のセッション。
     purchase_session: String,
     /// 2026-09-21 の 1200 JPY、重量 200。抽出を持たない。
@@ -90,7 +85,7 @@ fn build_data() -> TestData {
     let stats_user = user_id(1);
     seed.user(&stats_user, "stats user", CREATED);
     let stats_session = seed.session(&stats_user, FUTURE, CREATED);
-    let stats_product = seed.product(&stats_user, "統計の豆", CREATED, CREATED, None);
+    let stats_product = seed.product(&stats_user, "統計の豆", CREATED, CREATED);
     let stats_purchase_a = seed.purchase_with_numbers(
         &stats_user,
         &stats_product.id,
@@ -101,7 +96,6 @@ fn build_data() -> TestData {
         Some(200),
         CREATED,
         CREATED,
-        None,
     );
     let stats_purchase_b = seed.purchase_with_numbers(
         &stats_user,
@@ -113,9 +107,8 @@ fn build_data() -> TestData {
         Some(150),
         CREATED,
         CREATED,
-        None,
     );
-    let stats_archived_purchase = seed.purchase_with_numbers(
+    let stats_brew_i_purchase = seed.purchase_with_numbers(
         &stats_user,
         &stats_product.id,
         None,
@@ -124,8 +117,7 @@ fn build_data() -> TestData {
         None,
         None,
         CREATED,
-        ARCHIVED,
-        Some(ARCHIVED),
+        CREATED,
     );
     // 日と月の境界をまたぐ抽出日時 (コメントの区間は +540 の端末でのローカル時刻)。
     let brew_a = seed.brew_with_numbers(
@@ -139,7 +131,6 @@ fn build_data() -> TestData {
         Some(5),
         CREATED,
         CREATED,
-        None,
     );
     let brew_b = seed.brew_with_numbers(
         &stats_user,
@@ -152,7 +143,6 @@ fn build_data() -> TestData {
         None,
         CREATED,
         CREATED,
-        None,
     );
     let brew_c = seed.brew_with_numbers(
         &stats_user,
@@ -165,7 +155,6 @@ fn build_data() -> TestData {
         Some(4),
         CREATED,
         CREATED,
-        None,
     );
     let brew_d = seed.brew_with_numbers(
         &stats_user,
@@ -178,7 +167,6 @@ fn build_data() -> TestData {
         Some(3),
         CREATED,
         CREATED,
-        None,
     );
     seed.brew_with_numbers(
         &stats_user,
@@ -191,7 +179,6 @@ fn build_data() -> TestData {
         None,
         CREATED,
         CREATED,
-        None,
     );
     let brew_f = seed.brew_with_numbers(
         &stats_user,
@@ -204,12 +191,10 @@ fn build_data() -> TestData {
         Some(2),
         CREATED,
         CREATED,
-        None,
     );
-    // 購入がアーカイブ済みでも、抽出自身がアーカイブ済みでなければ統計に含める (ADR-0006)。
     let brew_i = seed.brew_with_numbers(
         &stats_user,
-        &stats_archived_purchase.id,
+        &stats_brew_i_purchase.id,
         "2026-09-21T01:00:00.000Z", // 09-21 の 10:00
         None,
         Some(160.0),
@@ -218,27 +203,13 @@ fn build_data() -> TestData {
         Some(3),
         CREATED,
         CREATED,
-        None,
-    );
-    let brew_archived = seed.brew_with_numbers(
-        &stats_user,
-        &stats_purchase_a.id,
-        "2026-09-21T02:00:00.000Z",
-        Some(100.0),
-        Some(100.0),
-        Some(99.0),
-        Some(999),
-        Some(1),
-        CREATED,
-        ARCHIVED,
-        Some(ARCHIVED),
     );
 
     // 購入金額と重量の統計の利用者。同じ購入日と、離れた購入日を含める。
     let purchase_user = user_id(2);
     seed.user(&purchase_user, "purchase stats user", CREATED);
     let purchase_session = seed.session(&purchase_user, FUTURE, CREATED);
-    let purchase_product = seed.product(&purchase_user, "購入統計の豆", CREATED, CREATED, None);
+    let purchase_product = seed.product(&purchase_user, "購入統計の豆", CREATED, CREATED);
     let purchase_jpy = seed.purchase_with_numbers(
         &purchase_user,
         &purchase_product.id,
@@ -249,7 +220,6 @@ fn build_data() -> TestData {
         Some(200),
         CREATED,
         CREATED,
-        None,
     );
     seed.purchase_with_numbers(
         &purchase_user,
@@ -261,7 +231,6 @@ fn build_data() -> TestData {
         Some(150),
         CREATED,
         CREATED,
-        None,
     );
     seed.purchase_with_numbers(
         &purchase_user,
@@ -273,7 +242,6 @@ fn build_data() -> TestData {
         None,
         CREATED,
         CREATED,
-        None,
     );
     seed.purchase_with_numbers(
         &purchase_user,
@@ -285,7 +253,6 @@ fn build_data() -> TestData {
         None,
         CREATED,
         CREATED,
-        None,
     );
     seed.purchase_with_numbers(
         &purchase_user,
@@ -297,7 +264,6 @@ fn build_data() -> TestData {
         Some(100),
         CREATED,
         CREATED,
-        None,
     );
     seed.purchase_with_numbers(
         &purchase_user,
@@ -309,19 +275,6 @@ fn build_data() -> TestData {
         Some(300),
         CREATED,
         CREATED,
-        None,
-    );
-    seed.purchase_with_numbers(
-        &purchase_user,
-        &purchase_product.id,
-        None,
-        "2026-09-21",
-        Some(9999),
-        Some("JPY"),
-        Some(999),
-        CREATED,
-        ARCHIVED,
-        Some(ARCHIVED),
     );
     seed.purchase_with_numbers(
         &purchase_user,
@@ -333,14 +286,13 @@ fn build_data() -> TestData {
         Some(400),
         CREATED,
         CREATED,
-        None,
     );
 
     // 他の利用者。購入と抽出を 1 つずつ持ち、統計と 404 の検査に使う。
     let other_user = user_id(3);
     seed.user(&other_user, "other user", CREATED);
     let other_session = seed.session(&other_user, FUTURE, CREATED);
-    let other_product = seed.product(&other_user, "他人の豆", CREATED, CREATED, None);
+    let other_product = seed.product(&other_user, "他人の豆", CREATED, CREATED);
     let other_purchase = seed.purchase_with_numbers(
         &other_user,
         &other_product.id,
@@ -351,7 +303,6 @@ fn build_data() -> TestData {
         Some(500),
         CREATED,
         CREATED,
-        None,
     );
     let other_brew = seed.brew_with_numbers(
         &other_user,
@@ -364,7 +315,6 @@ fn build_data() -> TestData {
         Some(1),
         CREATED,
         CREATED,
-        None,
     );
 
     // 記録が無い利用者。
@@ -376,7 +326,7 @@ fn build_data() -> TestData {
     let rounding_user = user_id(5);
     seed.user(&rounding_user, "rounding user", CREATED);
     let rounding_session = seed.session(&rounding_user, FUTURE, CREATED);
-    let rounding_product = seed.product(&rounding_user, "丸めの豆", CREATED, CREATED, None);
+    let rounding_product = seed.product(&rounding_user, "丸めの豆", CREATED, CREATED);
     let rounding_purchase = seed.purchase_with_numbers(
         &rounding_user,
         &rounding_product.id,
@@ -387,7 +337,6 @@ fn build_data() -> TestData {
         None,
         CREATED,
         CREATED,
-        None,
     );
     for (index, dose) in [(1, 0.1), (2, 0.2)] {
         seed.brew_with_numbers(
@@ -401,7 +350,6 @@ fn build_data() -> TestData {
             None,
             CREATED,
             CREATED,
-            None,
         );
     }
 
@@ -410,14 +358,13 @@ fn build_data() -> TestData {
         stats_session,
         stats_purchase_a,
         stats_purchase_b,
-        stats_archived_purchase,
+        stats_brew_i_purchase,
         brew_a,
         brew_b,
         brew_c,
         brew_d,
         brew_f,
         brew_i,
-        brew_archived,
         purchase_session,
         purchase_jpy,
         other_session,
@@ -523,7 +470,7 @@ mod stats_brews {
         );
         let brews = assert_brews(&body);
         // A (12.0) と B (10.5、評価は NULL) と I (豆の量は NULL) が 09-21 の区間になる。
-        // C は +540 では 09-22、F は 09-20 の区間になり、G (アーカイブ済み) は含まれない。
+        // C は +540 では 09-22、F は 09-20 の区間になる。
         assert_eq!(brews.len(), 1, "{body}");
         assert_brew_period(&brews[0], "2026-09-21", 3, 22.5);
 
@@ -834,7 +781,7 @@ mod stats_brew_ratings {
         assert_eq!(ratings[1]["dose_grams"], Value::Null, "{body}");
         assert_eq!(ratings[1]["water_grams"], 160.0, "{body}");
         assert_eq!(ratings[1]["rating"], 3, "{body}");
-        // B (評価が NULL) と C (09-22 の区間) と G (アーカイブ済み) は含まれない。
+        // B (評価が NULL) と C (09-22 の区間) は含まれない。
         assert!(
             !ratings
                 .iter()
@@ -924,7 +871,7 @@ mod stats_brew_ratings {
 }
 
 mod purchases_rating_history {
-    //! `GET /api/purchases/<ID>/rating-history` のテスト (FR-18、FR-12、FR-5)。
+    //! `GET /api/purchases/<ID>/rating-history` のテスト (FR-18、FR-5)。
 
     use super::*;
 
@@ -960,12 +907,9 @@ mod purchases_rating_history {
             "{body}"
         );
         assert_eq!(ratings[1]["rating"], 5, "{body}");
-        // 評価が NULL の B と、アーカイブ済みの G は含まれない。
+        // 評価が NULL の B は含まれない。
         assert!(
-            !ratings
-                .iter()
-                .any(|rating| rating["id"] == data.brew_b.id
-                    || rating["id"] == data.brew_archived.id),
+            !ratings.iter().any(|rating| rating["id"] == data.brew_b.id),
             "{body}"
         );
 
@@ -988,11 +932,11 @@ mod purchases_rating_history {
             "{body}"
         );
 
-        // アーカイブ済みの購入も指定できる (単件取得と同じ扱い。FR-12)。
+        // 評価を持つ抽出が 1 件だけの購入も指定できる。
         let body = assert_status(
             client.get(&format!(
                 "/api/purchases/{}/rating-history",
-                data.stats_archived_purchase.id
+                data.stats_brew_i_purchase.id
             )),
             200,
         );
@@ -1049,18 +993,18 @@ mod purchases_rating_history {
 }
 
 mod isolation {
-    //! 他の利用者の記録とアーカイブ済みの記録の除外の検査 (FR-5、FR-12、FR-18)。
+    //! 他の利用者の記録の除外の検査 (FR-5、FR-18)。
 
     use super::*;
 
     #[test]
-    fn wrangler_stats_return_only_own_records_and_exclude_archived() {
+    fn wrangler_stats_return_only_own_records() {
         let data = data();
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
 
         // 他の利用者から見た統計には、こちらの記録が 1 件も入らない。
-        // 他の利用者の記録は購入 1 件と抽出 1 件 (アーカイブされていない) だけである。
+        // 他の利用者の記録は購入 1 件と抽出 1 件だけである。
         let other = ApiClient::new(&base_url, Some(&data.other_session));
         let body = assert_status(
             other.get("/api/stats/brews?granularity=day&utc_offset_minutes=540"),
@@ -1085,9 +1029,9 @@ mod isolation {
         assert_eq!(ratings.len(), 1, "{body}");
         assert_eq!(ratings[0]["id"], data.other_brew.id, "{body}");
 
-        // こちらの統計には、他の利用者の記録も、アーカイブ済みの記録も入らない。
-        // 期待値は下ごしらえの記録だけから計算した値に一致する (アーカイブ済みの 9999 JPY と
-        // 100.0 グラムの抽出、他の利用者の 5000 JPY と 200.0 グラムの抽出は入らない)。
+        // こちらの統計には、他の利用者の記録が入らない。
+        // 期待値は下ごしらえの記録だけから計算した値に一致する (他の利用者の 5000 JPY と
+        // 200.0 グラムの抽出は入らない)。
         let stats = ApiClient::new(&base_url, Some(&data.stats_session));
         let body = assert_status(
             stats.get("/api/stats/brews?start=2026-09-01&end=2026-09-30&granularity=month&utc_offset_minutes=540"),
@@ -1104,7 +1048,6 @@ mod isolation {
         );
         let purchases = assert_purchases(&body);
         assert_eq!(purchases.len(), 4, "{body}");
-        // アーカイブ済みの 9999 JPY が入らないことを、合計の一致で確かめる。
         assert_purchase_period(&purchases[1], "2026-09", Some("JPY"), 2700, 500, 3);
 
         let body = assert_status(
@@ -1117,9 +1060,8 @@ mod isolation {
             .iter()
             .filter_map(|rating| rating["id"].as_str())
             .collect();
-        // アーカイブ済みの G (rating 1) と他の利用者の抽出は入らない。
+        // 他の利用者の抽出は入らない。
         assert_eq!(ids.len(), 5, "{body}");
-        assert!(!ids.contains(&data.brew_archived.id.as_str()), "{body}");
         assert!(!ids.contains(&data.other_brew.id.as_str()), "{body}");
     }
 

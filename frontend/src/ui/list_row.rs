@@ -6,7 +6,6 @@
 
 use dioxus::prelude::*;
 
-use crate::i18n::{t, Key};
 use crate::ui::{is_activation_key, Icon};
 
 /// 一覧の行。
@@ -26,9 +25,6 @@ pub fn ListRow(
     /// 2 行目の下のタグ (商品の行だけ)。
     #[props(default)]
     tags: Option<Element>,
-    /// アーカイブ済みか。文字を `ink-muted` に落とし、バッジを付ける。
-    #[props(default = false)]
-    archived: bool,
     /// 広い画面で選択中か。地を `roast-soft` にする。
     #[props(default = false)]
     selected: bool,
@@ -37,9 +33,6 @@ pub fn ListRow(
     on_click: Option<EventHandler<()>>,
 ) -> Element {
     let mut classes = vec!["row".to_string()];
-    if archived {
-        classes.push("archived".to_string());
-    }
     if selected {
         classes.push("selected".to_string());
     }
@@ -73,13 +66,8 @@ pub fn ListRow(
                     div { class: "tags", {tags} }
                 }
             }
-            if trailing.is_some() || archived {
-                div { class: "side",
-                    {trailing}
-                    if archived {
-                        ArchivedBadge {}
-                    }
-                }
+            if trailing.is_some() {
+                div { class: "side", {trailing} }
             }
         }
     }
@@ -112,13 +100,5 @@ pub fn ListThumb(
     };
     rsx! {
         div { class: "thumb", {content} }
-    }
-}
-
-/// 「アーカイブ済み」のバッジ (ARB の `archivedBadge`)。
-#[component]
-pub fn ArchivedBadge() -> Element {
-    rsx! {
-        span { class: "badge", "{t(Key::ArchivedBadge)}" }
     }
 }

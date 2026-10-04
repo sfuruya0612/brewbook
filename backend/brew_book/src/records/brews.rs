@@ -1,18 +1,15 @@
-//! 抽出の API (FR-11、FR-12、FR-5)。
+//! 抽出の API (FR-11、FR-5)。
 //!
 //! 一覧はカーソル方式で、並び順は抽出日時の降順と ID の昇順とする (FR-11)。応答には続きを引く
 //! `next_cursor` を含める (ページが `limit` に満たないときは null)。
 //! 応答には購入 (`purchase`) をネストし、その中に商品 (`product`) と店 (`shop`) を含める (FR-11)。
 //! 購入、商品、店の結合は 1 回の SQL で行う (ADR-0006)。店が無い購入では `shop` は null になる。
-//! 購入を指定した登録と、参照先の購入を変更する更新は、存在しないか他の利用者の ID を 404、
-//! アーカイブ済みの購入を 409 にする (FR-11)。参照先を変えない更新は検査しない
-//! (購入をアーカイブしても抽出を編集できるようにするため。0007 の設計判断)。
-//! 単件取得はアーカイブ済みでも返し、更新もアーカイブ済みの抽出にできる。
-//! アーカイブと解除は繰り返し呼んでも 200 を返す。
+//! 購入を指定した登録と、参照先の購入を変更する更新は、存在しないか他の利用者の ID を 404 に
+//! する (FR-11)。参照先を変えない更新は検査しない (0007 の設計判断)。
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
-//! `updated_at` は更新、アーカイブ、アーカイブ解除で現在時刻にする (ADR-0006)。
+//! `updated_at` は更新で現在時刻にする (ADR-0006)。
 
-use brew_book_core::query::{self, Archived, BrewValues, OrderKind};
+use brew_book_core::query::{self, BrewValues, OrderKind};
 use brew_book_core::records::{
     trim_optional, validate_count, validate_decimal, validate_rating, validate_timestamp,
 };
@@ -47,7 +44,6 @@ pub struct BrewResponse {
     pub notes: Option<String>,
     pub created_at: String,
     pub updated_at: String,
-    pub archived_at: Option<String>,
     /// 購入。必須の参照のため常にある (FR-11)。
     pub purchase: PurchaseResponse,
 }
@@ -77,7 +73,6 @@ struct BrewJoinRow {
     b_notes: Option<String>,
     b_created_at: String,
     b_updated_at: String,
-    b_archived_at: Option<String>,
     p_id: String,
     p_user_id: String,
     p_product_id: String,
@@ -91,7 +86,6 @@ struct BrewJoinRow {
     p_photo_key: Option<String>,
     p_created_at: String,
     p_updated_at: String,
-    p_archived_at: Option<String>,
     pr_id: String,
     pr_user_id: String,
     pr_name: String,
@@ -102,14 +96,12 @@ struct BrewJoinRow {
     pr_variety: Option<String>,
     pr_created_at: String,
     pr_updated_at: String,
-    pr_archived_at: Option<String>,
     sh_id: Option<String>,
     sh_user_id: Option<String>,
     sh_name: Option<String>,
     sh_address: Option<String>,
     sh_created_at: Option<String>,
     sh_updated_at: Option<String>,
-    sh_archived_at: Option<String>,
 }
 
 impl BrewJoinRow {
@@ -131,7 +123,6 @@ impl BrewJoinRow {
             p_photo_key: self.p_photo_key,
             p_created_at: self.p_created_at,
             p_updated_at: self.p_updated_at,
-            p_archived_at: self.p_archived_at,
             pr_id: self.pr_id,
             pr_user_id: self.pr_user_id,
             pr_name: self.pr_name,
@@ -142,14 +133,12 @@ impl BrewJoinRow {
             pr_variety: self.pr_variety,
             pr_created_at: self.pr_created_at,
             pr_updated_at: self.pr_updated_at,
-            pr_archived_at: self.pr_archived_at,
             sh_id: self.sh_id,
             sh_user_id: self.sh_user_id,
             sh_name: self.sh_name,
             sh_address: self.sh_address,
             sh_created_at: self.sh_created_at,
             sh_updated_at: self.sh_updated_at,
-            sh_archived_at: self.sh_archived_at,
         };
         BrewResponse {
             id: self.b_id,
@@ -166,7 +155,6 @@ impl BrewJoinRow {
             notes: self.b_notes,
             created_at: self.b_created_at,
             updated_at: self.b_updated_at,
-            archived_at: self.b_archived_at,
             purchase: purchase.into_response(),
         }
     }
@@ -242,19 +230,14 @@ struct UpdateInput {
     notes: Option<Option<String>>,
 }
 
-/// 抽出の一覧を返す。認証が必要。アーカイブ済みは既定では返さない (FR-12)。
+/// 抽出の一覧を返す。認証が必要。
 pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Response> {
     let params = match ListParams::from_request(req) {
         Ok(params) => params,
         Err(response) => return Ok(response),
     };
     let d1 = db::database(env)?;
-    let statement = match query::brews_list(
-        &session.user_id,
-        params.archived,
-        params.cursor.clone(),
-        params.limit,
-    ) {
+    let statement = match query::brews_list(&session.user_id, params.cursor.clone(), params.limit) {
         Ok(statement) => statement,
         Err(error) => return Ok(query_error_response(error)),
     };
@@ -279,7 +262,7 @@ pub async fn create(req: &mut Request, env: &Env, session: &Session) -> Result<R
         ));
     };
     let d1 = db::database(env)?;
-    // 購入は、存在しないか他の利用者のものは 404、アーカイブ済みは 409 にする (FR-11)。
+    // 購入は、存在しないか他の利用者のものは 404 にする (FR-11)。
     if let Err(response) = require_purchase(&d1, &session.user_id, &input.purchase_id)
         .await?
         .or_return()
@@ -334,7 +317,7 @@ pub async fn create(req: &mut Request, env: &Env, session: &Session) -> Result<R
     respond_fetched(&d1, &session.user_id, &id).await
 }
 
-/// 抽出を 1 件返す。認証が必要。アーカイブ済みでも返す (FR-12)。
+/// 抽出を 1 件返す。認証が必要。
 pub async fn get(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
     let d1 = db::database(env)?;
     let Some(id) = id else {
@@ -452,36 +435,9 @@ pub async fn update(
     respond_fetched(&d1, &session.user_id, id).await
 }
 
-/// 抽出をアーカイブする、またはアーカイブ解除する。認証が必要。
-/// 同じ状態への遷移はエラーにしない (繰り返し呼んでも 200 を返す)。
-pub async fn archive(
-    env: &Env,
-    session: &Session,
-    id: Option<&str>,
-    archived: bool,
-) -> Result<Response> {
-    let Some(id) = id else {
-        return Ok(not_found("the brew does not exist"));
-    };
-    let d1 = db::database(env)?;
-    let Some(mut brew) = find(&d1, &session.user_id, id).await? else {
-        return Ok(not_found("the brew does not exist"));
-    };
-    let now = db::now_text()?;
-    let archived_at = if archived { Some(now.as_str()) } else { None };
-    let statement = match query::brew_set_archived(id, &session.user_id, archived_at, &now) {
-        Ok(statement) => statement,
-        Err(error) => return Ok(query_error_response(error)),
-    };
-    db::prepared(&d1, &statement)?.run().await?;
-    brew.archived_at = archived_at.map(str::to_owned);
-    brew.updated_at = now;
-    respond::json(&brew)
-}
-
-/// 抽出を 1 件引く。購入、商品、店を結合し、アーカイブ済みも返す (FR-11、FR-12)。
+/// 抽出を 1 件引く。購入、商品、店を結合する (FR-11)。
 async fn find(d1: &D1Database, user_id: &str, id: &str) -> Result<Option<BrewResponse>> {
-    let statement = query::brew_find(user_id, id, Archived::Include);
+    let statement = query::brew_find(user_id, id);
     let row: Option<BrewJoinRow> = db::prepared(d1, &statement)?.first(None).await?;
     match row {
         Some(row) => {

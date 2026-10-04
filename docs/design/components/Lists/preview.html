@@ -77,17 +77,9 @@ a { color: var(--link); }
 .row .sub .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .row .side { flex: none; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .row .val { font-family: var(--font-mono); font-size: 15px; line-height: 22px; font-variant-numeric: tabular-nums; }
-.row.archived .name, .row.archived .sub { color: var(--ink-muted); }
 .row.selected { background: var(--roast-soft); }
 .thumb { width: 44px; height: 44px; border-radius: var(--radius-sm); background: var(--paper-sunken); flex: none; display: flex; align-items: center; justify-content: center; color: var(--ink-faint); overflow: hidden; }
 .thumb svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; }
-.badge { display: inline-flex; align-items: center; height: 20px; padding: 0 var(--space-2); border-radius: var(--radius-sm); background: var(--paper-sunken); color: var(--ink-muted); font-size: 12px; line-height: 16px; font-weight: 500; }
-.toolbar { display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink-muted); font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; }
-.switch { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--ink-muted); }
-.switch .track { width: 36px; height: 20px; border-radius: var(--radius-full); border: 1px solid var(--line-strong); position: relative; background: transparent; }
-.switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--line-strong); }
-.switch.on .track { background: var(--roast); border-color: var(--roast); }
-.switch.on .track::after { left: 19px; background: var(--on-roast); }
 .empty { padding: var(--space-12) var(--space-6); text-align: center; color: var(--ink-muted); }
 
 /* 評価 */
@@ -222,7 +214,6 @@ a { color: var(--link); }
 <body>
 <div class="stage"><div class="phone"><div class="screen">
 <div class="appbar"><span class="nav"><span class="iconbtn"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></span><span class="lead"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></span><span class="brand"><span class="app-name"><svg viewBox="100 106 312 368" class="mark" aria-hidden="true"><g fill="currentColor"><rect x="118" y="124" width="276" height="34" rx="17"/><path d="M148 158 H364 L298 286 H214 Z" stroke="currentColor" stroke-width="8" stroke-linejoin="round"/><path d="M256 298 C256 298 228 332 228 352 A28 28 0 0 0 284 352 C284 332 256 298 256 298 Z"/><rect x="118" y="386" width="276" height="26" rx="13"/><rect x="118" y="430" width="168" height="26" rx="13"/></g></svg><span class="name">brewbook</span></span><span class="ttl">購入</span></span></div>
-<div class="toolbar"><span class="switch"><span class="track"></span>アーカイブ済みを含める</span></div>
 <div class="list">
   <div class="row"><div class="thumb"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div><div class="main"><div class="name">Ethiopia Guji Natural</div><div class="sub"><span class="v">2026-09-14</span> / Kaido Coffee Roasters</div></div><div class="side"><span class="val">200 g</span><span class="t-caption muted">1,980 JPY</span></div></div>
   <div class="row"><div class="thumb"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div><div class="main"><div class="name">Colombia Huila Washed</div><div class="sub"><span class="v">2026-09-07</span> / 喫茶ひかり</div></div><div class="side"><span class="val">250 g</span><span class="t-caption muted">2,200 JPY</span></div></div>
@@ -232,7 +223,6 @@ a { color: var(--link); }
 <span class="fab"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>購入を記録</span>
 </div></div><div class="phone"><div class="screen">
 <div class="appbar"><span class="nav"><span class="iconbtn"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></span><span class="lead"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></span><span class="brand"><span class="app-name"><svg viewBox="100 106 312 368" class="mark" aria-hidden="true"><g fill="currentColor"><rect x="118" y="124" width="276" height="34" rx="17"/><path d="M148 158 H364 L298 286 H214 Z" stroke="currentColor" stroke-width="8" stroke-linejoin="round"/><path d="M256 298 C256 298 228 332 228 352 A28 28 0 0 0 284 352 C284 332 256 298 256 298 Z"/><rect x="118" y="386" width="276" height="26" rx="13"/><rect x="118" y="430" width="168" height="26" rx="13"/></g></svg><span class="name">brewbook</span></span><span class="ttl">商品</span></span></div>
-<div class="toolbar"><span class="switch"><span class="track"></span>アーカイブ済みを含める</span></div>
 <div class="list">
   <div class="row"><div class="main"><div class="name">Ethiopia Guji Natural</div><div class="sub">Guji, Ethiopia / Natural / Heirloom</div><div class="chips" style="margin-top:6px"><span class="chip tag" style="height:22px;font-size:12px;padding:0 8px">ピーチ</span><span class="chip tag" style="height:22px;font-size:12px;padding:0 8px">ジャスミン</span><span class="chip tag" style="height:22px;font-size:12px;padding:0 8px">黒糖</span></div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
   <div class="row"><div class="main"><div class="name">Colombia Huila Washed</div><div class="sub">Huila, Colombia / Washed / Caturra</div><div class="chips" style="margin-top:6px"><span class="chip tag" style="height:22px;font-size:12px;padding:0 8px">オレンジ</span><span class="chip tag" style="height:22px;font-size:12px;padding:0 8px">キャラメル</span></div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
@@ -241,12 +231,10 @@ a { color: var(--link); }
 <span class="fab"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>商品を登録</span>
 </div></div><div class="phone"><div class="screen">
 <div class="appbar"><span class="nav"><span class="iconbtn"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span></span><span class="lead"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></span><span class="brand"><span class="app-name"><svg viewBox="100 106 312 368" class="mark" aria-hidden="true"><g fill="currentColor"><rect x="118" y="124" width="276" height="34" rx="17"/><path d="M148 158 H364 L298 286 H214 Z" stroke="currentColor" stroke-width="8" stroke-linejoin="round"/><path d="M256 298 C256 298 228 332 228 352 A28 28 0 0 0 284 352 C284 332 256 298 256 298 Z"/><rect x="118" y="386" width="276" height="26" rx="13"/><rect x="118" y="430" width="168" height="26" rx="13"/></g></svg><span class="name">brewbook</span></span><span class="ttl">店</span></span></div>
-<div class="toolbar"><span class="switch on"><span class="track"></span>アーカイブ済みを含める</span></div>
 <div class="list">
   <div class="row"><div class="main"><div class="name">Kaido Coffee Roasters</div><div class="sub">東京都目黒区中目黒 2-1-4</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
   <div class="row"><div class="main"><div class="name">喫茶ひかり</div><div class="sub">神奈川県鎌倉市小町 1-8</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
   <div class="row"><div class="main"><div class="name">Nishi Roastery</div><div class="sub muted">住所は未設定</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
-  <div class="row archived"><div class="main"><div class="name">Tsuki Coffee Stand</div><div class="sub">東京都世田谷区代田 5-3</div></div><div class="side"><span class="badge">アーカイブ済み</span></div></div>
 </div>
 <span class="fab"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>店を登録</span>
 </div></div></div>

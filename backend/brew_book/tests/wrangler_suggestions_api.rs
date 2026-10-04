@@ -2,7 +2,7 @@
 //!
 //! 8 つの項目とテーブルの対応、前後の空白を除いた前方一致 (大文字と小文字を区別しない)、
 //! 重複の除去と最大 20 件、`updated_at` の降順と値の Unicode コードポイントの昇順、`q` が空の
-//! ときの全値の返却、アーカイブ済みの包含、他の利用者の除外、`%` と `_` と `\` を文字として
+//! ときの全値の返却、他の利用者の除外、`%` と `_` と `\` を文字として
 //! 扱うこと、項目名と `q` の入力不正の 400、候補に無い値の入力を妨げないことを確認する。
 //!
 //! テスト名の `wrangler_` は、`wrangler dev` を起動するテストを `backend:test` が名前で除外するための規約。
@@ -121,7 +121,6 @@ fn build_data() -> TestData {
         },
         T21,
         T21,
-        None,
     );
     seed.product_with_texts(
         &user,
@@ -135,7 +134,6 @@ fn build_data() -> TestData {
         },
         T20,
         T20,
-        None,
     );
     // 大文字と小文字を区別しない前方一致の検査に使う。
     seed.product_with_texts(
@@ -148,7 +146,6 @@ fn build_data() -> TestData {
         },
         T19,
         T19,
-        None,
     );
     seed.product_with_texts(
         &user,
@@ -159,7 +156,6 @@ fn build_data() -> TestData {
         },
         T19,
         T19,
-        None,
     );
     // 同じ値の 2 件目が新しいとき、まとめた値は新しい方の更新日時を持つ (FR-13)。
     seed.product_with_texts(
@@ -171,12 +167,10 @@ fn build_data() -> TestData {
         },
         T22,
         T22,
-        None,
     );
-    // アーカイブ済みの商品の値も候補に含める (FR-13)。
     seed.product_with_texts(
         &user,
-        "しまった豆",
+        "別の産地の豆",
         ProductTexts {
             producer: Some("グアテマラ"),
             origin: Some("グアテマラ"),
@@ -184,10 +178,9 @@ fn build_data() -> TestData {
         },
         T18,
         T18,
-        Some(T18),
     );
     // 自由記述の値が無い商品は候補に出ない。
-    let plain_product = seed.product(&user, "値の無い豆", T17, T17, None);
+    let plain_product = seed.product(&user, "値の無い豆", T17, T17);
     // `%` と `_` と `\` を文字として扱うことの検査に使う。
     // ワイルドカードとして扱われると、先頭が一致するだけの値 (100X アラビカ、abc ロット) や
     // 全ての値が混ざる。
@@ -200,7 +193,6 @@ fn build_data() -> TestData {
         },
         T16,
         T16,
-        None,
     );
     seed.product_with_texts(
         &user,
@@ -211,7 +203,6 @@ fn build_data() -> TestData {
         },
         T16,
         T16,
-        None,
     );
     seed.product_with_texts(
         &user,
@@ -222,7 +213,6 @@ fn build_data() -> TestData {
         },
         T16,
         T16,
-        None,
     );
     seed.product_with_texts(
         &user,
@@ -233,7 +223,6 @@ fn build_data() -> TestData {
         },
         T15,
         T15,
-        None,
     );
     seed.product_with_texts(
         &user,
@@ -244,7 +233,6 @@ fn build_data() -> TestData {
         },
         T15,
         T15,
-        None,
     );
     seed.product_with_texts(
         &user,
@@ -255,7 +243,6 @@ fn build_data() -> TestData {
         },
         T15,
         T15,
-        None,
     );
     seed.product_with_texts(
         &user,
@@ -266,7 +253,6 @@ fn build_data() -> TestData {
         },
         T14,
         T14,
-        None,
     );
     seed.product_with_texts(
         &user,
@@ -277,7 +263,6 @@ fn build_data() -> TestData {
         },
         T14,
         T14,
-        None,
     );
     seed.product_with_texts(
         &user,
@@ -288,7 +273,6 @@ fn build_data() -> TestData {
         },
         T14,
         T14,
-        None,
     );
     // 同じ値の重複は 1 つにまとめる (FR-13)。
     seed.product_with_texts(
@@ -300,7 +284,6 @@ fn build_data() -> TestData {
         },
         T21,
         T21,
-        None,
     );
     seed.product_with_texts(
         &user,
@@ -311,7 +294,6 @@ fn build_data() -> TestData {
         },
         T20,
         T20,
-        None,
     );
     // 更新日時が同じときは値の昇順 (Unicode コードポイント) で並べる (FR-13)。
     seed.product_with_texts(
@@ -323,7 +305,6 @@ fn build_data() -> TestData {
         },
         T13,
         T13,
-        None,
     );
     seed.product_with_texts(
         &user,
@@ -334,7 +315,6 @@ fn build_data() -> TestData {
         },
         T13,
         T13,
-        None,
     );
     // 21 件以上あるときは、更新日時の新しい順に先頭の 20 件を返す (FR-13)。
     for index in 0..OVER_LIMIT_COUNT {
@@ -349,7 +329,6 @@ fn build_data() -> TestData {
             },
             &updated_at,
             &updated_at,
-            None,
         );
     }
 
@@ -362,7 +341,6 @@ fn build_data() -> TestData {
         Some("中煎り"),
         T21,
         T21,
-        None,
     );
     seed.purchase_with_roast(
         &user,
@@ -372,22 +350,11 @@ fn build_data() -> TestData {
         Some("中深煎り"),
         T20,
         T20,
-        None,
     );
-    seed.purchase_with_roast(
-        &user,
-        &plain_product.id,
-        None,
-        D21,
-        Some("City"),
-        T19,
-        T19,
-        None,
-    );
+    seed.purchase_with_roast(&user, &plain_product.id, None, D21, Some("City"), T19, T19);
     // 自由記述の値が無い購入は候補に出ない。
     let plain_purchase =
-        seed.purchase_with_roast(&user, &plain_product.id, None, D18, None, T18, T18, None);
-    // アーカイブ済みの購入の値も候補に含める (FR-13)。
+        seed.purchase_with_roast(&user, &plain_product.id, None, D18, None, T18, T18);
     seed.purchase_with_roast(
         &user,
         &plain_product.id,
@@ -396,7 +363,6 @@ fn build_data() -> TestData {
         Some("深煎り"),
         T17,
         T17,
-        Some(T17),
     );
 
     // 抽出。抽出方法と挽き目の候補の検査に使う。
@@ -410,7 +376,6 @@ fn build_data() -> TestData {
         },
         T21,
         T21,
-        None,
     );
     seed.brew_with_texts(
         &user,
@@ -422,7 +387,6 @@ fn build_data() -> TestData {
         },
         T20,
         T20,
-        None,
     );
     // 自由記述の値が無い抽出は候補に出ない。
     seed.brew_with_texts(
@@ -432,9 +396,7 @@ fn build_data() -> TestData {
         BrewTexts::default(),
         T19,
         T19,
-        None,
     );
-    // アーカイブ済みの抽出の値も候補に含める (FR-13)。
     seed.brew_with_texts(
         &user,
         &plain_purchase.id,
@@ -445,7 +407,6 @@ fn build_data() -> TestData {
         },
         T18,
         T18,
-        Some(T18),
     );
 
     // 他の利用者。自分の候補だけが返ることの検査に使う。
@@ -462,7 +423,6 @@ fn build_data() -> TestData {
         },
         T21,
         T21,
-        None,
     );
     let other_purchase = seed.purchase_with_roast(
         &other_user,
@@ -472,7 +432,6 @@ fn build_data() -> TestData {
         Some("他人のロースト"),
         T21,
         T21,
-        None,
     );
     seed.brew_with_texts(
         &other_user,
@@ -484,7 +443,6 @@ fn build_data() -> TestData {
         },
         T21,
         T21,
-        None,
     );
 
     // 記録が無い利用者。
@@ -609,7 +567,7 @@ mod suggestions {
         let client = ApiClient::new(&base_url, Some(&data.session));
         // `q` が空のときは、その項目の全ての値を重複を除いて返す (FR-13)。
         // 候補は、その値を持つ記録の updated_at の最大の降順と、同じときの値の昇順で並ぶ。
-        // アーカイブ済みの記録の値も含み、他の利用者の値は含まない (FR-5)。
+        // 全ての記録の値も含み、他の利用者の値は含まない (FR-5)。
         for (field, expected) in [
             ("origin", vec!["エチオピア", "Ethiopia", "グアテマラ"]),
             ("region", vec!["イルガチェフェ", "シダモ"]),

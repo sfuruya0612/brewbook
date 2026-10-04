@@ -79,7 +79,6 @@ fn exercise(text: &str) {
     let _ = brew_book_core::datetime::parse_epoch_millis(text);
     let _ = brew_book_core::datetime::is_valid_date(text);
     let _ = brew_book_core::ids::uuid_bytes(text);
-    let _ = brew_book_core::query::parse_include_archived(Some(text));
     let _ = brew_book_core::query::parse_suggestion_field(text);
     let _ = brew_book_core::stats::parse_granularity(Some(text));
     let _ = brew_book_core::stats::parse_offset_minutes(Some(text));

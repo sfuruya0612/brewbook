@@ -1,18 +1,15 @@
-//! 購入の API (FR-9、FR-12、FR-5)。
+//! 購入の API (FR-9、FR-5)。
 //!
 //! 一覧はカーソル方式で、並び順は購入日の降順と ID の昇順とする (FR-9)。応答には続きを引く
 //! `next_cursor` を含める (ページが `limit` に満たないときは null)。
 //! 応答には商品 (`product`) と店 (`shop`) をネストしたオブジェクトとして含み、結合は 1 回の
 //! SQL で行う (ADR-0006)。店が無い購入では `shop` は null になる (FR-9)。
-//! 商品と店を指定した登録と、参照先を変更する更新は、存在しないか他の利用者の ID を 404、
-//! アーカイブ済みの親を 409 にする (FR-9)。参照先を変えない更新は検査しない
-//! (親をアーカイブしても購入を編集できるようにするため。0007 の設計判断)。
-//! 単件取得はアーカイブ済みでも返し、更新もアーカイブ済みの購入にできる。
-//! アーカイブと解除は繰り返し呼んでも 200 を返す。
+//! 商品と店を指定した登録と、参照先を変更する更新は、存在しないか他の利用者の ID を 404 に
+//! する (FR-9)。参照先を変えない更新は検査しない (0007 の設計判断)。
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
-//! `updated_at` は更新、アーカイブ、アーカイブ解除で現在時刻にする (ADR-0006)。
+//! `updated_at` は更新で現在時刻にする (ADR-0006)。
 
-use brew_book_core::query::{self, Archived, OrderKind, PurchaseValues};
+use brew_book_core::query::{self, OrderKind, PurchaseValues};
 use brew_book_core::records::{trim_optional, validate_count, validate_currency, validate_day};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Database;
@@ -45,7 +42,6 @@ pub struct PurchaseResponse {
     pub photo_key: Option<String>,
     pub created_at: String,
     pub updated_at: String,
-    pub archived_at: Option<String>,
     /// 商品。必須の参照のため常にある (FR-9)。
     pub product: ProductResponse,
     /// 店。店が無い購入では null になる (FR-9)。
@@ -77,7 +73,6 @@ pub(super) struct PurchaseJoinRow {
     pub(super) p_photo_key: Option<String>,
     pub(super) p_created_at: String,
     pub(super) p_updated_at: String,
-    pub(super) p_archived_at: Option<String>,
     pub(super) pr_id: String,
     pub(super) pr_user_id: String,
     pub(super) pr_name: String,
@@ -88,14 +83,12 @@ pub(super) struct PurchaseJoinRow {
     pub(super) pr_variety: Option<String>,
     pub(super) pr_created_at: String,
     pub(super) pr_updated_at: String,
-    pub(super) pr_archived_at: Option<String>,
     pub(super) sh_id: Option<String>,
     pub(super) sh_user_id: Option<String>,
     pub(super) sh_name: Option<String>,
     pub(super) sh_address: Option<String>,
     pub(super) sh_created_at: Option<String>,
     pub(super) sh_updated_at: Option<String>,
-    pub(super) sh_archived_at: Option<String>,
 }
 
 impl PurchaseJoinRow {
@@ -115,7 +108,6 @@ impl PurchaseJoinRow {
             photo_key: self.p_photo_key,
             created_at: self.p_created_at,
             updated_at: self.p_updated_at,
-            archived_at: self.p_archived_at,
             product: ProductResponse {
                 id: self.pr_id,
                 user_id: self.pr_user_id,
@@ -128,7 +120,6 @@ impl PurchaseJoinRow {
                 flavor_notes: Vec::new(),
                 created_at: self.pr_created_at,
                 updated_at: self.pr_updated_at,
-                archived_at: self.pr_archived_at,
             },
             // 店は LEFT JOIN のため、店が無いときは全ての列が NULL になる。
             shop: self.sh_id.map(|id| ShopResponse {
@@ -138,7 +129,6 @@ impl PurchaseJoinRow {
                 address: self.sh_address,
                 created_at: self.sh_created_at.unwrap_or_default(),
                 updated_at: self.sh_updated_at.unwrap_or_default(),
-                archived_at: self.sh_archived_at,
             }),
         }
     }
@@ -202,19 +192,15 @@ struct UpdateInput {
     weight_grams: Option<Option<i64>>,
 }
 
-/// 購入の一覧を返す。認証が必要。アーカイブ済みは既定では返さない (FR-12)。
+/// 購入の一覧を返す。認証が必要。
 pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Response> {
     let params = match ListParams::from_request(req) {
         Ok(params) => params,
         Err(response) => return Ok(response),
     };
     let d1 = db::database(env)?;
-    let statement = match query::purchases_list(
-        &session.user_id,
-        params.archived,
-        params.cursor.clone(),
-        params.limit,
-    ) {
+    let cursor = params.cursor.clone();
+    let statement = match query::purchases_list(&session.user_id, cursor, params.limit) {
         Ok(statement) => statement,
         Err(error) => return Ok(query_error_response(error)),
     };
@@ -242,7 +228,7 @@ pub async fn create(req: &mut Request, env: &Env, session: &Session) -> Result<R
         ));
     };
     let d1 = db::database(env)?;
-    // 商品と店は、存在しないか他の利用者のものは 404、アーカイブ済みは 409 にする (FR-9)。
+    // 商品と店は、存在しないか他の利用者のものは 404 にする (FR-9)。
     if let Err(response) = require_product(&d1, &session.user_id, &input.product_id)
         .await?
         .or_return()
@@ -299,7 +285,7 @@ pub async fn create(req: &mut Request, env: &Env, session: &Session) -> Result<R
     respond_fetched(&d1, &session.user_id, &id).await
 }
 
-/// 購入を 1 件返す。認証が必要。アーカイブ済みでも返す (FR-12)。
+/// 購入を 1 件返す。認証が必要。
 pub async fn get(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
     let d1 = db::database(env)?;
     let Some(id) = id else {
@@ -424,40 +410,13 @@ pub async fn update(
     respond_fetched(&d1, &session.user_id, id).await
 }
 
-/// 購入をアーカイブする、またはアーカイブ解除する。認証が必要。
-/// 同じ状態への遷移はエラーにしない (繰り返し呼んでも 200 を返す)。
-pub async fn archive(
-    env: &Env,
-    session: &Session,
-    id: Option<&str>,
-    archived: bool,
-) -> Result<Response> {
-    let Some(id) = id else {
-        return Ok(not_found("the purchase does not exist"));
-    };
-    let d1 = db::database(env)?;
-    let Some(mut purchase) = find(&d1, &session.user_id, id).await? else {
-        return Ok(not_found("the purchase does not exist"));
-    };
-    let now = db::now_text()?;
-    let archived_at = if archived { Some(now.as_str()) } else { None };
-    let statement = match query::purchase_set_archived(id, &session.user_id, archived_at, &now) {
-        Ok(statement) => statement,
-        Err(error) => return Ok(query_error_response(error)),
-    };
-    db::prepared(&d1, &statement)?.run().await?;
-    purchase.archived_at = archived_at.map(str::to_owned);
-    purchase.updated_at = now;
-    respond::json(&purchase)
-}
-
-/// 購入を 1 件引く。商品と店を結合し、アーカイブ済みも返す (FR-9、FR-12)。
+/// 購入を 1 件引く。商品と店を結合する (FR-9)。
 pub(super) async fn find(
     d1: &D1Database,
     user_id: &str,
     id: &str,
 ) -> Result<Option<PurchaseResponse>> {
-    let statement = query::purchase_find(user_id, id, Archived::Include);
+    let statement = query::purchase_find(user_id, id);
     let row: Option<PurchaseJoinRow> = db::prepared(d1, &statement)?.first(None).await?;
     match row {
         Some(row) => {

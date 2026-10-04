@@ -7,5 +7,5 @@
 - アプリの印は `mark.svg` の 32 px。アプリ名は `appTitle` の「brewbook」を IBM Plex Serif の 18 px で組む。アプリ名を押すとホームへ戻る (ホームでは何もしない)。
 - 画面名は ARB の `*Title` をアプリ名の下に `label` (13 px、`ink-muted`) で出す。ホームは「抽出」(`brewsLabel`)。
 - 先頭の操作は 1 つ: 一覧と詳細は戻る (`arrow_back_ios_new`)、フォームは閉じる (`close`)。
-- 末尾の操作は最大 2 つ。詳細はアーカイブと編集のアイコン、フォームは「保存」の文字ボタン (`crema-ink`)。
+- 末尾の操作は最大 2 つ。詳細は編集のアイコン、フォームは「保存」の文字ボタン (`crema-ink`)。
 - Dioxus では `frontend/src/ui/app_bar.rs` の `AppBar` で `.appbar` の帯を組み、下端の罫線は `border-bottom: 1px solid var(--line)` で引く (影は付けない)。経路の操作は `menu` と `on_home` の prop で受け取り、`frontend/src/screens/app_nav.rs` の `ScreenAppBar` が `AppNav` と組む。ハンバーガーは `.nav`、印とアプリ名は `.app-name`、画面名は `.ttl`、先頭の操作は `.lead`、末尾の操作は `.iconbtn` と `.textbtn`。メニューの面は `.menu.left` で左寄せにする。

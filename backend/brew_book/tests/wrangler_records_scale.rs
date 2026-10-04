@@ -237,11 +237,11 @@ impl ScaleData {
         let mut bulk_sql = Vec::new();
         // 店 100 件。作成日時は 1 分ずつ進める。
         bulk_sql.extend(chunked_insert(
-            "INSERT INTO shops (id, user_id, name, address, created_at, updated_at, archived_at)",
+            "INSERT INTO shops (id, user_id, name, address, created_at, updated_at)",
             (0..SHOP_COUNT)
                 .map(|index| {
                     format!(
-                        "({}, {}, {}, NULL, {}, {}, NULL)",
+                        "({}, {}, {}, NULL, {}, {})",
                         literal(&row_id("shop", index)),
                         literal(&user),
                         literal(&format!("一覧の店 {index}")),
@@ -254,11 +254,11 @@ impl ScaleData {
         // 商品 1,000 件。作成日時は 1 分ずつ進める。
         bulk_sql.extend(chunked_insert(
             "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
-             created_at, updated_at, archived_at)",
+             created_at, updated_at)",
             (0..PRODUCT_COUNT)
                 .map(|index| {
                     format!(
-                        "({}, {}, {}, NULL, NULL, NULL, NULL, NULL, {}, {}, NULL)",
+                        "({}, {}, {}, NULL, NULL, NULL, NULL, NULL, {}, {})",
                         literal(&row_id("product", index)),
                         literal(&user),
                         literal(&format!("一覧の商品 {index}")),
@@ -272,11 +272,11 @@ impl ScaleData {
         bulk_sql.extend(chunked_insert(
             "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, \
              roast_date, price_amount, price_currency, weight_grams, photo_key, created_at, \
-             updated_at, archived_at)",
+             updated_at)",
             (0..PURCHASE_COUNT)
                 .map(|index| {
                     format!(
-                        "({}, {}, {}, NULL, {}, NULL, NULL, NULL, NULL, NULL, NULL, {}, {}, NULL)",
+                        "({}, {}, {}, NULL, {}, NULL, NULL, NULL, NULL, NULL, NULL, {}, {})",
                         literal(&row_id("purchase", index)),
                         literal(&user),
                         literal(&row_id("product", index % PRODUCT_COUNT)),
@@ -291,11 +291,11 @@ impl ScaleData {
         bulk_sql.extend(chunked_insert(
             "INSERT INTO brews (id, user_id, purchase_id, brewed_at, dose_grams, water_grams, \
              water_temp_c, brew_time_seconds, method, grind_setting, rating, notes, created_at, \
-             updated_at, archived_at)",
+             updated_at)",
             (0..BREW_COUNT)
                 .map(|index| {
                     format!(
-                        "({}, {}, {}, {}, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, {}, {}, NULL)",
+                        "({}, {}, {}, {}, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, {}, {})",
                         literal(&row_id("brew", index)),
                         literal(&user),
                         literal(&row_id("purchase", index % PURCHASE_COUNT)),

@@ -9,15 +9,13 @@ use dioxus_router::navigator;
 
 use crate::i18n::{t, Key};
 use crate::records::{
-    record_error_key, save_target, validate_product_form, RecordError, RecordServices, RecordsApi,
-    SaveTarget, SuggestionTarget,
+    save_target, validate_product_form, RecordError, RecordServices, RecordsApi, SaveTarget,
+    SuggestionTarget,
 };
 use crate::screens::ScreenAppBar;
 use crate::ui::{Banner, Button, ButtonVariant, Chip, ChipVariant, Field, TextField};
 
-use super::{
-    archive_button, clear_notice_after, mark_records_changed, retryable_banner, SuggestionField,
-};
+use super::{clear_notice_after, mark_records_changed, retryable_banner, SuggestionField};
 
 /// 商品の登録 (FR-7)。
 #[component]
@@ -72,7 +70,6 @@ pub fn ProductForm(
     let mut load_error = use_signal(|| None::<RecordError>);
     let mut loading = use_signal(|| id.is_some());
     let mut busy = use_signal(|| false);
-    let mut archived = use_signal(|| false);
 
     // 編集のために現在の値を読み込む。再試行でも同じ処理を呼ぶ。
     let reload_services = services.clone();
@@ -94,7 +91,6 @@ pub fn ProductForm(
                     process.set(product.process.clone().unwrap_or_default());
                     variety.set(product.variety.clone().unwrap_or_default());
                     tags.set(product.flavor_notes.clone());
-                    archived.set(product.is_archived());
                 }
                 Err(failure) => load_error.set(Some(failure)),
             }
@@ -102,33 +98,6 @@ pub fn ProductForm(
         });
     });
     use_effect(move || reload.call(()));
-
-    let archive_services = services.clone();
-    let archive_id = id.clone();
-    let toggle_archive = EventHandler::new(move |_| {
-        let Some(id) = archive_id.clone() else {
-            return;
-        };
-        let api = RecordsApi::new(archive_services.api.clone());
-        let next = !archived();
-        spawn(async move {
-            match api.set_product_archived(&id, next).await {
-                Ok(updated) => {
-                    archived.set(updated.is_archived());
-                    notice.set(Some(
-                        t(if updated.is_archived() {
-                            Key::ArchivedMessage
-                        } else {
-                            Key::UnarchivedMessage
-                        })
-                        .to_string(),
-                    ));
-                    mark_records_changed(&mut revision);
-                }
-                Err(failure) => notice.set(Some(t(record_error_key(&failure)).to_string())),
-            }
-        });
-    });
 
     let add_tag = EventHandler::new(move |_| {
         let value = tag_input().trim().to_string();
@@ -198,12 +167,8 @@ pub fn ProductForm(
     let retry_save = EventHandler::new(move |_| save.call(()));
     let failure = save_error();
     let load_failure = load_error();
-    // 保存は新規でも常に出す。アーカイブは編集 (id がある) のときだけ出す
-    // (0041 のレビューの指摘。Flutter と同じ)。
+    // 保存は新規でも常に出す (Flutter と同じ)。
     let actions = rsx! {
-        if id.is_some() {
-            {archive_button(archived(), busy(), EventHandler::new(move |_| toggle_archive.call(())))}
-        }
         Button {
             label: t(Key::SaveButton).to_string(),
             variant: ButtonVariant::Text,

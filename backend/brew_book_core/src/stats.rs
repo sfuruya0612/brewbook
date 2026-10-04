@@ -6,8 +6,7 @@
 //! 日時関数の修飾子 (`+540 minutes`) は整数から組み立て、利用者の入力の文字列を SQL に連結しない。
 //! 期間の端は端末のローカル時刻の日付として受け取り、抽出の API では開始日の 00:00 と終了日の
 //! 翌日の 00:00 を UTC オフセットで UTC の瞬間に直して `brewed_at` を絞る (FR-18)。
-//! 組み立てる文はどれも `user_id` と `archived_at` の条件を持ち、行自身がアーカイブ済みの抽出と
-//! 購入は含めない (参照先の購入のアーカイブは見ない。ADR-0006)。
+//! 組み立てる文はどれも `user_id` の条件を持つ。
 
 use crate::datetime;
 use crate::error::ErrorCode;
@@ -132,7 +131,7 @@ pub fn brews_stats(
     sql.push_str(" AS period, COUNT(*) AS brew_count, ");
     sql.push_str("COALESCE(ROUND(SUM(b.dose_grams), 1), 0) AS dose_grams FROM ");
     sql.push_str(query::BREWS_TABLE);
-    sql.push_str(" AS b WHERE b.user_id = ? AND b.archived_at IS NULL");
+    sql.push_str(" AS b WHERE b.user_id = ?");
     push_brew_period(&mut sql, &mut params, period, offset_minutes)?;
     sql.push_str(" GROUP BY ");
     sql.push_str(&key);
@@ -156,7 +155,7 @@ pub fn brew_ratings(
          FROM ",
     );
     sql.push_str(query::BREWS_TABLE);
-    sql.push_str(" AS b WHERE b.user_id = ? AND b.archived_at IS NULL AND b.rating IS NOT NULL");
+    sql.push_str(" AS b WHERE b.user_id = ? AND b.rating IS NOT NULL");
     push_brew_period(&mut sql, &mut params, period, offset_minutes)?;
     sql.push_str(" ORDER BY b.brewed_at ASC, b.id ASC");
     Ok(Statement { sql, params })
@@ -179,7 +178,7 @@ pub fn purchases_stats(user_id: &str, granularity: Granularity, period: &Period)
         "COALESCE(SUM(p.weight_grams), 0) AS weight_grams, COUNT(*) AS purchase_count FROM ",
     );
     sql.push_str(query::PURCHASES_TABLE);
-    sql.push_str(" AS p WHERE p.user_id = ? AND p.archived_at IS NULL");
+    sql.push_str(" AS p WHERE p.user_id = ?");
     // 購入日はタイムゾーンを持たない日付なので、オフセットを受け取らずそのまま絞る (FR-18)。
     let mut params = vec![Value::Text(user_id.to_owned())];
     if let Some(start) = &period.start {
@@ -205,7 +204,7 @@ pub fn rating_history(user_id: &str, purchase_id: &str) -> Statement {
     sql.push_str("SELECT b.id, b.brewed_at, b.rating FROM ");
     sql.push_str(query::BREWS_TABLE);
     sql.push_str(
-        " AS b WHERE b.user_id = ? AND b.archived_at IS NULL AND b.purchase_id = ? AND \
+        " AS b WHERE b.user_id = ? AND b.purchase_id = ? AND \
          b.rating IS NOT NULL ORDER BY b.brewed_at ASC, b.id ASC",
     );
     Statement {

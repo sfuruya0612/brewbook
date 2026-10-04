@@ -1,11 +1,11 @@
 //! 翻訳のキー (FR-16)。
 //!
 //! 移行前の Flutter 版の ARB (`frontend/lib/l10n/app_ja.arb` と `app_en.arb`。0045 で削除) の
-//! 227 キーから作る。表 ([`super::ja`] と [`super::en`]) はこの添字で引く。キーの順序は ARB と
+//! 221 キーから作る。表 ([`super::ja`] と [`super::en`]) はこの添字で引く。キーの順序は ARB と
 //! 同じにしていた。
 
 /// キーの数。
-pub const KEY_COUNT: usize = 227;
+pub const KEY_COUNT: usize = 221;
 
 /// 翻訳のキー (FR-16)。
 ///
@@ -130,16 +130,10 @@ pub enum Key {
     EditButton,
     /// `deleteButton`。
     DeleteButton,
-    /// `archiveButton`。
-    ArchiveButton,
-    /// `unarchiveButton`。
-    UnarchiveButton,
     /// `selectButton`。
     SelectButton,
     /// `addButton`。
     AddButton,
-    /// `includeArchivedLabel`。
-    IncludeArchivedLabel,
     /// `rowSubtitleSeparator`。
     RowSubtitleSeparator,
     /// `noRecords`。
@@ -148,10 +142,6 @@ pub enum Key {
     UnsetLabel,
     /// `savedMessage`。
     SavedMessage,
-    /// `archivedMessage`。
-    ArchivedMessage,
-    /// `unarchivedMessage`。
-    UnarchivedMessage,
     /// `shopNameLabel`。
     ShopNameLabel,
     /// `productNameLabel`。
@@ -406,8 +396,6 @@ pub enum Key {
     BrewsLabel,
     /// `usedBeansLabel`。
     UsedBeansLabel,
-    /// `archivedBadge`。
-    ArchivedBadge,
     /// `addressUnset`。
     AddressUnset,
     /// `ratingNone`。
@@ -530,17 +518,12 @@ impl Key {
         Key::CancelButton,
         Key::EditButton,
         Key::DeleteButton,
-        Key::ArchiveButton,
-        Key::UnarchiveButton,
         Key::SelectButton,
         Key::AddButton,
-        Key::IncludeArchivedLabel,
         Key::RowSubtitleSeparator,
         Key::NoRecords,
         Key::UnsetLabel,
         Key::SavedMessage,
-        Key::ArchivedMessage,
-        Key::UnarchivedMessage,
         Key::ShopNameLabel,
         Key::ProductNameLabel,
         Key::AddressLabel,
@@ -668,7 +651,6 @@ impl Key {
         Key::RequiredLabel,
         Key::BrewsLabel,
         Key::UsedBeansLabel,
-        Key::ArchivedBadge,
         Key::AddressUnset,
         Key::RatingNone,
         Key::HomeEmptyHint,

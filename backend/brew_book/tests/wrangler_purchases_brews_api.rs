@@ -1,8 +1,8 @@
 //! 購入と抽出の API の結合テスト (HTTP)。
 //!
-//! 一覧と単件の取得、登録、更新、アーカイブと解除、入力の検証、参照先の 404 と 409、
+//! 一覧と単件の取得、登録、更新、入力の検証、参照先の 404、
 //! 他の利用者の記録の 404、ネストした商品と店 (店が無い購入の null を含む)、カーソルの
-//! 並び順を検査する。親 (商品、店、購入) をアーカイブしても子から親をたどれることも確認する。
+//! 並び順を検査する。子から親をたどれることも確認する。
 //!
 //! テスト名の `wrangler_` は、`wrangler dev` を起動するテストを `backend:test` が名前で除外するための規約。
 //! サーバーは 1 つのテストファイルで 1 回だけ起動し、下ごしらえの SQL を先に実行する。
@@ -22,7 +22,6 @@ use support::ServerLease;
 /// 下ごしらえに使う時刻 (ISO 8601 UTC の固定長)。
 const T21: &str = "2026-09-21T00:00:00.000Z";
 const T20: &str = "2026-09-20T00:00:00.000Z";
-const T19: &str = "2026-09-19T00:00:00.000Z";
 
 /// 下ごしらえに使う日付。
 const D21: &str = "2026-09-21";
@@ -37,32 +36,19 @@ const B19: &str = "2026-09-19T10:00:00.000Z";
 /// このテストファイルの下ごしらえと、テストが使う値。
 struct TestData {
     seed_sql: String,
-    /// 購入の一覧のテストの利用者 (同じ購入日の 2 件、店が無い 1 件、アーカイブ済みの店を参照する
-    /// 古い 1 件、アーカイブ済みの 1 件)。
+    /// 購入の一覧のテストの利用者 (同じ購入日の 2 件、店が無い 1 件、古い 1 件)。
     purchase_list_user: String,
     purchase_list_session: String,
     purchase_list_products: Vec<SeededProduct>,
     purchase_list_shop: SeededShop,
-    purchase_list_archived_shop: SeededShop,
     purchase_list_purchases: Vec<SeededPurchase>,
     purchase_list_old_purchase: SeededPurchase,
-    purchase_list_archived_purchase: SeededPurchase,
-    purchase_list_archived_product: SeededProduct,
     /// 購入の書き換えのテストの利用者。
     purchase_write_user: String,
     purchase_write_session: String,
     purchase_write_product: SeededProduct,
-    purchase_write_archived_product: SeededProduct,
     purchase_write_shop: SeededShop,
-    purchase_write_archived_shop: SeededShop,
-    /// 親のアーカイブのテストの利用者。
-    purchase_parent_user: String,
-    purchase_parent_session: String,
-    purchase_parent_product: SeededProduct,
-    purchase_parent_shop: SeededShop,
-    purchase_parent_purchase: SeededPurchase,
-    /// 抽出の一覧のテストの利用者 (同じ抽出日時の 2 件、アーカイブ済みの購入と店を参照する古い
-    /// 1 件、アーカイブ済みの 1 件)。
+    /// 抽出の一覧のテストの利用者 (同じ抽出日時の 2 件、古い 1 件)。
     brew_list_user: String,
     brew_list_session: String,
     brew_list_product: SeededProduct,
@@ -70,19 +56,10 @@ struct TestData {
     brew_list_purchases: Vec<SeededPurchase>,
     brew_list_brews: Vec<SeededBrew>,
     brew_list_old_brew: SeededBrew,
-    brew_list_archived_brew: SeededBrew,
     /// 抽出の書き換えのテストの利用者。
     brew_write_user: String,
     brew_write_session: String,
     brew_write_purchase: SeededPurchase,
-    brew_write_archived_purchase: SeededPurchase,
-    /// 親のアーカイブのテストの利用者。
-    brew_parent_user: String,
-    brew_parent_session: String,
-    brew_parent_purchase: SeededPurchase,
-    brew_parent_product: SeededProduct,
-    brew_parent_shop: SeededShop,
-    brew_parent_brew: SeededBrew,
     /// 他の利用者 (404 の検査に使う)。
     other_user: String,
     other_session: String,
@@ -119,11 +96,9 @@ fn build_data() -> TestData {
     seed.user(&purchase_list_user, "purchase list user", created);
     let purchase_list_session = seed.session(&purchase_list_user, future, created);
     let purchase_list_products = vec![
-        seed.product(&purchase_list_user, "一覧の豆", T21, T21, None),
-        seed.product(&purchase_list_user, "古い豆", T20, T20, None),
+        seed.product(&purchase_list_user, "一覧の豆", T21, T21),
+        seed.product(&purchase_list_user, "古い豆", T20, T20),
     ];
-    let purchase_list_archived_product =
-        seed.product(&purchase_list_user, "しまった豆", T19, T19, Some(T19));
     // ネストした商品の Flavor Notes の検査のためのタグ (乖離 2)。
     let purchase_list_tag = seed.flavor_tag(&purchase_list_user, "購入のタグ");
     seed.product_flavor_tag(
@@ -131,16 +106,7 @@ fn build_data() -> TestData {
         &purchase_list_products[0].id,
         &purchase_list_tag,
     );
-    let purchase_list_shop = seed.shop(
-        &purchase_list_user,
-        "一覧の店",
-        Some("東京都"),
-        T21,
-        T21,
-        None,
-    );
-    let purchase_list_archived_shop =
-        seed.shop(&purchase_list_user, "しまった店", None, T19, T19, Some(T19));
+    let purchase_list_shop = seed.shop(&purchase_list_user, "一覧の店", Some("東京都"), T21, T21);
     let purchase_list_purchases = vec![
         seed.purchase(
             &purchase_list_user,
@@ -149,7 +115,6 @@ fn build_data() -> TestData {
             D21,
             T21,
             T21,
-            None,
         ),
         seed.purchase(
             &purchase_list_user,
@@ -158,83 +123,33 @@ fn build_data() -> TestData {
             D21,
             T21,
             T21,
-            None,
         ),
     ];
     let purchase_list_old_purchase = seed.purchase(
         &purchase_list_user,
         &purchase_list_products[1].id,
-        Some(&purchase_list_archived_shop.id),
+        Some(&purchase_list_shop.id),
         D20,
         T20,
         T20,
-        None,
-    );
-    let purchase_list_archived_purchase = seed.purchase(
-        &purchase_list_user,
-        &purchase_list_archived_product.id,
-        None,
-        D19,
-        T19,
-        T19,
-        Some(T19),
     );
 
     // 購入の書き換えのテストの利用者。
     let purchase_write_user = user_id(2);
     seed.user(&purchase_write_user, "purchase write user", created);
     let purchase_write_session = seed.session(&purchase_write_user, future, created);
-    let purchase_write_product = seed.product(&purchase_write_user, "書き換えの豆", T21, T21, None);
-    let purchase_write_archived_product = seed.product(
-        &purchase_write_user,
-        "書き換えのしまった豆",
-        T19,
-        T19,
-        Some(T19),
-    );
-    let purchase_write_shop = seed.shop(&purchase_write_user, "書き換えの店", None, T21, T21, None);
-    let purchase_write_archived_shop = seed.shop(
-        &purchase_write_user,
-        "書き換えのしまった店",
-        None,
-        T19,
-        T19,
-        Some(T19),
-    );
-
-    // 親のアーカイブのテストの利用者。
-    let purchase_parent_user = user_id(3);
-    seed.user(&purchase_parent_user, "purchase parent user", created);
-    let purchase_parent_session = seed.session(&purchase_parent_user, future, created);
-    let purchase_parent_product = seed.product(&purchase_parent_user, "親の豆", T21, T21, None);
-    let purchase_parent_shop = seed.shop(&purchase_parent_user, "親の店", None, T21, T21, None);
-    let purchase_parent_purchase = seed.purchase(
-        &purchase_parent_user,
-        &purchase_parent_product.id,
-        Some(&purchase_parent_shop.id),
-        D21,
-        T21,
-        T21,
-        None,
-    );
+    let purchase_write_product = seed.product(&purchase_write_user, "書き換えの豆", T21, T21);
+    let purchase_write_shop = seed.shop(&purchase_write_user, "書き換えの店", None, T21, T21);
 
     // 抽出の一覧のテストの利用者。同じ抽出日時の 2 件は、先に作った方の ID が小さい。
     let brew_list_user = user_id(4);
     seed.user(&brew_list_user, "brew list user", created);
     let brew_list_session = seed.session(&brew_list_user, future, created);
-    let brew_list_product = seed.product(&brew_list_user, "抽出の豆", T21, T21, None);
+    let brew_list_product = seed.product(&brew_list_user, "抽出の豆", T21, T21);
     // ネストした商品の Flavor Notes の検査のためのタグ (乖離 2)。
     let brew_list_tag = seed.flavor_tag(&brew_list_user, "抽出のタグ");
     seed.product_flavor_tag(&brew_list_user, &brew_list_product.id, &brew_list_tag);
-    let brew_list_shop = seed.shop(&brew_list_user, "抽出の店", None, T21, T21, None);
-    let brew_list_archived_shop = seed.shop(
-        &brew_list_user,
-        "抽出のしまった店",
-        None,
-        T19,
-        T19,
-        Some(T19),
-    );
+    let brew_list_shop = seed.shop(&brew_list_user, "抽出の店", None, T21, T21);
     let brew_list_purchases = vec![
         seed.purchase(
             &brew_list_user,
@@ -243,68 +158,29 @@ fn build_data() -> TestData {
             D21,
             T21,
             T21,
-            None,
         ),
-        seed.purchase(
-            &brew_list_user,
-            &brew_list_product.id,
-            None,
-            D21,
-            T21,
-            T21,
-            None,
-        ),
+        seed.purchase(&brew_list_user, &brew_list_product.id, None, D21, T21, T21),
     ];
-    let brew_list_archived_purchase = seed.purchase(
+    let brew_list_old_purchase = seed.purchase(
         &brew_list_user,
         &brew_list_product.id,
-        Some(&brew_list_archived_shop.id),
+        Some(&brew_list_shop.id),
         D20,
         T20,
         T20,
-        Some(T20),
     );
     let brew_list_brews = vec![
-        seed.brew(
-            &brew_list_user,
-            &brew_list_purchases[0].id,
-            B21,
-            T21,
-            T21,
-            None,
-        ),
-        seed.brew(
-            &brew_list_user,
-            &brew_list_purchases[1].id,
-            B21,
-            T21,
-            T21,
-            None,
-        ),
+        seed.brew(&brew_list_user, &brew_list_purchases[0].id, B21, T21, T21),
+        seed.brew(&brew_list_user, &brew_list_purchases[1].id, B21, T21, T21),
     ];
-    let brew_list_old_brew = seed.brew(
-        &brew_list_user,
-        &brew_list_archived_purchase.id,
-        B20,
-        T20,
-        T20,
-        None,
-    );
-    let brew_list_archived_brew = seed.brew(
-        &brew_list_user,
-        &brew_list_purchases[0].id,
-        B19,
-        T19,
-        T19,
-        Some(T19),
-    );
+    let brew_list_old_brew = seed.brew(&brew_list_user, &brew_list_old_purchase.id, B20, T20, T20);
 
     // 抽出の書き換えのテストの利用者。
     let brew_write_user = user_id(5);
     seed.user(&brew_write_user, "brew write user", created);
     let brew_write_session = seed.session(&brew_write_user, future, created);
-    let brew_write_product = seed.product(&brew_write_user, "書き換えの抽出の豆", T21, T21, None);
-    let brew_write_shop = seed.shop(&brew_write_user, "書き換えの抽出の店", None, T21, T21, None);
+    let brew_write_product = seed.product(&brew_write_user, "書き換えの抽出の豆", T21, T21);
+    let brew_write_shop = seed.shop(&brew_write_user, "書き換えの抽出の店", None, T21, T21);
     let brew_write_purchase = seed.purchase(
         &brew_write_user,
         &brew_write_product.id,
@@ -312,48 +188,14 @@ fn build_data() -> TestData {
         D21,
         T21,
         T21,
-        None,
-    );
-    let brew_write_archived_purchase = seed.purchase(
-        &brew_write_user,
-        &brew_write_product.id,
-        None,
-        D19,
-        T19,
-        T19,
-        Some(T19),
-    );
-
-    // 親のアーカイブのテストの利用者。
-    let brew_parent_user = user_id(6);
-    seed.user(&brew_parent_user, "brew parent user", created);
-    let brew_parent_session = seed.session(&brew_parent_user, future, created);
-    let brew_parent_product = seed.product(&brew_parent_user, "親の抽出の豆", T21, T21, None);
-    let brew_parent_shop = seed.shop(&brew_parent_user, "親の抽出の店", None, T21, T21, None);
-    let brew_parent_purchase = seed.purchase(
-        &brew_parent_user,
-        &brew_parent_product.id,
-        Some(&brew_parent_shop.id),
-        D21,
-        T21,
-        T21,
-        None,
-    );
-    let brew_parent_brew = seed.brew(
-        &brew_parent_user,
-        &brew_parent_purchase.id,
-        B21,
-        T21,
-        T21,
-        None,
     );
 
     // 他の利用者。商品と店と購入と抽出を 1 つずつ持つ。
     let other_user = user_id(7);
     seed.user(&other_user, "other user", created);
     let other_session = seed.session(&other_user, future, created);
-    let other_product = seed.product(&other_user, "他人の豆", T21, T21, None);
-    let other_shop = seed.shop(&other_user, "他人の店", None, T21, T21, None);
+    let other_product = seed.product(&other_user, "他人の豆", T21, T21);
+    let other_shop = seed.shop(&other_user, "他人の店", None, T21, T21);
     let other_purchase = seed.purchase(
         &other_user,
         &other_product.id,
@@ -361,9 +203,8 @@ fn build_data() -> TestData {
         D21,
         T21,
         T21,
-        None,
     );
-    let other_brew = seed.brew(&other_user, &other_purchase.id, B21, T21, T21, None);
+    let other_brew = seed.brew(&other_user, &other_purchase.id, B21, T21, T21);
 
     // 記録が無い利用者。
     let empty_user = user_id(8);
@@ -376,22 +217,12 @@ fn build_data() -> TestData {
         purchase_list_session,
         purchase_list_products,
         purchase_list_shop,
-        purchase_list_archived_shop,
         purchase_list_purchases,
         purchase_list_old_purchase,
-        purchase_list_archived_purchase,
-        purchase_list_archived_product,
         purchase_write_user,
         purchase_write_session,
         purchase_write_product,
-        purchase_write_archived_product,
         purchase_write_shop,
-        purchase_write_archived_shop,
-        purchase_parent_user,
-        purchase_parent_session,
-        purchase_parent_product,
-        purchase_parent_shop,
-        purchase_parent_purchase,
         brew_list_user,
         brew_list_session,
         brew_list_product,
@@ -399,17 +230,9 @@ fn build_data() -> TestData {
         brew_list_purchases,
         brew_list_brews,
         brew_list_old_brew,
-        brew_list_archived_brew,
         brew_write_user,
         brew_write_session,
         brew_write_purchase,
-        brew_write_archived_purchase,
-        brew_parent_user,
-        brew_parent_session,
-        brew_parent_purchase,
-        brew_parent_product,
-        brew_parent_shop,
-        brew_parent_brew,
         other_user,
         other_session,
         other_product,
@@ -448,12 +271,6 @@ fn assert_bad_request(response: Response) {
 fn assert_not_found(response: Response) {
     let body = assert_status(response, 404);
     assert_eq!(error_code(&body), Some("not_found"), "{body}");
-}
-
-/// 参照先を指定できない呼び出しが 409 になることを確かめる (FR-9、FR-11)。
-fn assert_conflict(response: Response) {
-    let body = assert_status(response, 409);
-    assert_eq!(error_code(&body), Some("conflict"), "{body}");
 }
 
 /// 固定長の ISO 8601 UTC の文字列であることを確かめる。
@@ -498,7 +315,7 @@ fn assert_nested_shop(body: &Value, shop: &SeededShop, user_id: &str) {
 }
 
 mod purchases {
-    //! 購入の経路のテスト (FR-9、FR-12、FR-5)。
+    //! 購入の経路のテスト (FR-9、FR-5)。
 
     use super::*;
 
@@ -540,13 +357,12 @@ mod purchases {
         );
         // 店が無い購入では shop は null になる (FR-9)。
         assert_eq!(purchases[1]["shop"], Value::Null, "{body}");
-        // アーカイブ済みの店を参照する購入でも店をたどれる (FR-12)。
+        // 店を参照する購入でも店をたどれる。
         assert_nested_shop(
             &purchases[2],
-            &data.purchase_list_archived_shop,
+            &data.purchase_list_shop,
             &data.purchase_list_user,
         );
-        assert_timestamp(&purchases[2]["shop"]["archived_at"]);
         // 写真は未設定で、クライアントが有無を知るために photo_key を含める (0009 が操作を扱う)。
         assert_eq!(purchases[0]["photo_key"], Value::Null, "{body}");
         // 一覧は呼び出した利用者の記録だけを返す (FR-5)。
@@ -556,42 +372,25 @@ mod purchases {
                 .all(|purchase| purchase["user_id"] == data.purchase_list_user),
             "the list must carry only the caller's records: {body}"
         );
-        // 既定では、アーカイブ済みの購入は含まれない (FR-12)。
-        assert!(
-            !purchases
-                .iter()
-                .any(|purchase| purchase["id"] == data.purchase_list_archived_purchase.id),
-            "the archived purchase must not be listed: {body}"
-        );
+        // 応答に archived_at は無い。
+        for purchase in purchases {
+            assert!(
+                purchase.get("archived_at").is_none(),
+                "the response must not carry archived_at: {purchase}"
+            );
+        }
         assert_eq!(body["next_cursor"], Value::Null);
+        // include_archived は未知のパラメータとして無視され、挙動が変わらない。
+        let with_parameter = assert_status(client.get("/api/purchases?include_archived=true"), 200);
+        assert_eq!(with_parameter, body, "{with_parameter}");
     }
 
     #[test]
-    fn wrangler_purchases_list_ok_with_include_archived_and_a_cursor() {
+    fn wrangler_purchases_list_ok_with_a_cursor() {
         let data = data();
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
         let client = ApiClient::new(&base_url, Some(&data.purchase_list_session));
-
-        // アーカイブ済みを含めると、アーカイブ済みの購入も返る (FR-12)。
-        let body = assert_status(client.get("/api/purchases?include_archived=true"), 200);
-        let purchases = body["purchases"].as_array().expect("purchases");
-        assert_eq!(purchases.len(), 4, "{body}");
-        assert_eq!(purchases[3]["id"], data.purchase_list_archived_purchase.id);
-        assert_timestamp(&purchases[3]["archived_at"]);
-        // アーカイブ済みの商品を参照する購入でも商品をたどれる (FR-12)。
-        assert_eq!(
-            purchases[3]["product"]["id"], data.purchase_list_archived_product.id,
-            "{body}"
-        );
-        assert_timestamp(&purchases[3]["product"]["archived_at"]);
-        // 親のアーカイブのテストの利用者が混ざっていないことを確認する。
-        assert!(
-            purchases
-                .iter()
-                .all(|purchase| purchase["user_id"] == data.purchase_list_user),
-            "{body}"
-        );
 
         // カーソルで続きを引く。同じ行が重複せず、並び順が保たれる。
         let first = assert_status(client.get("/api/purchases?limit=2"), 200);
@@ -648,18 +447,13 @@ mod purchases {
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
         let client = ApiClient::new(&base_url, Some(&data.purchase_list_session));
-        for query in [
-            "limit=0",
-            "limit=abc",
-            "limit=201",
-            "include_archived=yes",
-            "cursor=x",
-            "cursor=",
-        ] {
+        for query in ["limit=0", "limit=abc", "limit=201", "cursor=x", "cursor="] {
             assert_bad_request(client.get(&format!("/api/purchases?{query}")));
         }
         // 200 ぴったりは受け付ける。
         assert_status(client.get("/api/purchases?limit=200"), 200);
+        // 受け取らないパラメータは未知のパラメータとして無視する (400 にしない)。
+        assert_status(client.get("/api/purchases?include_archived=yes"), 200);
     }
 
     #[test]
@@ -694,7 +488,7 @@ mod purchases {
         assert_eq!(body["shop_id"], Value::Null, "{body}");
         assert_eq!(body["purchased_on"], D21, "{body}");
         assert_eq!(body["photo_key"], Value::Null, "{body}");
-        assert_eq!(body["archived_at"], Value::Null, "{body}");
+        assert!(body.get("archived_at").is_none(), "{body}");
         assert_timestamp(&body["created_at"]);
         assert_eq!(body["created_at"], body["updated_at"], "{body}");
         // 価格が無いときは通貨コードも null になる (0007 の設計判断)。
@@ -812,7 +606,6 @@ mod purchases {
             json!({ "product_id": product, "purchased_on": D21, "id": "no-such-id" }),
             json!({ "product_id": product, "purchased_on": D21, "created_at": T21 }),
             json!({ "product_id": product, "purchased_on": D21, "updated_at": T21 }),
-            json!({ "product_id": product, "purchased_on": D21, "archived_at": T21 }),
             json!({ "product_id": product, "purchased_on": D21, "photo_key": "purchases/photo.jpg" }),
             json!({ "product_id": product, "purchased_on": D21, "user_id": data.purchase_write_user }),
             json!([1, 2]),
@@ -822,7 +615,7 @@ mod purchases {
     }
 
     #[test]
-    fn wrangler_purchases_create_reference_404_and_409() {
+    fn wrangler_purchases_create_reference_404() {
         let data = data();
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
@@ -852,35 +645,19 @@ mod purchases {
                 "purchased_on": D21,
             }),
         ));
-        // アーカイブ済みの商品と店は 409 (FR-9)。
-        assert_conflict(client.post_json(
-            "/api/purchases",
-            &json!({
-                "product_id": data.purchase_write_archived_product.id,
-                "purchased_on": D21,
-            }),
-        ));
-        assert_conflict(client.post_json(
-            "/api/purchases",
-            &json!({
-                "product_id": data.purchase_write_product.id,
-                "shop_id": data.purchase_write_archived_shop.id,
-                "purchased_on": D21,
-            }),
-        ));
-        // 他の利用者の商品と店は、アーカイブされていないことを確かめる (404 が利用者の違いによるものだと裏付ける)。
+        // 他の利用者の商品と店は、その利用者からは参照できる (404 が利用者の違いによるものだと裏付ける)。
         let other = assert_status(
             ApiClient::new(&base_url, Some(&data.other_session))
                 .get(&format!("/api/products/{}", data.other_product.id)),
             200,
         );
-        assert_eq!(other["archived_at"], Value::Null, "{other}");
+        assert_eq!(other["id"], data.other_product.id, "{other}");
         let other = assert_status(
             ApiClient::new(&base_url, Some(&data.other_session))
                 .get(&format!("/api/shops/{}", data.other_shop.id)),
             200,
         );
-        assert_eq!(other["archived_at"], Value::Null, "{other}");
+        assert_eq!(other["id"], data.other_shop.id, "{other}");
     }
 
     #[test]
@@ -917,15 +694,7 @@ mod purchases {
             &["購入のタグ"],
         );
         assert_nested_shop(&body, &data.purchase_list_shop, &data.purchase_list_user);
-        // アーカイブ済みでも単件では返す (FR-12)。
-        let body = assert_status(
-            client.get(&format!(
-                "/api/purchases/{}",
-                data.purchase_list_archived_purchase.id
-            )),
-            200,
-        );
-        assert_timestamp(&body["archived_at"]);
+        assert!(body.get("archived_at").is_none(), "{body}");
     }
 
     #[test]
@@ -1064,21 +833,6 @@ mod purchases {
         let fetched = assert_status(client.get(&format!("/api/purchases/{id}")), 200);
         assert_eq!(fetched, body);
 
-        // アーカイブ済みの購入も更新できる (単件の取得と同じくアーカイブ済みを引くため)。
-        assert_status(client.post(&format!("/api/purchases/{id}/archive")), 200);
-        let archived = assert_status(
-            client.patch_json(
-                &format!("/api/purchases/{id}"),
-                &json!({ "roast": "アーカイブ後" }),
-            ),
-            200,
-        );
-        assert_eq!(archived["roast"], "アーカイブ後", "{archived}");
-        assert!(
-            archived["archived_at"].as_str().is_some(),
-            "the archived_at must be kept: {archived}"
-        );
-
         // 他の利用者の購入は変わっていない。
         let other = assert_status(
             ApiClient::new(&base_url, Some(&data.other_session))
@@ -1136,7 +890,6 @@ mod purchases {
             json!({ "id": "no-such-id" }),
             json!({ "created_at": T21 }),
             json!({ "updated_at": T21 }),
-            json!({ "archived_at": T21 }),
             json!({ "photo_key": "purchases/photo.jpg" }),
             json!([1]),
         ] {
@@ -1150,7 +903,7 @@ mod purchases {
     }
 
     #[test]
-    fn wrangler_purchases_update_reference_404_and_409() {
+    fn wrangler_purchases_update_reference_404() {
         let data = data();
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
@@ -1179,15 +932,6 @@ mod purchases {
         assert_not_found(client.patch_json(
             &format!("/api/purchases/{id}"),
             &json!({ "shop_id": data.other_shop.id }),
-        ));
-        // アーカイブ済みの親への付け替えは 409 (FR-9、FR-12)。
-        assert_conflict(client.patch_json(
-            &format!("/api/purchases/{id}"),
-            &json!({ "product_id": data.purchase_write_archived_product.id }),
-        ));
-        assert_conflict(client.patch_json(
-            &format!("/api/purchases/{id}"),
-            &json!({ "shop_id": data.purchase_write_archived_shop.id }),
         ));
         // 参照先を変えない更新は通る。
         let body = assert_status(
@@ -1231,49 +975,6 @@ mod purchases {
         assert_eq!(body["product_id"], new_product["id"], "{body}");
         assert_eq!(body["shop_id"], new_shop["id"], "{body}");
 
-        // 親をアーカイブしても、参照先を変えない更新は通る (乖離 3)。
-        let product = assert_status(
-            client.post_json("/api/products", &json!({ "name": "アーカイブする親の豆" })),
-            200,
-        );
-        let shop = assert_status(
-            client.post_json("/api/shops", &json!({ "name": "アーカイブする親の店" })),
-            200,
-        );
-        let purchase = assert_status(
-            client.post_json(
-                "/api/purchases",
-                &json!({
-                    "product_id": product["id"],
-                    "shop_id": shop["id"],
-                    "purchased_on": D21,
-                }),
-            ),
-            200,
-        );
-        let archived_parent_id = purchase["id"].as_str().expect("the id must be present");
-        let product_id = product["id"].as_str().expect("the id must be present");
-        let shop_id = shop["id"].as_str().expect("the id must be present");
-        assert_status(
-            client.post(&format!("/api/products/{product_id}/archive")),
-            200,
-        );
-        assert_status(client.post(&format!("/api/shops/{shop_id}/archive")), 200);
-        let body = assert_status(
-            client.patch_json(
-                &format!("/api/purchases/{archived_parent_id}"),
-                &json!({
-                    "product_id": product_id,
-                    "shop_id": shop_id,
-                    "roast": "親はアーカイブ済み",
-                }),
-            ),
-            200,
-        );
-        assert_eq!(body["roast"], "親はアーカイブ済み", "{body}");
-        assert_eq!(body["product_id"], product_id, "{body}");
-        assert_eq!(body["shop_id"], shop_id, "{body}");
-
         // 他の利用者の購入の更新は 404 (FR-5)。
         assert_not_found(
             ApiClient::new(&base_url, Some(&data.purchase_list_session)).patch_json(
@@ -1299,189 +1000,10 @@ mod purchases {
             &json!({ "roast": "ロースト" }),
         ));
     }
-
-    // 購入のアーカイブと解除 (認証が必要、入力なし)。
-
-    #[test]
-    fn wrangler_purchases_archive_and_unarchive_ok() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.purchase_write_session));
-        let created = assert_status(
-            client.post_json(
-                "/api/purchases",
-                &json!({
-                    "product_id": data.purchase_write_product.id,
-                    "purchased_on": D21,
-                }),
-            ),
-            200,
-        );
-        let id = created["id"].as_str().expect("the id must be present");
-        sleep_millis(10);
-
-        let body = assert_status(client.post(&format!("/api/purchases/{id}/archive")), 200);
-        assert_timestamp(&body["archived_at"]);
-        assert!(
-            body["updated_at"].as_str() > created["updated_at"].as_str(),
-            "updated_at must advance on archive: {body}"
-        );
-        // アーカイブした購入は既定の一覧に含まれない (FR-12)。
-        let list = assert_status(client.get("/api/purchases"), 200);
-        assert!(
-            !list["purchases"]
-                .as_array()
-                .expect("purchases")
-                .iter()
-                .any(|purchase| purchase["id"] == created["id"]),
-            "the archived purchase must not be listed: {list}"
-        );
-        // アーカイブ済みの購入は include_archived で取得でき、単件でも取得できる (FR-12)。
-        let list = assert_status(client.get("/api/purchases?include_archived=true"), 200);
-        assert!(
-            list["purchases"]
-                .as_array()
-                .expect("purchases")
-                .iter()
-                .any(|purchase| purchase["id"] == created["id"]),
-            "the archived purchase must be listed: {list}"
-        );
-        assert_status(client.get(&format!("/api/purchases/{id}")), 200);
-
-        // 繰り返しのアーカイブも 200 を返す (同じ状態への遷移はエラーにしない)。
-        assert_status(client.post(&format!("/api/purchases/{id}/archive")), 200);
-
-        // アーカイブ解除で既定の一覧に戻る (FR-12)。
-        let body = assert_status(client.post(&format!("/api/purchases/{id}/unarchive")), 200);
-        assert_eq!(body["archived_at"], Value::Null, "{body}");
-        let list = assert_status(client.get("/api/purchases"), 200);
-        assert!(
-            list["purchases"]
-                .as_array()
-                .expect("purchases")
-                .iter()
-                .any(|purchase| purchase["id"] == created["id"]),
-            "the unarchived purchase must be listed: {list}"
-        );
-        // 繰り返しのアーカイブ解除も 200 を返す。
-        assert_status(client.post(&format!("/api/purchases/{id}/unarchive")), 200);
-    }
-
-    #[test]
-    fn wrangler_purchases_archive_unauthenticated_401() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(anonymous(&base_url).post(&format!(
-            "/api/purchases/{}/archive",
-            data.purchase_list_purchases[0].id
-        )));
-    }
-
-    #[test]
-    fn wrangler_purchases_unarchive_unauthenticated_401() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(anonymous(&base_url).post(&format!(
-            "/api/purchases/{}/unarchive",
-            data.purchase_list_purchases[0].id
-        )));
-    }
-
-    #[test]
-    fn wrangler_purchases_archive_other_user_404() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.purchase_list_session));
-        assert_not_found(client.post(&format!(
-            "/api/purchases/{}/archive",
-            data.other_purchase.id
-        )));
-        assert_not_found(client.post(&format!(
-            "/api/purchases/{}/unarchive",
-            data.other_purchase.id
-        )));
-        let other = assert_status(
-            ApiClient::new(&base_url, Some(&data.other_session))
-                .get(&format!("/api/purchases/{}", data.other_purchase.id)),
-            200,
-        );
-        assert_eq!(other["archived_at"], Value::Null);
-    }
-
-    #[test]
-    fn wrangler_purchases_unarchive_other_user_404() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_not_found(
-            ApiClient::new(&base_url, Some(&data.purchase_list_session))
-                .post("/api/purchases/no-such-id/unarchive"),
-        );
-    }
-
-    // 親 (商品、店) のアーカイブ (FR-12)。
-
-    #[test]
-    fn wrangler_purchases_keep_tracing_the_archived_parents() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.purchase_parent_session));
-        // 親をアーカイブしても、購入はアーカイブされず、親をたどれる (FR-12)。
-        assert_status(
-            client.post(&format!(
-                "/api/products/{}/archive",
-                data.purchase_parent_product.id
-            )),
-            200,
-        );
-        assert_status(
-            client.post(&format!(
-                "/api/shops/{}/archive",
-                data.purchase_parent_shop.id
-            )),
-            200,
-        );
-        let body = assert_status(
-            client.get(&format!(
-                "/api/purchases/{}",
-                data.purchase_parent_purchase.id
-            )),
-            200,
-        );
-        assert_eq!(body["archived_at"], Value::Null, "{body}");
-        assert_nested_product(
-            &body,
-            &data.purchase_parent_product,
-            &data.purchase_parent_user,
-            &[],
-        );
-        assert_nested_shop(
-            &body,
-            &data.purchase_parent_shop,
-            &data.purchase_parent_user,
-        );
-        assert_timestamp(&body["product"]["archived_at"]);
-        assert_timestamp(&body["shop"]["archived_at"]);
-        // 既定の一覧にも残る。
-        let list = assert_status(client.get("/api/purchases"), 200);
-        assert!(
-            list["purchases"]
-                .as_array()
-                .expect("purchases")
-                .iter()
-                .any(|purchase| purchase["id"] == data.purchase_parent_purchase.id),
-            "the purchase of the archived parents must be listed: {list}"
-        );
-    }
 }
 
 mod brews {
-    //! 抽出の経路のテスト (FR-11、FR-12、FR-5)。
+    //! 抽出の経路のテスト (FR-11、FR-5)。
 
     use super::*;
 
@@ -1526,13 +1048,11 @@ mod brews {
         );
         // 店が無い購入では shop は null になる (FR-9、FR-11)。
         assert_eq!(brews[1]["purchase"]["shop"], Value::Null, "{body}");
-        // アーカイブ済みの購入と店を参照する抽出でも、購入と商品と店をたどれる (FR-12)。
+        // 古い抽出でも、購入と商品と店をたどれる。
         assert_eq!(
             brews[2]["purchase"]["id"], data.brew_list_old_brew.purchase_id,
             "{body}"
         );
-        assert_timestamp(&brews[2]["purchase"]["archived_at"]);
-        assert_timestamp(&brews[2]["purchase"]["shop"]["archived_at"]);
         assert_nested_product(
             &brews[2]["purchase"],
             &data.brew_list_product,
@@ -1546,29 +1066,25 @@ mod brews {
                 .all(|brew| brew["user_id"] == data.brew_list_user),
             "the list must carry only the caller's records: {body}"
         );
-        // 既定では、アーカイブ済みの抽出は含まれない (FR-12)。
-        assert!(
-            !brews
-                .iter()
-                .any(|brew| brew["id"] == data.brew_list_archived_brew.id),
-            "the archived brew must not be listed: {body}"
-        );
+        // 応答に archived_at は無い。
+        for brew in brews {
+            assert!(
+                brew.get("archived_at").is_none(),
+                "the response must not carry archived_at: {brew}"
+            );
+        }
         assert_eq!(body["next_cursor"], Value::Null);
+        // include_archived は未知のパラメータとして無視され、挙動が変わらない。
+        let with_parameter = assert_status(client.get("/api/brews?include_archived=true"), 200);
+        assert_eq!(with_parameter, body, "{with_parameter}");
     }
 
     #[test]
-    fn wrangler_brews_list_ok_with_include_archived_and_a_cursor() {
+    fn wrangler_brews_list_ok_with_a_cursor() {
         let data = data();
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
         let client = ApiClient::new(&base_url, Some(&data.brew_list_session));
-
-        // アーカイブ済みを含めると、アーカイブ済みの抽出も返る (FR-12)。
-        let body = assert_status(client.get("/api/brews?include_archived=true"), 200);
-        let brews = body["brews"].as_array().expect("brews");
-        assert_eq!(brews.len(), 4, "{body}");
-        assert_eq!(brews[3]["id"], data.brew_list_archived_brew.id);
-        assert_timestamp(&brews[3]["archived_at"]);
 
         // カーソルで続きを引く。同じ行が重複せず、並び順が保たれる。
         let first = assert_status(client.get("/api/brews?limit=2"), 200);
@@ -1621,15 +1137,11 @@ mod brews {
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
         let client = ApiClient::new(&base_url, Some(&data.brew_list_session));
-        for query in [
-            "limit=0",
-            "limit=abc",
-            "limit=201",
-            "include_archived=1",
-            "cursor=x",
-        ] {
+        for query in ["limit=0", "limit=abc", "limit=201", "cursor=x"] {
             assert_bad_request(client.get(&format!("/api/brews?{query}")));
         }
+        // 受け取らないパラメータは未知のパラメータとして無視する (400 にしない)。
+        assert_status(client.get("/api/brews?include_archived=1"), 200);
     }
 
     #[test]
@@ -1674,7 +1186,7 @@ mod brews {
         ] {
             assert_eq!(body[field], Value::Null, "{field}: {body}");
         }
-        assert_eq!(body["archived_at"], Value::Null, "{body}");
+        assert!(body.get("archived_at").is_none(), "{body}");
         assert_timestamp(&body["created_at"]);
         assert_eq!(body["created_at"], body["updated_at"], "{body}");
         // 購入がネストし、その中に商品と店が入る (FR-11)。
@@ -1823,7 +1335,6 @@ mod brews {
             json!({ "purchase_id": purchase, "brewed_at": B21, "id": "no-such-id" }),
             json!({ "purchase_id": purchase, "brewed_at": B21, "created_at": T21 }),
             json!({ "purchase_id": purchase, "brewed_at": B21, "updated_at": T21 }),
-            json!({ "purchase_id": purchase, "brewed_at": B21, "archived_at": T21 }),
             json!({ "purchase_id": purchase, "brewed_at": B21, "user_id": data.brew_write_user }),
             json!([1]),
         ] {
@@ -1832,7 +1343,7 @@ mod brews {
     }
 
     #[test]
-    fn wrangler_brews_create_reference_404_and_409() {
+    fn wrangler_brews_create_reference_404() {
         let data = data();
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
@@ -1846,21 +1357,13 @@ mod brews {
             "/api/brews",
             &json!({ "purchase_id": data.other_purchase.id, "brewed_at": B21 }),
         ));
-        // アーカイブ済みの購入は 409 (FR-11、FR-12)。
-        assert_conflict(client.post_json(
-            "/api/brews",
-            &json!({
-                "purchase_id": data.brew_write_archived_purchase.id,
-                "brewed_at": B21,
-            }),
-        ));
-        // 他の利用者の購入は、アーカイブされていないことを確かめる (404 が利用者の違いによるものだと裏付ける)。
+        // 他の利用者の購入は、その利用者からは参照できる (404 が利用者の違いによるものだと裏付ける)。
         let other = assert_status(
             ApiClient::new(&base_url, Some(&data.other_session))
                 .get(&format!("/api/purchases/{}", data.other_purchase.id)),
             200,
         );
-        assert_eq!(other["archived_at"], Value::Null, "{other}");
+        assert_eq!(other["id"], data.other_purchase.id, "{other}");
     }
 
     #[test]
@@ -1897,12 +1400,7 @@ mod brews {
             &data.brew_list_user,
             &["抽出のタグ"],
         );
-        // アーカイブ済みでも単件では返す (FR-12)。
-        let body = assert_status(
-            client.get(&format!("/api/brews/{}", data.brew_list_archived_brew.id)),
-            200,
-        );
-        assert_timestamp(&body["archived_at"]);
+        assert!(body.get("archived_at").is_none(), "{body}");
     }
 
     #[test]
@@ -2019,18 +1517,6 @@ mod brews {
         let fetched = assert_status(client.get(&format!("/api/brews/{id}")), 200);
         assert_eq!(fetched, body);
 
-        // アーカイブ済みの抽出も更新できる。
-        assert_status(client.post(&format!("/api/brews/{id}/archive")), 200);
-        let archived = assert_status(
-            client.patch_json(&format!("/api/brews/{id}"), &json!({ "rating": 3 })),
-            200,
-        );
-        assert_eq!(archived["rating"], 3, "{archived}");
-        assert!(
-            archived["archived_at"].as_str().is_some(),
-            "the archived_at must be kept: {archived}"
-        );
-
         // 他の利用者の抽出は変わっていない。
         let other = assert_status(
             ApiClient::new(&base_url, Some(&data.other_session))
@@ -2074,7 +1560,6 @@ mod brews {
             json!({ "shop_id": "no-such-id" }),
             json!({ "id": "no-such-id" }),
             json!({ "created_at": T21 }),
-            json!({ "archived_at": T21 }),
             json!({ "user_id": data.brew_write_user }),
             json!([1]),
         ] {
@@ -2087,7 +1572,7 @@ mod brews {
     }
 
     #[test]
-    fn wrangler_brews_update_reference_404_and_409() {
+    fn wrangler_brews_update_reference_404() {
         let data = data();
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
@@ -2111,11 +1596,6 @@ mod brews {
         assert_not_found(client.patch_json(
             &format!("/api/brews/{id}"),
             &json!({ "purchase_id": data.other_purchase.id }),
-        ));
-        // アーカイブ済みの購入への付け替えは 409 (FR-11、FR-12)。
-        assert_conflict(client.patch_json(
-            &format!("/api/brews/{id}"),
-            &json!({ "purchase_id": data.brew_write_archived_purchase.id }),
         ));
         // 参照先を変えない更新は通る。
         let body = assert_status(
@@ -2157,44 +1637,6 @@ mod brews {
         let body = assert_status(client.get(&format!("/api/brews/{id}")), 200);
         assert_eq!(body["purchase_id"], new_purchase["id"], "{body}");
 
-        // 購入をアーカイブしても、参照先を変えない更新は通る (乖離 3)。
-        let product = assert_status(
-            client.post_json(
-                "/api/products",
-                &json!({ "name": "アーカイブする購入の豆" }),
-            ),
-            200,
-        );
-        let purchase = assert_status(
-            client.post_json(
-                "/api/purchases",
-                &json!({ "product_id": product["id"], "purchased_on": D21 }),
-            ),
-            200,
-        );
-        let archived_purchase_id = purchase["id"].as_str().expect("the id must be present");
-        let brew = assert_status(
-            client.post_json(
-                "/api/brews",
-                &json!({ "purchase_id": archived_purchase_id, "brewed_at": B20 }),
-            ),
-            200,
-        );
-        let archived_brew_id = brew["id"].as_str().expect("the id must be present");
-        assert_status(
-            client.post(&format!("/api/purchases/{archived_purchase_id}/archive")),
-            200,
-        );
-        let body = assert_status(
-            client.patch_json(
-                &format!("/api/brews/{archived_brew_id}"),
-                &json!({ "purchase_id": archived_purchase_id, "rating": 3 }),
-            ),
-            200,
-        );
-        assert_eq!(body["rating"], 3, "{body}");
-        assert_eq!(body["purchase_id"], archived_purchase_id, "{body}");
-
         // 他の利用者の抽出の更新は 404 (FR-5)。
         assert_not_found(
             ApiClient::new(&base_url, Some(&data.brew_list_session)).patch_json(
@@ -2219,185 +1661,6 @@ mod brews {
             &format!("/api/brews/{}", data.brew_list_brews[0].id),
             &json!({ "rating": 3 }),
         ));
-    }
-
-    // 抽出のアーカイブと解除 (認証が必要、入力なし)。
-
-    #[test]
-    fn wrangler_brews_archive_and_unarchive_ok() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.brew_write_session));
-        let created = assert_status(
-            client.post_json(
-                "/api/brews",
-                &json!({
-                    "purchase_id": data.brew_write_purchase.id,
-                    "brewed_at": B21,
-                }),
-            ),
-            200,
-        );
-        let id = created["id"].as_str().expect("the id must be present");
-        sleep_millis(10);
-
-        let body = assert_status(client.post(&format!("/api/brews/{id}/archive")), 200);
-        assert_timestamp(&body["archived_at"]);
-        assert!(
-            body["updated_at"].as_str() > created["updated_at"].as_str(),
-            "updated_at must advance on archive: {body}"
-        );
-        // アーカイブした抽出は既定の一覧に含まれない (FR-12)。
-        let list = assert_status(client.get("/api/brews"), 200);
-        assert!(
-            !list["brews"]
-                .as_array()
-                .expect("brews")
-                .iter()
-                .any(|brew| brew["id"] == created["id"]),
-            "the archived brew must not be listed: {list}"
-        );
-        // アーカイブ済みの抽出は include_archived で取得でき、単件でも取得できる (FR-12)。
-        let list = assert_status(client.get("/api/brews?include_archived=true"), 200);
-        assert!(
-            list["brews"]
-                .as_array()
-                .expect("brews")
-                .iter()
-                .any(|brew| brew["id"] == created["id"]),
-            "the archived brew must be listed: {list}"
-        );
-        assert_status(client.get(&format!("/api/brews/{id}")), 200);
-
-        // 繰り返しのアーカイブも 200 を返す。
-        assert_status(client.post(&format!("/api/brews/{id}/archive")), 200);
-
-        // アーカイブ解除で既定の一覧に戻る (FR-12)。
-        let body = assert_status(client.post(&format!("/api/brews/{id}/unarchive")), 200);
-        assert_eq!(body["archived_at"], Value::Null, "{body}");
-        let list = assert_status(client.get("/api/brews"), 200);
-        assert!(
-            list["brews"]
-                .as_array()
-                .expect("brews")
-                .iter()
-                .any(|brew| brew["id"] == created["id"]),
-            "the unarchived brew must be listed: {list}"
-        );
-        // 繰り返しのアーカイブ解除も 200 を返す。
-        assert_status(client.post(&format!("/api/brews/{id}/unarchive")), 200);
-    }
-
-    #[test]
-    fn wrangler_brews_archive_unauthenticated_401() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(anonymous(&base_url).post(&format!(
-            "/api/brews/{}/archive",
-            data.brew_list_brews[0].id
-        )));
-    }
-
-    #[test]
-    fn wrangler_brews_unarchive_unauthenticated_401() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(anonymous(&base_url).post(&format!(
-            "/api/brews/{}/unarchive",
-            data.brew_list_brews[0].id
-        )));
-    }
-
-    #[test]
-    fn wrangler_brews_archive_other_user_404() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.brew_list_session));
-        assert_not_found(client.post(&format!("/api/brews/{}/archive", data.other_brew.id)));
-        assert_not_found(client.post(&format!("/api/brews/{}/unarchive", data.other_brew.id)));
-        let other = assert_status(
-            ApiClient::new(&base_url, Some(&data.other_session))
-                .get(&format!("/api/brews/{}", data.other_brew.id)),
-            200,
-        );
-        assert_eq!(other["archived_at"], Value::Null);
-    }
-
-    #[test]
-    fn wrangler_brews_unarchive_other_user_404() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_not_found(
-            ApiClient::new(&base_url, Some(&data.brew_list_session))
-                .post("/api/brews/no-such-id/unarchive"),
-        );
-    }
-
-    // 親 (購入、商品、店) のアーカイブ (FR-12)。
-
-    #[test]
-    fn wrangler_brews_keep_tracing_the_archived_parents() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.brew_parent_session));
-        // 親 (購入、商品、店) をアーカイブしても、抽出はアーカイブされず、親をたどれる (FR-12)。
-        assert_status(
-            client.post(&format!(
-                "/api/purchases/{}/archive",
-                data.brew_parent_purchase.id
-            )),
-            200,
-        );
-        assert_status(
-            client.post(&format!(
-                "/api/products/{}/archive",
-                data.brew_parent_product.id
-            )),
-            200,
-        );
-        assert_status(
-            client.post(&format!("/api/shops/{}/archive", data.brew_parent_shop.id)),
-            200,
-        );
-        let body = assert_status(
-            client.get(&format!("/api/brews/{}", data.brew_parent_brew.id)),
-            200,
-        );
-        assert_eq!(body["archived_at"], Value::Null, "{body}");
-        assert_eq!(
-            body["purchase"]["id"], data.brew_parent_purchase.id,
-            "{body}"
-        );
-        assert_timestamp(&body["purchase"]["archived_at"]);
-        assert_nested_product(
-            &body["purchase"],
-            &data.brew_parent_product,
-            &data.brew_parent_user,
-            &[],
-        );
-        assert_nested_shop(
-            &body["purchase"],
-            &data.brew_parent_shop,
-            &data.brew_parent_user,
-        );
-        assert_timestamp(&body["purchase"]["product"]["archived_at"]);
-        assert_timestamp(&body["purchase"]["shop"]["archived_at"]);
-        // 既定の一覧にも残る。
-        let list = assert_status(client.get("/api/brews"), 200);
-        assert!(
-            list["brews"]
-                .as_array()
-                .expect("brews")
-                .iter()
-                .any(|brew| brew["id"] == data.brew_parent_brew.id),
-            "the brew of the archived parents must be listed: {list}"
-        );
     }
 }
 
@@ -2433,10 +1696,20 @@ mod schema {
             .use_server(|server| {
                 server.query_int(
                     "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'index' \
-                     AND name = 'idx_purchases_user_archived_purchased_on'",
+                     AND name = 'idx_purchases_user_purchased_on'",
                 )
             })
             .expect("the schema must be readable");
         assert_eq!(index, 1, "the purchases index must remain");
+        // migration 0003 が archived_at を削除し、列を含まないインデックスを作り直す (ADR-0018)。
+        let archived = lease
+            .use_server(|server| {
+                server.query_int(
+                    "SELECT COUNT(*) AS count FROM pragma_table_info('purchases') \
+                     WHERE name = 'archived_at'",
+                )
+            })
+            .expect("the schema must be readable");
+        assert_eq!(archived, 0, "the purchases table must not have archived_at");
     }
 }

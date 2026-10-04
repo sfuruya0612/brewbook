@@ -190,15 +190,8 @@ fn build_data() -> TestData {
     );
     // ログイン用のチャレンジの行は user_id を持たない (ADR-0006)。削除の対象外であることを検査する。
     seed.challenge(None, KIND_AUTHENTICATION, LOGIN_CHALLENGE, FUTURE);
-    let shop = seed.shop(
-        &user,
-        "削除する店",
-        Some("削除する住所"),
-        CREATED,
-        CREATED,
-        None,
-    );
-    let product = seed.product(&user, "削除する豆", CREATED, CREATED, None);
+    let shop = seed.shop(&user, "削除する店", Some("削除する住所"), CREATED, CREATED);
+    let product = seed.product(&user, "削除する豆", CREATED, CREATED);
     let tag = seed.flavor_tag(&user, "削除するタグ");
     seed.product_flavor_tag(&user, &product.id, &tag);
     let photo_keys = vec![ok_photo_key(&user, 0), ok_photo_key(&user, 1)];
@@ -206,28 +199,20 @@ fn build_data() -> TestData {
     // 購入は写真のキーを持ち、抽出はその購入を参照する。
     seed.raw(&format!(
         "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, roast_date, \
-         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at, archived_at) \
+         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at) \
          VALUES ('{OK_PURCHASE_ID}', '{user}', '{}', '{}', '{D21}', NULL, NULL, 1200, 'JPY', 200, \
-         '{}', '{CREATED}', '{CREATED}', NULL)",
+         '{}', '{CREATED}', '{CREATED}')",
         product.id, shop.id, photo_keys[0]
     ));
-    seed.brew(&user, OK_PURCHASE_ID, B21, CREATED, CREATED, None);
+    seed.brew(&user, OK_PURCHASE_ID, B21, CREATED, CREATED);
 
     // 他の利用者。行と R2 のオブジェクトが削除されないことを検査する。
     let other_user = user_id(2);
     seed.user(&other_user, "残る利用者", CREATED);
     let other_session = seed.session(&other_user, FUTURE, CREATED);
     seed.passkey(&other_user, "残るパスキー", CREATED, None);
-    let other_product = seed.product(&other_user, "残る豆", CREATED, CREATED, None);
-    seed.purchase(
-        &other_user,
-        &other_product.id,
-        None,
-        D21,
-        CREATED,
-        CREATED,
-        None,
-    );
+    let other_product = seed.product(&other_user, "残る豆", CREATED, CREATED);
+    seed.purchase(&other_user, &other_product.id, None, D21, CREATED, CREATED);
     let other_photo = other_photo_key(&other_user);
     let other_pending = other_pending_key(&other_user);
 
@@ -259,18 +244,18 @@ fn build_data() -> TestData {
 fn scale_statements(user: &str) -> Vec<String> {
     let mut statements = vec![format!(
         "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
-         created_at, updated_at, archived_at) VALUES ('{SCALE_PRODUCT_ID}', '{user}', '想定規模の豆', \
-         NULL, NULL, NULL, NULL, NULL, '{CREATED}', '{CREATED}', NULL)"
+         created_at, updated_at) VALUES ('{SCALE_PRODUCT_ID}', '{user}', '想定規模の豆', \
+         NULL, NULL, NULL, NULL, NULL, '{CREATED}', '{CREATED}')"
     )];
     statements.extend(chunked_insert(
         "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, roast_date, \
-         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at, archived_at)",
+         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at)",
         (0..SCALE_PURCHASE_COUNT)
             .map(|index| {
                 let index = index as i64;
                 format!(
                     "('{}', '{user}', '{SCALE_PRODUCT_ID}', NULL, '{D21}', NULL, NULL, NULL, NULL, \
-                     NULL, '{}', '{CREATED}', '{CREATED}', NULL)",
+                     NULL, '{}', '{CREATED}', '{CREATED}')",
                     brew_book::r2_check::photo_purchase_id(index),
                     brew_book::r2_check::object_key(user, index)
                 )

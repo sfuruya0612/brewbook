@@ -26,7 +26,7 @@ use dioxus_router::Navigator;
 use crate::i18n::{t, Key};
 use crate::records::{record_error_key, record_error_retry, RecordError};
 use crate::router::Route;
-use crate::ui::{Banner, IconButton, RailItem};
+use crate::ui::{Banner, RailItem};
 
 pub use list_view::{RecordListView, RecordLoader};
 pub use picker::RecordPickerSheet;
@@ -63,7 +63,7 @@ pub fn rail_items(navigator: Navigator, active: usize) -> Vec<RailItem> {
         .collect()
 }
 
-/// 記録の変更を一覧に知らせる (保存、アーカイブ、写真の操作の後)。一覧は先頭から読み直す。
+/// 記録の変更を一覧に知らせる (保存、写真の操作の後)。一覧は先頭から読み直す。
 pub fn mark_records_changed(revision: &mut Signal<u64>) {
     revision.set(revision() + 1);
 }
@@ -81,25 +81,6 @@ pub fn retryable_banner(error: &RecordError, on_retry: EventHandler<()>) -> Elem
         record_error_retry(error).then_some(EventHandler::new(move |_| on_retry.call(())));
     rsx! {
         Banner { message: t(record_error_key(error)).to_string(), on_retry: handler }
-    }
-}
-
-/// アーカイブとアーカイブ解除のボタン (FR-12)。ヘッダー (ScreenAppBar) の末尾に置く。
-///
-/// 実行中 (`busy`) は押せない (二重に要求を送らない。0041 のレビューの指摘)。
-pub fn archive_button(archived: bool, busy: bool, on_click: EventHandler<MouseEvent>) -> Element {
-    let (name, label) = if archived {
-        ("unarchive", t(Key::UnarchiveButton))
-    } else {
-        ("archive", t(Key::ArchiveButton))
-    };
-    rsx! {
-        IconButton {
-            name: name.to_string(),
-            label: label.to_string(),
-            disabled: busy,
-            onclick: on_click,
-        }
     }
 }
 

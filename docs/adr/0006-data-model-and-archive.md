@@ -2,7 +2,11 @@
 
 Created: 2026-09-21
 Model: Claude Fable 5.1
-Status: Accepted
+Status: Partially superseded by ADR-0018 (2026-10-03)
+
+ADR-0018 (アーカイブ (論理削除) を廃止する) が本 ADR のアーカイブ (論理削除) の決定だけを置き換えた (2026-10-03)。
+データモデルの他の決定 (4 つの記録の関係、物理削除はアカウント削除だけ、`user_id` を全クエリの条件に含める規則など) は残る。
+本文の `archived_at` の記述は決定の履歴として残す。
 
 ## 背景
 

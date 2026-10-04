@@ -1,4 +1,4 @@
-//! 店の一覧の画面 (FR-6、FR-12)。
+//! 店の一覧の画面 (FR-6)。
 //!
 //! 行から店の編集を開く。幅 840 px 以上では一覧とフォームを 2 段組にし、行を押すと右の面に
 //! フォームを出す。
@@ -27,9 +27,9 @@ pub fn ShopListScreen() -> Element {
     let mut creating = use_signal(|| false);
 
     let load_services = services.clone();
-    let load = RecordLoader::new(move |cursor, include_archived| {
+    let load = RecordLoader::new(move |cursor| {
         let api = RecordsApi::new(load_services.api.clone());
-        Box::pin(async move { api.shops(cursor.as_deref(), include_archived).await })
+        Box::pin(async move { api.shops(cursor.as_deref()).await })
     });
 
     let row = Callback::new(move |shop: crate::records::Shop| {
@@ -41,7 +41,6 @@ pub fn ShopListScreen() -> Element {
             ListRow {
                 title: shop.name.clone(),
                 subtitle: Some(rsx! { span { "{subtitle}" } }),
-                archived: shop.is_archived(),
                 selected: selected_now,
                 on_click: Some(EventHandler::new(move |_| {
                     if wide() {

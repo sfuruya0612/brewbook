@@ -10,7 +10,7 @@
 //! 組み立てる SELECT は、この検査が知らない列を足せない (列の並びは定数だけが持つ)。
 
 use brew_book::queries::{self, STATEMENTS};
-use brew_book_core::query::{self, Archived, SuggestionItem};
+use brew_book_core::query::{self, SuggestionItem};
 use brew_book_core::stats::{self, Granularity};
 
 /// テスト用の利用者の ID。
@@ -24,38 +24,36 @@ fn statements() -> Vec<String> {
     let mut statements: Vec<String> = STATEMENTS.iter().map(|sql| (*sql).to_owned()).collect();
 
     // 記録の一覧と 1 件の取得 (brew_book_core::query)。列の並びは定数が持つ。
-    for archived in [Archived::Exclude, Archived::Include] {
-        statements.push(
-            query::shops_list(USER, archived, None, 20)
-                .expect("the shops list must be built")
-                .sql,
-        );
-        statements.push(
-            query::products_list(USER, archived, None, 20, None)
-                .expect("the products list must be built")
-                .sql,
-        );
-        // 名前の絞り込み (FR-19) を付けた商品の一覧も、同じ検査の対象にする。
-        statements.push(
-            query::products_list(USER, archived, None, 20, Some("名前"))
-                .expect("the products list with a name must be built")
-                .sql,
-        );
-        statements.push(
-            query::purchases_list(USER, archived, None, 20)
-                .expect("the purchases list must be built")
-                .sql,
-        );
-        statements.push(
-            query::brews_list(USER, archived, None, 20)
-                .expect("the brews list must be built")
-                .sql,
-        );
-    }
-    statements.push(query::shop_find(USER, ID, Archived::Exclude).sql);
-    statements.push(query::product_find(USER, ID, Archived::Exclude).sql);
-    statements.push(query::purchase_find(USER, ID, Archived::Exclude).sql);
-    statements.push(query::brew_find(USER, ID, Archived::Exclude).sql);
+    statements.push(
+        query::shops_list(USER, None, 20)
+            .expect("the shops list must be built")
+            .sql,
+    );
+    statements.push(
+        query::products_list(USER, None, 20, None)
+            .expect("the products list must be built")
+            .sql,
+    );
+    // 名前の絞り込み (FR-19) を付けた商品の一覧も、同じ検査の対象にする。
+    statements.push(
+        query::products_list(USER, None, 20, Some("名前"))
+            .expect("the products list with a name must be built")
+            .sql,
+    );
+    statements.push(
+        query::purchases_list(USER, None, 20)
+            .expect("the purchases list must be built")
+            .sql,
+    );
+    statements.push(
+        query::brews_list(USER, None, 20)
+            .expect("the brews list must be built")
+            .sql,
+    );
+    statements.push(query::shop_find(USER, ID).sql);
+    statements.push(query::product_find(USER, ID).sql);
+    statements.push(query::purchase_find(USER, ID).sql);
+    statements.push(query::brew_find(USER, ID).sql);
     statements.push(query::flavor_tags_list(USER).sql);
     statements.push(query::suggestions(USER, SuggestionItem::Producer, "q").sql);
 
@@ -74,7 +72,7 @@ fn statements() -> Vec<String> {
         statements.push(query::export_rows(table, columns, "id ASC", USER).sql);
     }
 
-    // アカウント削除 (FR-15) と Flavor Notes のタグ (FR-12)。
+    // アカウント削除 (FR-15) と Flavor Notes のタグ (FR-8)。
     statements.extend(
         query::account_delete(USER)
             .into_iter()

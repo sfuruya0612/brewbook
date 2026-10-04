@@ -31,11 +31,11 @@ fn sample_ledger() -> Vec<Route> {
             ok_test: OkTest::Ci,
         },
         Route {
-            name: "shops_archive",
+            name: "passkeys_rename",
             method: Method::Patch,
-            pattern: "/api/shops/:id",
+            pattern: "/api/passkeys/:id",
             auth_required: true,
-            has_input: false,
+            has_input: true,
             ok_test: OkTest::Ci,
         },
         Route {
@@ -93,8 +93,8 @@ fn sample_suite() -> Vec<support::SuiteEntry> {
             kinds: &[OK, UNAUTH, INPUT],
         },
         support::SuiteEntry {
-            route: "shops_archive",
-            kinds: &[OK, UNAUTH],
+            route: "passkeys_rename",
+            kinds: &[OK, UNAUTH, INPUT],
         },
         support::SuiteEntry {
             route: "passkeys_delete",

@@ -11,18 +11,15 @@ use crate::records::display::{
     purchase_reference_tiles, purchase_row_subtitle, purchase_tile_name,
 };
 use crate::records::stats::RatingHistoryEntry;
-use crate::records::{
-    record_error_key, RecordError, RecordServices, RecordsApi, StatsApi, MAX_PHOTO_LONG_SIDE,
-};
+use crate::records::{RecordError, RecordServices, RecordsApi, StatsApi, MAX_PHOTO_LONG_SIDE};
 use crate::router::Route;
 use crate::screens::stats::RatingHistoryChart;
 use crate::screens::ScreenAppBar;
 use crate::ui::{
-    ArchivedBadge, Button, ButtonVariant, IconButton, Ledger, LedgerRow, ReferenceChain,
-    ReferenceTile, TagChip,
+    Button, ButtonVariant, IconButton, Ledger, LedgerRow, ReferenceChain, ReferenceTile, TagChip,
 };
 
-use super::{archive_button, clear_notice_after, mark_records_changed, retryable_banner};
+use super::{clear_notice_after, mark_records_changed, retryable_banner};
 
 /// 購入の詳細 (FR-9)。
 #[component]
@@ -48,7 +45,7 @@ pub fn PurchaseDetail(
 ) -> Element {
     let services = use_context::<RecordServices>();
     let mut revision = use_context::<Signal<u64>>();
-    let mut notice = use_context::<Signal<Option<String>>>();
+    let notice = use_context::<Signal<Option<String>>>();
     let navigator = navigator();
     let mut purchase = use_signal(|| None::<crate::records::Purchase>);
     let mut ratings = use_signal(Vec::<RatingHistoryEntry>::new);
@@ -84,32 +81,6 @@ pub fn PurchaseDetail(
     use_effect(move || {
         let _ = revision();
         reload.call(());
-    });
-
-    let archive_services = services.clone();
-    let archive_id = id.clone();
-    let toggle_archive = EventHandler::new(move |_| {
-        let Some(current) = purchase() else {
-            return;
-        };
-        let api = RecordsApi::new(archive_services.api.clone());
-        let id = archive_id.clone();
-        let archived = !current.is_archived();
-        spawn(async move {
-            match api.set_purchase_archived(&id, archived).await {
-                Ok(updated) => {
-                    let message = if updated.is_archived() {
-                        Key::ArchivedMessage
-                    } else {
-                        Key::UnarchivedMessage
-                    };
-                    purchase.set(Some(updated));
-                    notice.set(Some(t(message).to_string()));
-                    mark_records_changed(&mut revision);
-                }
-                Err(failure) => notice.set(Some(t(record_error_key(&failure)).to_string())),
-            }
-        });
     });
 
     // 写真を選び直してアップロードする (FR-10)。
@@ -169,10 +140,8 @@ pub fn PurchaseDetail(
     let ratings_failure = ratings_error();
     let photo_failure = photo_error();
     let photo_url = format!("{}/purchases/{}/photo", services.api.base_path(), id);
-    let actions = current.as_ref().map(|purchase| {
-        let archived = purchase.is_archived();
+    let actions = current.as_ref().map(|_| {
         rsx! {
-            {archive_button(archived, false, EventHandler::new(move |_| toggle_archive.call(())))}
             IconButton {
                 name: "edit".to_string(),
                 label: t(Key::EditButton).to_string(),
@@ -210,12 +179,7 @@ pub fn PurchaseDetail(
                                 }
                             }
                             div { class: "detail-head-main",
-                                div { class: "name",
-                                    "{purchase.product.name}"
-                                    if purchase.is_archived() {
-                                        ArchivedBadge {}
-                                    }
-                                }
+                                div { class: "name", "{purchase.product.name}" }
                                 if let Some(shop) = purchase.shop.as_ref() {
                                     div { class: "t-caption muted", "{shop.name}" }
                                 }

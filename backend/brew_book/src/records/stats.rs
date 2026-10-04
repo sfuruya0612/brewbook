@@ -4,7 +4,7 @@
 //! `YYYY-MM` とし、記録の無い区間は返さない。区間と通貨コードの組は昇順で返す。
 //! 期間の端は端末のローカル時刻の日付として受け取り、抽出の API だけが UTC オフセット (分) を
 //! 受け取る (購入日はタイムゾーンを持たない)。
-//! 購入ごとの評価の推移は期間で絞らず、アーカイブ済みの購入も指定できる (単件取得と同じ扱い)。
+//! 購入ごとの評価の推移は期間で絞らず、購入を指定できる (単件取得と同じ扱い)。
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 
 use brew_book_core::stats::{self, StatsError};
@@ -167,7 +167,7 @@ pub async fn brew_ratings(req: &Request, env: &Env, session: &Session) -> Result
 
 /// 購入ごとの評価の推移を返す。認証が必要。
 ///
-/// アーカイブ済みの購入も指定できる (単件取得と同じ扱い。FR-12)。
+/// 購入を指定できる (単件取得と同じ扱い。FR-18)。
 pub async fn rating_history(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
     let Some(id) = id else {
         return Ok(not_found("the purchase does not exist"));

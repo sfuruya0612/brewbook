@@ -1,4 +1,4 @@
-//! 購入の一覧の画面 (FR-9、FR-12)。
+//! 購入の一覧の画面 (FR-9)。
 //!
 //! 行から購入の詳細を開く。幅 840 px 以上では一覧と詳細を 2 段組にし、行を押すと右の面に
 //! 詳細やフォームを出す。
@@ -28,9 +28,9 @@ pub fn PurchaseListScreen() -> Element {
     let mut editing = use_signal(|| false);
 
     let load_services = services.clone();
-    let load = RecordLoader::new(move |cursor, include_archived| {
+    let load = RecordLoader::new(move |cursor| {
         let api = RecordsApi::new(load_services.api.clone());
-        Box::pin(async move { api.purchases(cursor.as_deref(), include_archived).await })
+        Box::pin(async move { api.purchases(cursor.as_deref()).await })
     });
 
     let photo_services = services.clone();
@@ -63,7 +63,6 @@ pub fn PurchaseListScreen() -> Element {
                         div { class: "t-caption muted", "{price}" }
                     }
                 }),
-                archived: purchase.is_archived(),
                 selected: selected_now,
                 on_click: Some(EventHandler::new(move |_| {
                     if wide() {

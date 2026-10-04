@@ -65,17 +65,12 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "キャンセル",                                                         // cancelButton
     "編集",                                                               // editButton
     "削除",                                                               // deleteButton
-    "アーカイブ",                                                         // archiveButton
-    "アーカイブ解除",                                                     // unarchiveButton
     "選択",                                                               // selectButton
     "追加",                                                               // addButton
-    "アーカイブ済みを含める",                                             // includeArchivedLabel
     " / ",                                                                // rowSubtitleSeparator
     "記録がありません",                                                   // noRecords
     "未設定",                                                             // unsetLabel
     "保存しました。",                                                     // savedMessage
-    "アーカイブしました。",                                               // archivedMessage
-    "アーカイブ解除しました。",                                           // unarchivedMessage
     "店名",                                                               // shopNameLabel
     "商品名",                                                             // productNameLabel
     "住所",                                                               // addressLabel
@@ -203,7 +198,6 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "必須",                                                      // requiredLabel
     "抽出",                                                      // brewsLabel
     "使った豆",                                                  // usedBeansLabel
-    "アーカイブ済み",                                            // archivedBadge
     "住所は未設定",                                              // addressUnset
     "未評価",                                                    // ratingNone
     "右下の「抽出を記録」から最初の 1 杯を記録します。",         // homeEmptyHint

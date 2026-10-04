@@ -58,8 +58,8 @@ fn wrangler_web_routes_registration_login_and_brew_save_ok() {
     let user = seed::user_id(1);
     seed.user(&user, "E2E の利用者", CREATED);
     let token = seed.registration_token(&user, FUTURE);
-    let shop = seed.shop(&user, "E2E の店", None, CREATED, CREATED, None);
-    let product = seed.product(&user, PRODUCT_NAME, CREATED, CREATED, None);
+    let shop = seed.shop(&user, "E2E の店", None, CREATED, CREATED);
+    let product = seed.product(&user, PRODUCT_NAME, CREATED, CREATED);
     let tag = seed.flavor_tag(&user, "E2E のタグ");
     seed.product_flavor_tag(&user, &product.id, &tag);
     let purchase = seed.purchase(
@@ -69,7 +69,6 @@ fn wrangler_web_routes_registration_login_and_brew_save_ok() {
         PURCHASED_ON,
         CREATED,
         CREATED,
-        None,
     );
     let brew = seed.brew_with_numbers(
         &user,
@@ -82,7 +81,6 @@ fn wrangler_web_routes_registration_login_and_brew_save_ok() {
         Some(4),
         CREATED,
         CREATED,
-        None,
     );
 
     let server = DevServer::start_with_assets(

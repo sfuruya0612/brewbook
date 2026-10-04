@@ -1,6 +1,6 @@
 //! `records::list` の単体テスト (0041)。
 //!
-//! カーソル方式のページングと、アーカイブ済みを含める切り替えを確かめる (完了条件 2)。
+//! カーソル方式のページングを確かめる (完了条件 2)。
 
 use brew_book_frontend::records::{PageRequest, RecordError, RecordList, LOAD_MORE_THRESHOLD};
 
@@ -11,16 +11,10 @@ fn page(list: &mut RecordList, count: usize, next: Option<&str>) {
 }
 
 #[test]
-fn the_first_load_requests_the_first_page_without_archived() {
+fn the_first_load_requests_the_first_page() {
     let mut list = RecordList::new();
     let request = list.reset().expect("the first load must be requested");
-    assert_eq!(
-        request,
-        PageRequest {
-            cursor: None,
-            include_archived: false,
-        }
-    );
+    assert_eq!(request, PageRequest { cursor: None });
     assert!(list.is_loading());
     page(&mut list, 50, Some("cur"));
     assert!(list.is_loaded());
@@ -40,7 +34,6 @@ fn the_next_page_uses_the_cursor_of_the_previous_page() {
         request,
         PageRequest {
             cursor: Some("cur".to_string()),
-            include_archived: false,
         }
     );
     page(&mut list, 3, None);
@@ -48,33 +41,6 @@ fn the_next_page_uses_the_cursor_of_the_previous_page() {
     assert_eq!(list.next_cursor(), None);
     // 続きが無ければ、これ以上読まない。
     assert!(list.load_more().is_none());
-}
-
-#[test]
-fn the_archived_toggle_reloads_from_the_first_page() {
-    let mut list = RecordList::new();
-    let _ = list.reset();
-    page(&mut list, 50, Some("cur"));
-
-    let request = list
-        .toggle_include_archived()
-        .expect("the toggle must reload");
-    assert_eq!(
-        request,
-        PageRequest {
-            cursor: None,
-            include_archived: true,
-        }
-    );
-    assert!(list.include_archived());
-    assert_eq!(list.item_count(), 0);
-    page(&mut list, 2, None);
-
-    let request = list
-        .toggle_include_archived()
-        .expect("the toggle must reload");
-    assert!(!request.include_archived);
-    assert!(!list.include_archived());
 }
 
 #[test]
@@ -100,13 +66,7 @@ fn a_reset_while_loading_is_run_after_the_page_finishes() {
     let request = list
         .finish_load(Ok((50, Some("cur".to_string()))))
         .expect("the pending reset must be requested");
-    assert_eq!(
-        request,
-        PageRequest {
-            cursor: None,
-            include_archived: false,
-        }
-    );
+    assert_eq!(request, PageRequest { cursor: None });
     page(&mut list, 1, None);
     assert_eq!(list.item_count(), 1);
 }
