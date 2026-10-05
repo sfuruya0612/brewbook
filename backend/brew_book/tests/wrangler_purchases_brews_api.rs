@@ -759,6 +759,7 @@ mod purchases {
             200,
         );
         assert_eq!(body["purchased_on"], D20, "{body}");
+        assert!(body.get("archived_at").is_none(), "{body}");
         assert_eq!(body["roast"], "変更後のロースト", "{body}");
         assert_eq!(body["roast_date"], D19, "{body}");
         // 価格は変更せず、通貨コードだけを変更すると USD になる。
@@ -1466,6 +1467,7 @@ mod brews {
             200,
         );
         assert_eq!(body["brewed_at"], B20, "{body}");
+        assert!(body.get("archived_at").is_none(), "{body}");
         assert_eq!(body["dose_grams"], 15.5, "{body}");
         assert_eq!(body["water_grams"], 250.0, "{body}");
         assert_eq!(body["water_temp_c"], 93.0, "{body}");

@@ -515,6 +515,7 @@ mod shops {
             200,
         );
         assert_eq!(body["id"], created["id"]);
+        assert!(body.get("archived_at").is_none(), "{body}");
         assert_eq!(body["name"], "変更後の店", "{body}");
         assert_eq!(body["address"], "変更後の住所", "{body}");
         assert_eq!(body["created_at"], created_at, "created_at must not change");
@@ -1047,6 +1048,7 @@ mod products {
             200,
         );
         assert_eq!(body["name"], "変更後の豆", "{body}");
+        assert!(body.get("archived_at").is_none(), "{body}");
         assert_eq!(body["producer"], "変更後の生産者", "{body}");
         assert_eq!(body["origin"], "エチオピア", "{body}");
         assert_eq!(body["region"], "イルガチェフェ", "{body}");

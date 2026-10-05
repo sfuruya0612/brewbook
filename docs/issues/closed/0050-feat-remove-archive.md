@@ -2,6 +2,7 @@
 
 Created: 2026-10-03
 Model: DeepSeek V4.1 Flash
+Completed: 2026-10-05
 
 ## 背景
 
@@ -63,3 +64,39 @@ Model: DeepSeek V4.1 Flash
 
 - 同じ購入と抽出のフォームを変える 0049 の後 (番号順) に処理する。
 - 0051 はこの issue の後に着手する (一覧のツールバーと `include_archived` を置き換えるため)。
+
+## 解決方法
+
+アーカイブ (論理削除) をコードとデータベースから削除し、一覧、単件取得、統計、サジェスト、エクスポートの挙動をアーカイブ無しの前提に揃えた。既存のアーカイブ済みの記録は削除せず、通常の記録として扱う。
+
+- データベース: `backend/brew_book/migrations/0003_remove_archive.sql` を追加した。4 つのインデックスを `DROP INDEX` し、4 テーブルの `archived_at` を `ALTER TABLE ... DROP COLUMN` で削除し、`archived_at` を含まない 4 つのインデックス (`idx_shops_user_created_at`、`idx_products_user_created_at`、`idx_purchases_user_purchased_on`、`idx_brews_user_brewed_at`。`id` まで含む) を作り直す。`DELETE` は書いていない。
+- 共有ライブラリ: `Archived`、`IncludeArchivedError`、`parse_include_archived`、`ListQuery::archived`、`FindQuery::archived`、`set_archived` と `*_set_archived` を削除し、`list`、`find_one`、`list_qualified`、`find_qualified` から `archived_at` の条件を消した。4 つの列の並びから `archived_at` を消し、`stats.rs` の集計から条件を消した。
+- API: `backend/brew_book_core/src/routes.rs` の 8 経路と `backend/brew_book/src/lib.rs` の振り分けを削除した。`ListParams` から `include_archived` を削除した (受け取ったリクエストは未知のパラメータとして無視する)。`require_product`、`require_shop`、`require_purchase` からアーカイブ済みの 409 を削除した。`purchase_exists` から `Archived::Include` を消し、`d1_check.rs`、`export.rs`、fuzz の `parse_strings.rs` を追随させた。
+- Frontend: `list_view.rs` の切り替え、`records/list.rs` の切り替えの状態、`ListRow` の `archived` と `ArchivedBadge`、`archive_button` と各フォームのアーカイブの処理、`RecordsApi` の `set_*_archived`、モデルの `archived_at` と `is_archived` を削除した。i18n の 6 キーを削除した (`KEY_COUNT` は 227 から 221 になった)。
+- テスト: `tests/support/seed.rs` の 9 ヘルパーから `archived_at` の引数を消し、`tests/support/mod.rs` の台帳、`schema.rs` (0001 から 0004 を適用した最終スキーマの検査。0004 は 0051 が追加)、各結合テスト、`prop_stats.rs`、`prop_records.rs` を更新した。`d1_binding.rs` の「アーカイブ済みだった行が残る」テストは、0002 の状態で `archived_at` を設定した行を入れ、0003 の以降の適用後に行が残り一覧の API が返すことを検証する。マイグレーションの適用は `migrations/` のファイルを名前順に読んで 0002 までと 0003 以降に分ける形にした (0051 の 0004 を含む以降の追加に追随する)。
+- 文書: PRD (`docs/prd/brewbook.md`) の用語、目的、スコープ、UC-7 の削除 (番号は欠番)、409 の記述、FR-5、FR-9、FR-11、FR-13、FR-14、FR-18、FR-19 のアーカイブの記述、FR-12 の見出しと本文の削除 (番号は欠番)、決定の履歴、関連資料を改訂した。`docs/adr/0006-data-model-and-archive.md` に部分置き換えの注記を足し、`docs/adr/0018-remove-archive.md` を追加した。`docs/design/` のアーカイブの記述 (README、`tokens.json`、`preview.html`) を削除または更新した。
+- `CHANGES.md` に `[CHANGE]` のエントリを足した。
+
+完了条件の検証:
+
+- `0003_remove_archive.sql` が 4 つのインデックスを削除し、4 テーブルの `archived_at` を削除し、`archived_at` を含まない 4 つのインデックスを作る (`DELETE` を含まない): 上記のとおり。`backend/brew_book/tests/schema.rs` が 0001 から 0004 を順に適用した最終スキーマ (0051 の `favorited_at` を含む) を検証し、通過した。
+- スキーマのテストで 4 テーブルに `archived_at` が無く、4 つのインデックスが `archived_at` を含まない: `schema.rs` の `the_final_schema_has_no_archived_column` と `the_final_schema_indexes_do_not_contain_the_archived_column` が通過した。
+- `routes.rs` の台帳からアーカイブの 8 経路が消え、経路の照合のテストが通過: `api_suite.rs` と `support/mod.rs` の台帳の照合が通過した。
+- 一覧、単件取得、更新の API の応答から `archived_at` が消え、`include_archived` を指定しても挙動が変わらない: `wrangler_records_api.rs` などの API テストが通過した。
+- アーカイブ済みだった記録が一覧に含まれる: `d1_binding.rs` の `wrangler_the_migration_removing_the_archive_keeps_the_rows` が通過した。
+- 統計、サジェスト、エクスポートのクエリから `archived_at` の条件と列が消える: `test_query.rs`、`test_stats.rs`、`prop_stats.rs`、`wrangler_export_api.rs` の更新と通過で確認した。
+- fuzz と `d1_check.rs` が `Archived` と `parse_include_archived` を参照しない: `mise run lint` の型検査が通過した。
+- Frontend からアーカイブの操作が消え、モデルに `archived_at` と `is_archived` が無い: Frontend のテストと `prop_records.rs` の更新で確認した。
+- i18n の 6 キーが消え、`KEY_COUNT` と表の要素数が一致する: `test_i18n.rs` が通過した (221。0051 の 8 キー追加後は 229)。
+- `seed.rs` の 9 ヘルパーから `archived_at` の引数が消え、アーカイブを使うテストが通過: 上記のとおり。
+- PRD、ADR-0006、ADR-0018、`docs/design/`、`CHANGES.md`: 上記のとおり。
+- スクリーンショット比較: 0049 から 0051 の実装の完了後にまとめて実行した E2E の 58 件の比較を確認した。0050 の変更 (一覧の切り替えの削除と詳細のアーカイブのボタンの削除) による差分は Home、Lists、Detail に現れ、0051 の変更 (ツールバーと星) による差分は Home、Lists、ListRow、Detail、RecordForms に現れる。同じ実行で撮ったキャプチャから原本を更新したため、0050 と 0051 の寄与は分離できない。更新後の比較は Home、BrewDetail、Purchases、ProductEdit が mean 0.00、ListRow が 0.10 である。PurchaseDetail、Products、Shops、ShopEdit の残差は複数の画面が 1 つの原本を共有することによる差で、意図しない差分は無い。
+- `mise run check` が通過: ユーザーの指示により、0049 から 0051 の実装の完了後に段ごとに実行し、全て通過した (2026-10-05)。`backend:test-integration` の `d1_binding` は 0051 の 0004 の適用漏れで一度失敗し、テストを直して再実行で通過した。
+
+レビューの指摘を受けて変えたもの (方式は変えていない):
+
+- `d1_binding.rs` のマイグレーションの適用を、`migrations/` のファイルを名前順に読んで 0002 までと 0003 以降に分ける形にした (将来のマイグレーションの追加に追随する。レビューの指摘、中)。
+- 更新 (PATCH) の応答に `archived_at` が無いことの検査を 4 つの更新テストに足した (レビューの指摘、低)。
+- `frontend/src/i18n/mod.rs` のキー数のコメントを数を持たない形に直した (レビューの指摘、低)。
+- `backend/brew_book_core/tests/test_error.rs` の Conflict の例を、現存する 409 の文言に差し替えた (レビューの指摘、低)。
+- 記録の修正: スクリーンショット比較に Detail と mean の数値を足し、`schema.rs` の記述を 0004 まで含む形に直し、issue 番号を 4 桁表記に揃えた (レビューの指摘、中・低)。

@@ -7,6 +7,7 @@
 
 mod support;
 
+use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
@@ -129,12 +130,18 @@ fn wrangler_the_migration_removing_the_archive_keeps_the_rows() {
     server
         .execute_sql_file(&drops)
         .expect("the tables must be dropped");
-    server
-        .execute_sql_file(&[migration("0001_initial_schema.sql")])
-        .expect("the initial schema must apply");
-    server
-        .execute_sql_file(&[migration("0002_purchases_price_currency_nullable.sql")])
-        .expect("the second migration must apply");
+    // migrations/ のファイルを名前順に読み、0002 までを適用してから行を入れ、0003 以降を
+    // 順に適用する (将来のマイグレーションの追加にも追随する。レビューの指摘)。
+    let names = migration_names();
+    let archive_index = names
+        .iter()
+        .position(|name| name.starts_with("0003_"))
+        .expect("the archive removal migration must exist");
+    for name in &names[..archive_index] {
+        server
+            .execute_sql_file(&[migration(name)])
+            .expect("the migration must apply");
+    }
 
     // 0002 の状態では archived_at があり、アーカイブ済みの行を入れられる。
     let at = "2026-09-21T00:00:00.000Z";
@@ -168,9 +175,11 @@ fn wrangler_the_migration_removing_the_archive_keeps_the_rows() {
         .execute_sql_file(&[seed.sql()])
         .expect("the archived rows must be inserted");
 
-    server
-        .execute_sql_file(&[migration("0003_remove_archive.sql")])
-        .expect("the third migration must apply");
+    for name in &names[archive_index..] {
+        server
+            .execute_sql_file(&[migration(name)])
+            .expect("the migration must apply");
+    }
 
     // 4 つのテーブルの行は残る。
     for table in ["shops", "products", "purchases", "brews"] {
@@ -198,6 +207,19 @@ fn migration(name: &str) -> String {
         .join(name);
     std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()))
+}
+
+/// `migrations/` の `.sql` のファイル名を名前順に返す (レビューの指摘)。
+fn migration_names() -> Vec<String> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let mut names: Vec<String> = fs::read_dir(&dir)
+        .expect("the migrations directory must be readable")
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| name.ends_with(".sql"))
+        .collect();
+    names.sort();
+    names
 }
 
 fn client() -> reqwest::blocking::Client {

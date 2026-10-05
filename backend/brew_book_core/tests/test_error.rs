@@ -38,9 +38,15 @@ fn body_escapes_special_characters_in_the_message() {
 
 #[test]
 fn envelope_keeps_the_code_and_message() {
-    let envelope = envelope(ErrorCode::Conflict, "already archived");
+    let envelope = envelope(
+        ErrorCode::Conflict,
+        "the registration token has already been used",
+    );
     assert_eq!(envelope.error.code, "conflict");
-    assert_eq!(envelope.error.message, "already archived");
+    assert_eq!(
+        envelope.error.message,
+        "the registration token has already been used"
+    );
 }
 
 #[test]
