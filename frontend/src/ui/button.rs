@@ -130,7 +130,7 @@ pub fn Fab(
     }
 }
 
-/// アイコンだけのボタン (AppBar の末尾の操作など)。
+/// アイコンだけのボタン (AppBar の末尾の操作や、一覧の行の星など)。
 #[component]
 pub fn IconButton(
     /// アイコンの名前 (Material Icons のリガチャ)。
@@ -143,6 +143,10 @@ pub fn IconButton(
     /// 押せるか (実行中は二重に送らない)。
     #[props(default = false)]
     disabled: bool,
+    /// 押したときとキーで押したときに、親の要素へ伝播させないか (一覧の行の星)。
+    /// 行の押下 (詳細を開く) と、行の Enter と Space の処理を発火させないために使う。
+    #[props(default = false)]
+    stop_propagation: bool,
 ) -> Element {
     rsx! {
         button {
@@ -151,8 +155,16 @@ pub fn IconButton(
             "aria-label": "{label}",
             disabled,
             onclick: move |event| {
+                if stop_propagation {
+                    event.stop_propagation();
+                }
                 if !disabled {
                     onclick.call(event);
+                }
+            },
+            onkeydown: move |event| {
+                if stop_propagation && crate::ui::is_activation_key(&event) {
+                    event.stop_propagation();
                 }
             },
             Icon { name }

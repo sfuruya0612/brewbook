@@ -7,6 +7,7 @@
 //! 利用者と店をプレースホルダ付きの INSERT で入れ、一覧の SQL を組み立てる共通部分
 //! (`brew_book_core::query`) の SELECT で引き直した結果を返す。
 
+use brew_book_core::cursor::{SortKey, SortOrder};
 use brew_book_core::datetime::format_epoch_millis;
 use brew_book_core::error::{envelope, ErrorCode};
 use brew_book_core::ids::uuid_v4_from_bytes;
@@ -87,7 +88,15 @@ async fn handle(req: &mut Request, env: &Env) -> Result<Response> {
     db::prepared(&d1, &insert)?.run().await?;
 
     // 一覧の SQL は共通部分を通して組み立て、値はプレースホルダで渡す。
-    let statement = query::shops_list(&user_id, None, 50).map_err(|error| {
+    let statement = query::shops_list(
+        &user_id,
+        SortKey::CreatedAt,
+        SortOrder::Desc,
+        false,
+        None,
+        50,
+    )
+    .map_err(|error| {
         Error::RustError(format!(
             "failed to build the list query: {}",
             error.message()

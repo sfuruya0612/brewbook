@@ -8,7 +8,7 @@
 //! Flavor Notes のタグの個別のクエリもこのモジュールが持つ。0007 と 0008 と 0010 と 0011 も
 //! このモジュールを使う。
 
-use crate::cursor::CursorKey;
+use crate::cursor::{CursorKey, CursorValue, SortKey, SortOrder};
 use crate::error::ErrorCode;
 
 /// SQL に束縛する値。
@@ -113,17 +113,21 @@ pub fn parse_suggestion_field(name: &str) -> Result<SuggestionItem, SuggestionFi
 /// サジェストの候補の上限 (FR-13)。
 pub const SUGGESTION_LIMIT: u32 = 20;
 
-/// 並び順のキーの種類。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OrderKind {
-    /// 日時 (ISO 8601 UTC) の降順と ID の昇順。
-    DateTime,
-    /// 日付 (`YYYY-MM-DD`) の降順と ID の昇順。
-    Date,
-}
+/// 抽出の一覧が受け付ける並び順のキー (FR-20)。既定は先頭の `brewed_at`。
+pub const BREW_SORT_KEYS: &[SortKey] = &[SortKey::BrewedAt, SortKey::Rating, SortKey::DoseGrams];
+/// 購入の一覧が受け付ける並び順のキー (FR-20)。既定は先頭の `purchased_on`。
+pub const PURCHASE_SORT_KEYS: &[SortKey] = &[
+    SortKey::PurchasedOn,
+    SortKey::PriceAmount,
+    SortKey::WeightGrams,
+];
+/// 商品の一覧が受け付ける並び順のキー (FR-20)。既定は先頭の `created_at`。
+pub const PRODUCT_SORT_KEYS: &[SortKey] = &[SortKey::CreatedAt, SortKey::Name, SortKey::UpdatedAt];
+/// 店の一覧が受け付ける並び順のキー (FR-20)。既定は先頭の `created_at`。
+pub const SHOP_SORT_KEYS: &[SortKey] = &[SortKey::CreatedAt, SortKey::Name, SortKey::UpdatedAt];
 
 /// 一覧クエリの入力。
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ListQuery<'a> {
     /// 対象のテーブル名。コード内の定数だけを渡す。
     pub table: &'static str,
@@ -131,10 +135,12 @@ pub struct ListQuery<'a> {
     pub columns: &'static str,
     /// 絞り込む利用者の ID。
     pub user_id: &'a str,
-    /// 並び順のキーの列名。コード内の定数だけを渡す。
-    pub order_column: &'static str,
-    /// 並び順のキーの種類。
-    pub order_kind: OrderKind,
+    /// 並び順のキー。コード内の定数だけを渡す。
+    pub sort: SortKey,
+    /// 並び順の方向。
+    pub order: SortOrder,
+    /// お気に入りだけに絞るか (FR-21)。
+    pub favorite_only: bool,
     /// 直前のページの最後の行を指すカーソル。先頭から引くときは None。
     pub cursor: Option<CursorKey>,
     /// 取得件数。
@@ -202,8 +208,8 @@ pub struct Statement {
 /// クエリの組み立ての誤り。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueryError {
-    /// カーソルが並び順のキーの種類と一致しない。
-    CursorKindMismatch,
+    /// カーソルの並び順のキーと方向が、リクエストの `sort` と `order` に一致しない。
+    CursorMismatch,
     /// 列の数と値の数が一致しない (コードの誤り)。
     ColumnCountMismatch,
 }
@@ -212,7 +218,7 @@ impl QueryError {
     /// 応答のエラーの種別。
     pub fn code(self) -> ErrorCode {
         match self {
-            QueryError::CursorKindMismatch => ErrorCode::BadRequest,
+            QueryError::CursorMismatch => ErrorCode::BadRequest,
             QueryError::ColumnCountMismatch => ErrorCode::Internal,
         }
     }
@@ -220,7 +226,7 @@ impl QueryError {
     /// 応答に載せる英語のメッセージ。
     pub fn message(self) -> &'static str {
         match self {
-            QueryError::CursorKindMismatch => "invalid cursor",
+            QueryError::CursorMismatch => "invalid cursor",
             QueryError::ColumnCountMismatch => "the number of columns and values must match",
         }
     }
@@ -229,16 +235,19 @@ impl QueryError {
 /// 一覧の SQL を組み立てる。
 ///
 /// `SELECT <columns> FROM <table> WHERE user_id = ?
-/// [AND (<order_column> < ? OR (<order_column> = ? AND id > ?))]
-/// ORDER BY <order_column> DESC, id ASC LIMIT ?`
+/// [AND <sort> <比較> ? ...] ORDER BY <sort> <方向> NULLS LAST, id ASC LIMIT ?`
+///
+/// 数値のキーは NULL を取り得るため、NULL は常に末尾にする。名前のキーは索引、`ORDER BY`、
+/// カーソルの比較の 3 か所で `COLLATE NOCASE` に揃える (FR-20)。
 pub fn list(query: &ListQuery<'_>) -> Result<Statement, QueryError> {
     list_qualified(
         &QualifiedList {
             from: query.table,
             columns: query.columns,
             alias: "",
-            order_column: query.order_column,
-            order_kind: query.order_kind,
+            sort: query.sort,
+            order: query.order,
+            favorite_only: query.favorite_only,
             user_id: query.user_id,
             name: query.name,
         },
@@ -262,10 +271,12 @@ struct QualifiedList<'a> {
     columns: &'a str,
     /// 列名を修飾する別名。空のときは修飾しない。
     alias: &'a str,
-    /// 並び順のキーの列 (修飾前)。
-    order_column: &'a str,
-    /// 並び順のキーの種類。
-    order_kind: OrderKind,
+    /// 並び順のキー (修飾前)。
+    sort: SortKey,
+    /// 並び順の方向。
+    order: SortOrder,
+    /// お気に入りだけに絞るか (FR-21)。
+    favorite_only: bool,
     /// 絞り込む利用者の ID。
     user_id: &'a str,
     /// 名前の完全一致の絞り込み (FR-19)。絞り込まないときは None。
@@ -302,35 +313,92 @@ fn list_qualified(
         params.push(Value::Text(name.to_owned()));
     }
 
+    // お気に入りだけに絞る (FR-21)。
+    if query.favorite_only {
+        sql.push_str(" AND ");
+        sql.push_str(&qualified(query.alias, "favorited_at"));
+        sql.push_str(" IS NOT NULL");
+    }
+
     if let Some(cursor) = &cursor {
-        let key = match (cursor, query.order_kind) {
-            (CursorKey::DateTime { at, .. }, OrderKind::DateTime) => at,
-            (CursorKey::Date { on, .. }, OrderKind::Date) => on,
-            _ => return Err(QueryError::CursorKindMismatch),
-        };
-        // 並び順のキーの降順と ID の昇順の続きを引く。
-        let order = qualified(query.alias, query.order_column);
-        let id = qualified(query.alias, "id");
-        sql.push_str(" AND (");
-        sql.push_str(&order);
-        sql.push_str(" < ? OR (");
-        sql.push_str(&order);
-        sql.push_str(" = ? AND ");
-        sql.push_str(&id);
-        sql.push_str(" > ?))");
-        params.push(Value::Text(key.clone()));
-        params.push(Value::Text(key.clone()));
-        params.push(Value::Text(cursor.id().to_owned()));
+        if cursor.sort != query.sort || cursor.order != query.order {
+            return Err(QueryError::CursorMismatch);
+        }
+        push_cursor_condition(&mut sql, &mut params, query, cursor);
     }
 
     sql.push_str(" ORDER BY ");
-    sql.push_str(&qualified(query.alias, query.order_column));
-    sql.push_str(" DESC, ");
+    push_sort_column(&mut sql, query.alias, query.sort);
+    sql.push(' ');
+    sql.push_str(query.order.as_str().to_ascii_uppercase().as_str());
+    // 数値のキーは NULL を取り得るため、NULL は方向によらず末尾にする (FR-20)。
+    sql.push_str(" NULLS LAST, ");
     sql.push_str(&qualified(query.alias, "id"));
     sql.push_str(" ASC LIMIT ?");
     params.push(Value::Integer(i64::from(limit)));
 
     Ok(Statement { sql, params })
+}
+
+/// カーソルの続きの条件を足す (FR-20)。
+///
+/// キーの値が NULL のときは、NULL の行のうち ID がカーソルより大きい行を引く。
+/// それ以外は、NULL の行 (NULLS LAST で必ず後ろに来る) と、キーがカーソルの値より後ろの行、
+/// キーが等しく ID が大きい行を引く。方向で `<` と `>` を入れ替える。
+fn push_cursor_condition(
+    sql: &mut String,
+    params: &mut Vec<Value>,
+    query: &QualifiedList<'_>,
+    cursor: &CursorKey,
+) {
+    let key = qualified(query.alias, query.sort.as_str());
+    let id = qualified(query.alias, "id");
+    let comparison = query.order.comparison();
+    sql.push_str(" AND ");
+    match &cursor.value {
+        None => {
+            sql.push('(');
+            sql.push_str(&key);
+            sql.push_str(" IS NULL AND ");
+            sql.push_str(&id);
+            sql.push_str(" > ?)");
+            params.push(Value::Text(cursor.id.clone()));
+        }
+        Some(value) => {
+            sql.push('(');
+            sql.push_str(&key);
+            sql.push_str(" IS NULL OR ");
+            push_sort_column(sql, query.alias, query.sort);
+            sql.push(' ');
+            sql.push_str(comparison);
+            sql.push_str(" ? OR (");
+            push_sort_column(sql, query.alias, query.sort);
+            sql.push_str(" = ? AND ");
+            sql.push_str(&id);
+            sql.push_str(" > ?))");
+            let bound = cursor_value(value);
+            params.push(bound.clone());
+            params.push(bound);
+            params.push(Value::Text(cursor.id.clone()));
+        }
+    }
+}
+
+/// 並び順のキーの列を SQL に足す。名前のキーは比較の照合を `COLLATE NOCASE` に揃える (FR-20)。
+fn push_sort_column(sql: &mut String, alias: &str, sort: SortKey) {
+    sql.push_str(&qualified(alias, sort.as_str()));
+    if sort == SortKey::Name {
+        sql.push_str(" COLLATE NOCASE");
+    }
+}
+
+/// カーソルのキーの値を SQL に束縛する値にする。
+fn cursor_value(value: &CursorValue) -> Value {
+    match value {
+        CursorValue::Text(text) => Value::Text(text.clone()),
+        CursorValue::Integer(number) => Value::Integer(*number),
+        CursorValue::Real(number) => Value::Real(*number),
+    }
 }
 
 /// 別名を付けた 1 件の取得の SQL を組み立てる。`from` にはテーブルと結合の並びを渡せる。
@@ -418,24 +486,24 @@ pub fn update(query: &UpdateQuery<'_>) -> Result<Statement, QueryError> {
 /// 店のテーブル名。
 pub const SHOPS_TABLE: &str = "shops";
 /// 店の列の並び。応答の JSON の項目と同じ。
-pub const SHOP_COLUMNS: &str = "id, user_id, name, address, created_at, updated_at";
+pub const SHOP_COLUMNS: &str = "id, user_id, name, address, created_at, updated_at, favorited_at";
 /// 商品のテーブル名。
 pub const PRODUCTS_TABLE: &str = "products";
 /// 商品の列の並び。応答の JSON の項目と同じ。
 pub const PRODUCT_COLUMNS: &str = "id, user_id, name, producer, origin, region, process, variety, \
-                                   created_at, updated_at";
+                                   created_at, updated_at, favorited_at";
 /// 購入のテーブル名。
 pub const PURCHASES_TABLE: &str = "purchases";
 /// 購入の列の並び。応答の JSON の項目と同じ。
 pub const PURCHASE_COLUMNS: &str = "id, user_id, product_id, shop_id, purchased_on, roast, \
                                     roast_date, price_amount, price_currency, weight_grams, \
-                                    photo_key, created_at, updated_at";
+                                    photo_key, created_at, updated_at, favorited_at";
 /// 抽出のテーブル名。
 pub const BREWS_TABLE: &str = "brews";
 /// 抽出の列の並び。応答の JSON の項目と同じ。
 pub const BREW_COLUMNS: &str = "id, user_id, purchase_id, brewed_at, dose_grams, water_grams, \
                                 water_temp_c, brew_time_seconds, method, grind_setting, rating, \
-                                notes, created_at, updated_at";
+                                notes, created_at, updated_at, favorited_at";
 /// Flavor Notes のタグのテーブル名。
 pub const FLAVOR_TAGS_TABLE: &str = "flavor_tags";
 /// Flavor Notes のタグの列の並び。応答の JSON の項目と同じ。
@@ -652,9 +720,12 @@ pub struct BrewValues<'a> {
     pub notes: Option<&'a str>,
 }
 
-/// 店の一覧を組み立てる。並び順は作成日時の降順と ID の昇順。
+/// 店の一覧を組み立てる。既定の並び順は作成日時の降順と ID の昇順 (FR-20)。
 pub fn shops_list(
     user_id: &str,
+    sort: SortKey,
+    order: SortOrder,
+    favorite_only: bool,
     cursor: Option<CursorKey>,
     limit: u32,
 ) -> Result<Statement, QueryError> {
@@ -662,8 +733,9 @@ pub fn shops_list(
         table: SHOPS_TABLE,
         columns: SHOP_COLUMNS,
         user_id,
-        order_column: "created_at",
-        order_kind: OrderKind::DateTime,
+        sort,
+        order,
+        favorite_only,
         cursor,
         limit,
         name: None,
@@ -722,11 +794,14 @@ pub fn shop_update(
     })
 }
 
-/// 商品の一覧を組み立てる。並び順は作成日時の降順と ID の昇順。
+/// 商品の一覧を組み立てる。既定の並び順は作成日時の降順と ID の昇順 (FR-20)。
 /// `name` を指定したときは、名前の完全一致 (前後の空白を除き、大文字と小文字を区別しない) で
 /// 絞り込む (FR-19)。
 pub fn products_list(
     user_id: &str,
+    sort: SortKey,
+    order: SortOrder,
+    favorite_only: bool,
     cursor: Option<CursorKey>,
     limit: u32,
     name: Option<&str>,
@@ -735,8 +810,9 @@ pub fn products_list(
         table: PRODUCTS_TABLE,
         columns: PRODUCT_COLUMNS,
         user_id,
-        order_column: "created_at",
-        order_kind: OrderKind::DateTime,
+        sort,
+        order,
+        favorite_only,
         cursor,
         limit,
         name,
@@ -791,9 +867,12 @@ pub fn product_update(
     })
 }
 
-/// 購入と商品と店を結合した一覧を組み立てる。並び順は購入日の降順と ID の昇順 (FR-9)。
+/// 購入と商品と店を結合した一覧を組み立てる。既定の並び順は購入日の降順と ID の昇順 (FR-9、FR-20)。
 pub fn purchases_list(
     user_id: &str,
+    sort: SortKey,
+    order: SortOrder,
+    favorite_only: bool,
     cursor: Option<CursorKey>,
     limit: u32,
 ) -> Result<Statement, QueryError> {
@@ -802,8 +881,9 @@ pub fn purchases_list(
             from: PURCHASES_FROM,
             columns: &purchases_columns(),
             alias: PURCHASE_ALIAS,
-            order_column: "purchased_on",
-            order_kind: OrderKind::Date,
+            sort,
+            order,
+            favorite_only,
             user_id,
             name: None,
         },
@@ -877,9 +957,40 @@ pub fn purchase_set_photo_key(
     })
 }
 
-/// 抽出と、購入、商品、店を結合した一覧を組み立てる。並び順は抽出日時の降順と ID の昇順 (FR-11)。
+/// お気に入りの付け外しの `UPDATE` の列 (FR-21)。`favorited_at` は付け外しの両方がある。
+const FAVORITE_COLUMNS: &[&str] = &["favorited_at", "updated_at"];
+
+/// お気に入りの付け外しの SQL を組み立てる (FR-21)。
+///
+/// `favorited_at` が None のときは NULL にし、`updated_at` は付け外しのたびに現在時刻にする。
+/// 更新する行は `id` と `user_id` の両方で絞る。
+pub fn set_favorited_at(
+    table: &'static str,
+    id: &str,
+    user_id: &str,
+    favorited_at: Option<&str>,
+    updated_at: &str,
+) -> Statement {
+    update(&UpdateQuery {
+        table,
+        columns: FAVORITE_COLUMNS,
+        values: vec![
+            optional_text(favorited_at),
+            Value::Text(updated_at.to_owned()),
+        ],
+        id,
+        user_id,
+    })
+    .expect("the favorite columns and values have the same length")
+}
+
+/// 抽出と、購入、商品、店を結合した一覧を組み立てる。既定の並び順は抽出日時の降順と ID の昇順
+/// (FR-11、FR-20)。
 pub fn brews_list(
     user_id: &str,
+    sort: SortKey,
+    order: SortOrder,
+    favorite_only: bool,
     cursor: Option<CursorKey>,
     limit: u32,
 ) -> Result<Statement, QueryError> {
@@ -888,8 +999,9 @@ pub fn brews_list(
             from: BREWS_FROM,
             columns: &brews_columns(),
             alias: BREW_ALIAS,
-            order_column: "brewed_at",
-            order_kind: OrderKind::DateTime,
+            sort,
+            order,
+            favorite_only,
             user_id,
             name: None,
         },

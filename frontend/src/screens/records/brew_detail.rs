@@ -8,12 +8,12 @@ use dioxus_router::navigator;
 
 use crate::i18n::{current_language, t, Key};
 use crate::records::display::{brew_reference_tiles, count_text, number_text, rating_text};
-use crate::records::{RecordError, RecordServices, RecordsApi};
+use crate::records::{record_error_key, RecordError, RecordServices, RecordsApi};
 use crate::router::Route;
 use crate::screens::ScreenAppBar;
 use crate::ui::{IconButton, Ledger, LedgerRow, Rating, ReferenceChain, ReferenceTile};
 
-use super::{clear_notice_after, retryable_banner};
+use super::{clear_notice_after, mark_records_changed, retryable_banner};
 
 /// 抽出の詳細 (FR-11)。
 #[component]
@@ -71,8 +71,39 @@ pub fn BrewDetail(
     let offset = services.clock.utc_offset_minutes();
     let current = brew();
     let failure = error();
+    let favorited = current
+        .as_ref()
+        .is_some_and(|brew| brew.favorited_at.is_some());
+    let favorite_services = services.clone();
+    let favorite_id = id.clone();
+    let mut favorite_revision = revision;
+    let mut favorite_notice = notice;
+    let favorite = EventHandler::new(move |_| {
+        let api = RecordsApi::new(favorite_services.api.clone());
+        let id = favorite_id.clone();
+        spawn(async move {
+            match api.set_brew_favorite(&id, !favorited).await {
+                Ok(_) => mark_records_changed(&mut favorite_revision),
+                Err(failure) => {
+                    favorite_notice.set(Some(t(record_error_key(&failure)).to_string()))
+                }
+            }
+        });
+    });
     let actions = current.as_ref().map(|_| {
+        let favorite_name = if favorited { "star" } else { "star_border" }.to_string();
+        let favorite_label = t(if favorited {
+            Key::FavoriteRemoveLabel
+        } else {
+            Key::FavoriteAddLabel
+        })
+        .to_string();
         rsx! {
+            IconButton {
+                name: favorite_name,
+                label: favorite_label,
+                onclick: move |_| favorite.call(()),
+            }
             IconButton {
                 name: "edit".to_string(),
                 label: t(Key::EditButton).to_string(),

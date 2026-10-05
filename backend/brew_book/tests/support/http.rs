@@ -104,6 +104,11 @@ impl ApiClient {
         self.send(Method::PATCH, path, Some(body))
     }
 
+    /// 本体を送らない `PUT` (お気に入り。FR-21)。
+    pub fn put(&self, path: &str) -> Response {
+        self.send(Method::PUT, path, None)
+    }
+
     pub fn delete(&self, path: &str) -> Response {
         self.send(Method::DELETE, path, None)
     }

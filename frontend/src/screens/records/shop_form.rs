@@ -7,10 +7,11 @@ use dioxus_router::navigator;
 
 use crate::i18n::{t, Key};
 use crate::records::{
-    save_target, validate_shop_form, RecordError, RecordServices, RecordsApi, SaveTarget,
+    record_error_key, save_target, validate_shop_form, RecordError, RecordServices, RecordsApi,
+    SaveTarget,
 };
 use crate::screens::ScreenAppBar;
-use crate::ui::{Button, ButtonVariant, Field, TextField};
+use crate::ui::{Button, ButtonVariant, Field, IconButton, TextField};
 
 use super::{clear_notice_after, mark_records_changed, retryable_banner};
 
@@ -59,6 +60,7 @@ pub fn ShopForm(
     let mut name_error = use_signal(|| None::<Key>);
     let mut save_error = use_signal(|| None::<RecordError>);
     let mut load_error = use_signal(|| None::<RecordError>);
+    let mut favorited_at = use_signal(|| None::<String>);
     let mut loading = use_signal(|| id.is_some());
     let mut busy = use_signal(|| false);
 
@@ -77,6 +79,7 @@ pub fn ShopForm(
                 Ok(shop) => {
                     name.set(shop.name.clone());
                     address.set(shop.address.clone().unwrap_or_default());
+                    favorited_at.set(shop.favorited_at.clone());
                 }
                 Err(failure) => load_error.set(Some(failure)),
             }
@@ -132,8 +135,46 @@ pub fn ShopForm(
     let retry_save = EventHandler::new(move |_| save.call(()));
     let failure = save_error();
     let load_failure = load_error();
+    // 星は編集の画面 (id があるとき) にだけ置く (新規の登録では ID が無い。FR-21)。
+    let favorite_services = services.clone();
+    let favorite_id = id.clone();
+    let mut favorite_revision = revision;
+    let mut favorite_notice = notice;
+    let toggle_favorite = EventHandler::new(move |_| {
+        let Some(favorite_id) = favorite_id.clone() else {
+            return;
+        };
+        let api = RecordsApi::new(favorite_services.api.clone());
+        let favorited = favorited_at().is_some();
+        spawn(async move {
+            match api.set_shop_favorite(&favorite_id, !favorited).await {
+                Ok(shop) => {
+                    favorited_at.set(shop.favorited_at.clone());
+                    mark_records_changed(&mut favorite_revision);
+                }
+                Err(failure) => {
+                    favorite_notice.set(Some(t(record_error_key(&failure)).to_string()))
+                }
+            }
+        });
+    });
+    let favorited = favorited_at().is_some();
+    let favorite_name = if favorited { "star" } else { "star_border" }.to_string();
+    let favorite_label = t(if favorited {
+        Key::FavoriteRemoveLabel
+    } else {
+        Key::FavoriteAddLabel
+    })
+    .to_string();
     // 保存は新規でも常に出す (Flutter と同じ)。
     let actions = rsx! {
+        if id.is_some() && !loading() && load_failure.is_none() {
+            IconButton {
+                name: favorite_name,
+                label: favorite_label,
+                onclick: move |_| toggle_favorite.call(()),
+            }
+        }
         Button {
             label: t(Key::SaveButton).to_string(),
             variant: ButtonVariant::Text,

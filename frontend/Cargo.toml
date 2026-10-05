@@ -61,10 +61,13 @@ web-sys = { version = "0.3", features = [
   "UserVerificationRequirement",
   # 写真の選択 (input type=file)。
   "Event",
+  "EventInit",
   "EventTarget",
   "File",
   "FileList",
   "HtmlInputElement",
+  # ブラウザで動かすテスト (frontend:test-web) のキーの合成 (0051)。
+  "KeyboardEventInit",
   # 写真の変換 (画像の復号と canvas と JPEG への変換)。
   "Blob",
   "CanvasRenderingContext2d",

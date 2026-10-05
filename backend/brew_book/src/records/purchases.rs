@@ -9,7 +9,8 @@
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 //! `updated_at` は更新で現在時刻にする (ADR-0006)。
 
-use brew_book_core::query::{self, OrderKind, PurchaseValues};
+use brew_book_core::cursor::{CursorValue, SortKey};
+use brew_book_core::query::{self, PurchaseValues};
 use brew_book_core::records::{trim_optional, validate_count, validate_currency, validate_day};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Database;
@@ -18,8 +19,8 @@ use worker::{Env, Request, Response, Result};
 use super::products::ProductResponse;
 use super::shops::ShopResponse;
 use super::{
-    attach_flavor_notes, invalid_input, not_found, query_error_response, read_input,
-    require_product, require_shop, ListParams,
+    apply_favorite, attach_flavor_notes, invalid_input, not_found, query_error_response,
+    read_input, require_product, require_shop, ListParams,
 };
 use crate::auth::session::Session;
 use crate::db;
@@ -42,6 +43,8 @@ pub struct PurchaseResponse {
     pub photo_key: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// お気に入りにした日時。未設定のときは null (FR-21)。
+    pub favorited_at: Option<String>,
     /// 商品。必須の参照のため常にある (FR-9)。
     pub product: ProductResponse,
     /// 店。店が無い購入では null になる (FR-9)。
@@ -73,6 +76,7 @@ pub(super) struct PurchaseJoinRow {
     pub(super) p_photo_key: Option<String>,
     pub(super) p_created_at: String,
     pub(super) p_updated_at: String,
+    pub(super) p_favorited_at: Option<String>,
     pub(super) pr_id: String,
     pub(super) pr_user_id: String,
     pub(super) pr_name: String,
@@ -83,12 +87,14 @@ pub(super) struct PurchaseJoinRow {
     pub(super) pr_variety: Option<String>,
     pub(super) pr_created_at: String,
     pub(super) pr_updated_at: String,
+    pub(super) pr_favorited_at: Option<String>,
     pub(super) sh_id: Option<String>,
     pub(super) sh_user_id: Option<String>,
     pub(super) sh_name: Option<String>,
     pub(super) sh_address: Option<String>,
     pub(super) sh_created_at: Option<String>,
     pub(super) sh_updated_at: Option<String>,
+    pub(super) sh_favorited_at: Option<String>,
 }
 
 impl PurchaseJoinRow {
@@ -108,6 +114,7 @@ impl PurchaseJoinRow {
             photo_key: self.p_photo_key,
             created_at: self.p_created_at,
             updated_at: self.p_updated_at,
+            favorited_at: self.p_favorited_at,
             product: ProductResponse {
                 id: self.pr_id,
                 user_id: self.pr_user_id,
@@ -120,6 +127,7 @@ impl PurchaseJoinRow {
                 flavor_notes: Vec::new(),
                 created_at: self.pr_created_at,
                 updated_at: self.pr_updated_at,
+                favorited_at: self.pr_favorited_at,
             },
             // 店は LEFT JOIN のため、店が無いときは全ての列が NULL になる。
             shop: self.sh_id.map(|id| ShopResponse {
@@ -129,6 +137,7 @@ impl PurchaseJoinRow {
                 address: self.sh_address,
                 created_at: self.sh_created_at.unwrap_or_default(),
                 updated_at: self.sh_updated_at.unwrap_or_default(),
+                favorited_at: self.sh_favorited_at,
             }),
         }
     }
@@ -192,32 +201,49 @@ struct UpdateInput {
     weight_grams: Option<Option<i64>>,
 }
 
-/// 購入の一覧を返す。認証が必要。
+/// 購入の一覧を返す。認証が必要。`sort`、`order`、`favorite` を受け付ける (FR-20、FR-21)。
 pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Response> {
-    let params = match ListParams::from_request(req) {
-        Ok(params) => params,
-        Err(response) => return Ok(response),
-    };
+    let params =
+        match ListParams::from_request(req, SortKey::PurchasedOn, query::PURCHASE_SORT_KEYS) {
+            Ok(params) => params,
+            Err(response) => return Ok(response),
+        };
     let d1 = db::database(env)?;
-    let cursor = params.cursor.clone();
-    let statement = match query::purchases_list(&session.user_id, cursor, params.limit) {
+    let statement = match query::purchases_list(
+        &session.user_id,
+        params.sort,
+        params.order,
+        params.favorite,
+        params.cursor.clone(),
+        params.limit,
+    ) {
         Ok(statement) => statement,
         Err(error) => return Ok(query_error_response(error)),
     };
     let rows: Vec<PurchaseJoinRow> = db::prepared(&d1, &statement)?.all().await?.results()?;
     let mut purchases = responses(rows);
     attach_notes(&d1, &session.user_id, &mut purchases).await?;
-    let next_cursor = params.next_cursor(
-        OrderKind::Date,
-        purchases
-            .last()
-            .map(|purchase| (purchase.purchased_on.as_str(), purchase.id.as_str())),
-        purchases.len(),
-    );
+    let next_cursor = purchases.last().and_then(|purchase| {
+        params.next_cursor(
+            sort_value(purchase, params.sort),
+            &purchase.id,
+            purchases.len(),
+        )
+    });
     respond::json(&PurchaseListResponse {
         purchases,
         next_cursor,
     })
+}
+
+/// 並び順のキーの値を、応答の行から取り出す (FR-20)。
+fn sort_value(purchase: &PurchaseResponse, sort: SortKey) -> Option<CursorValue> {
+    match sort {
+        SortKey::PurchasedOn => Some(CursorValue::Text(purchase.purchased_on.clone())),
+        SortKey::PriceAmount => purchase.price_amount.map(CursorValue::Integer),
+        SortKey::WeightGrams => purchase.weight_grams.map(CursorValue::Integer),
+        _ => None,
+    }
 }
 
 /// 購入を登録する。認証が必要。
@@ -434,6 +460,47 @@ pub(super) async fn respond_fetched(d1: &D1Database, user_id: &str, id: &str) ->
         Some(purchase) => respond::json(&purchase),
         None => Ok(super::internal_error()),
     }
+}
+
+/// お気に入りを付ける (FR-21)。認証が必要。
+pub async fn favorite_put(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    set_favorite(env, session, id, true).await
+}
+
+/// お気に入りを外す (FR-21)。認証が必要。
+pub async fn favorite_delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    set_favorite(env, session, id, false).await
+}
+
+/// お気に入りを付け外しする (FR-21)。
+///
+/// 既に同じ状態のときは `favorited_at` と `updated_at` を変えず、現在の応答をそのまま返す。
+async fn set_favorite(
+    env: &Env,
+    session: &Session,
+    id: Option<&str>,
+    favorite: bool,
+) -> Result<Response> {
+    let Some(id) = id else {
+        return Ok(not_found("the purchase does not exist"));
+    };
+    let d1 = db::database(env)?;
+    let Some(purchase) = find(&d1, &session.user_id, id).await? else {
+        return Ok(not_found("the purchase does not exist"));
+    };
+    let changed = apply_favorite(
+        &d1,
+        query::PURCHASES_TABLE,
+        id,
+        &session.user_id,
+        purchase.favorited_at.as_deref(),
+        favorite,
+    )
+    .await?;
+    if changed.is_none() {
+        return respond::json(&purchase);
+    }
+    respond_fetched(&d1, &session.user_id, id).await
 }
 
 /// 結合した行を応答の並びにする。

@@ -28,7 +28,7 @@ use crate::records::{record_error_key, record_error_retry, RecordError};
 use crate::router::Route;
 use crate::ui::{Banner, RailItem};
 
-pub use list_view::{RecordListView, RecordLoader};
+pub use list_view::{RecordListView, RecordLoader, SortChoice};
 pub use picker::RecordPickerSheet;
 pub use suggestion_field::SuggestionField;
 

@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 31082b21a282094f05cd6b285069759e9997ae7cd6ac1ce6e145ca8834a66377 # shrinks to (sort, value) = (DoseGrams, Some(Real(373376.06426979485))), order = Asc, id = "0000a000-0000-40a0-800a-a0000a00aa00"

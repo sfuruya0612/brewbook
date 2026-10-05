@@ -225,6 +225,14 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "day",                                                                // statsPeriodDay
     "month",                                                              // statsPeriodMonth
     "Brew conditions and rating",                                         // statsScatterSection
-    "Purchase amount", // statsPurchaseAmountLabel
-    "Purchase weight", // statsPurchaseWeightLabel
+    "Purchase amount",       // statsPurchaseAmountLabel
+    "Purchase weight",       // statsPurchaseWeightLabel
+    "Sort",                  // sortLabel
+    "Ascending",             // sortAscending
+    "Descending",            // sortDescending
+    "Favorites only",        // favoritesOnlyLabel
+    "Add to favorites",      // favoriteAddLabel
+    "Remove from favorites", // favoriteRemoveLabel
+    "Created",               // sortCreatedAt
+    "Updated",               // sortUpdatedAt
 ];

@@ -1,10 +1,12 @@
 //! `cursor` の単体テスト。符号化の往復は PBT (`prop_cursor.rs`) が担う。
 
 use brew_book_core::cursor::{
-    parse_page_size, CursorError, CursorKey, PageSizeError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
+    parse_page_size, parse_sort_key, CursorError, CursorKey, CursorValue, PageSizeError, SortKey,
+    SortKeyError, SortOrder, SortOrderError, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
 };
 
 const ID: &str = "9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60";
+const AT: &str = "2026-09-21T12:34:56.789Z";
 
 #[test]
 fn the_page_size_defaults_to_fifty_and_accepts_the_upper_bound() {
@@ -45,14 +47,51 @@ fn the_page_size_rejects_values_above_the_upper_bound() {
 }
 
 #[test]
+fn the_sort_key_names_are_the_query_parameters_and_unknown_names_are_rejected() {
+    for (key, name) in [
+        (SortKey::BrewedAt, "brewed_at"),
+        (SortKey::Rating, "rating"),
+        (SortKey::DoseGrams, "dose_grams"),
+        (SortKey::PurchasedOn, "purchased_on"),
+        (SortKey::PriceAmount, "price_amount"),
+        (SortKey::WeightGrams, "weight_grams"),
+        (SortKey::CreatedAt, "created_at"),
+        (SortKey::Name, "name"),
+        (SortKey::UpdatedAt, "updated_at"),
+    ] {
+        assert_eq!(key.as_str(), name);
+        assert_eq!(parse_sort_key(name, &[key]), Ok(key));
+    }
+    // 一覧が受け付けるキーの並びに無い名前は拒否する (FR-20)。
+    assert_eq!(
+        parse_sort_key("brewed_at", &[SortKey::CreatedAt]),
+        Err(SortKeyError::Unknown)
+    );
+    assert_eq!(parse_sort_key("unknown", &[]), Err(SortKeyError::Unknown));
+}
+
+#[test]
+fn the_sort_order_names_are_the_query_parameters_and_unknown_names_are_rejected() {
+    assert_eq!(SortOrder::Asc.as_str(), "asc");
+    assert_eq!(SortOrder::Desc.as_str(), "desc");
+    assert_eq!(SortOrder::parse("asc"), Ok(SortOrder::Asc));
+    assert_eq!(SortOrder::parse("desc"), Ok(SortOrder::Desc));
+    for text in ["", "ASC", "up", "1"] {
+        assert_eq!(SortOrder::parse(text), Err(SortOrderError::Unknown));
+    }
+}
+
+#[test]
 fn a_datetime_cursor_is_encoded_as_the_base64url_of_its_json() {
-    let cursor = CursorKey::DateTime {
-        at: "2026-09-21T12:34:56.789Z".to_owned(),
+    let cursor = CursorKey {
+        sort: SortKey::CreatedAt,
+        order: SortOrder::Desc,
+        value: Some(CursorValue::Text(AT.to_owned())),
         id: ID.to_owned(),
     };
     assert_eq!(
         cursor.encode(),
-        "eyJhdCI6IjIwMjYtMDktMjFUMTI6MzQ6NTYuNzg5WiIsImlkIjoiOWY4ZjFmMmUtNmIxYS00YTNjLThkMGUtMWIyYzNkNGU1ZjYwIn0"
+        "eyJzb3J0IjoiY3JlYXRlZF9hdCIsIm9yZGVyIjoiZGVzYyIsInZhbHVlIjoiMjAyNi0wOS0yMVQxMjozNDo1Ni43ODlaIiwiaWQiOiI5ZjhmMWYyZS02YjFhLTRhM2MtOGQwZS0xYjJjM2Q0ZTVmNjAifQ"
     );
     assert!(
         !cursor.encode().contains('='),
@@ -61,15 +100,95 @@ fn a_datetime_cursor_is_encoded_as_the_base64url_of_its_json() {
 }
 
 #[test]
-fn a_date_cursor_is_encoded_as_the_base64url_of_its_json() {
-    let cursor = CursorKey::Date {
-        on: "2026-09-21".to_owned(),
+fn a_date_cursor_and_a_null_value_cursor_are_encoded_as_the_base64url_of_their_json() {
+    let date = CursorKey {
+        sort: SortKey::PurchasedOn,
+        order: SortOrder::Asc,
+        value: Some(CursorValue::Text("2026-09-21".to_owned())),
         id: ID.to_owned(),
     };
     assert_eq!(
-        cursor.encode(),
-        "eyJvbiI6IjIwMjYtMDktMjEiLCJpZCI6IjlmOGYxZjJlLTZiMWEtNGEzYy04ZDBlLTFiMmMzZDRlNWY2MCJ9"
+        date.encode(),
+        "eyJzb3J0IjoicHVyY2hhc2VkX29uIiwib3JkZXIiOiJhc2MiLCJ2YWx1ZSI6IjIwMjYtMDktMjEiLCJpZCI6IjlmOGYxZjJlLTZiMWEtNGEzYy04ZDBlLTFiMmMzZDRlNWY2MCJ9"
     );
+    let null = CursorKey {
+        sort: SortKey::Name,
+        order: SortOrder::Asc,
+        value: None,
+        id: ID.to_owned(),
+    };
+    assert_eq!(
+        null.encode(),
+        "eyJzb3J0IjoibmFtZSIsIm9yZGVyIjoiYXNjIiwidmFsdWUiOm51bGwsImlkIjoiOWY4ZjFmMmUtNmIxYS00YTNjLThkMGUtMWIyYzNkNGU1ZjYwIn0"
+    );
+}
+
+#[test]
+fn a_numeric_cursor_is_encoded_as_the_base64url_of_its_json() {
+    let integer = CursorKey {
+        sort: SortKey::Rating,
+        order: SortOrder::Desc,
+        value: Some(CursorValue::Integer(4)),
+        id: ID.to_owned(),
+    };
+    assert_eq!(
+        integer.encode(),
+        "eyJzb3J0IjoicmF0aW5nIiwib3JkZXIiOiJkZXNjIiwidmFsdWUiOjQsImlkIjoiOWY4ZjFmMmUtNmIxYS00YTNjLThkMGUtMWIyYzNkNGU1ZjYwIn0"
+    );
+    let real = CursorKey {
+        sort: SortKey::DoseGrams,
+        order: SortOrder::Asc,
+        value: Some(CursorValue::Real(15.5)),
+        id: ID.to_owned(),
+    };
+    assert_eq!(
+        real.encode(),
+        "eyJzb3J0IjoiZG9zZV9ncmFtcyIsIm9yZGVyIjoiYXNjIiwidmFsdWUiOjE1LjUsImlkIjoiOWY4ZjFmMmUtNmIxYS00YTNjLThkMGUtMWIyYzNkNGU1ZjYwIn0"
+    );
+}
+
+#[test]
+fn every_kind_of_cursor_round_trips() {
+    for cursor in [
+        CursorKey {
+            sort: SortKey::CreatedAt,
+            order: SortOrder::Desc,
+            value: Some(CursorValue::Text(AT.to_owned())),
+            id: ID.to_owned(),
+        },
+        CursorKey {
+            sort: SortKey::PurchasedOn,
+            order: SortOrder::Asc,
+            value: Some(CursorValue::Text("2026-09-21".to_owned())),
+            id: ID.to_owned(),
+        },
+        CursorKey {
+            sort: SortKey::Name,
+            order: SortOrder::Asc,
+            value: Some(CursorValue::Text("豆".to_owned())),
+            id: ID.to_owned(),
+        },
+        CursorKey {
+            sort: SortKey::Rating,
+            order: SortOrder::Desc,
+            value: Some(CursorValue::Integer(4)),
+            id: ID.to_owned(),
+        },
+        CursorKey {
+            sort: SortKey::DoseGrams,
+            order: SortOrder::Asc,
+            value: Some(CursorValue::Real(15.5)),
+            id: ID.to_owned(),
+        },
+        CursorKey {
+            sort: SortKey::WeightGrams,
+            order: SortOrder::Desc,
+            value: None,
+            id: ID.to_owned(),
+        },
+    ] {
+        assert_eq!(CursorKey::decode(&cursor.encode()), Ok(cursor));
+    }
 }
 
 #[test]
@@ -92,13 +211,17 @@ fn every_page_size_and_cursor_error_maps_to_400() {
     assert_eq!(PageSizeError::NotPositive.code().status(), 400);
     assert_eq!(PageSizeError::TooLarge.code().status(), 400);
     assert_eq!(CursorError::Invalid.code().status(), 400);
+    assert_eq!(SortKeyError::Unknown.code().status(), 400);
+    assert_eq!(SortOrderError::Unknown.code().status(), 400);
     assert_eq!(
-        brew_book_core::query::QueryError::CursorKindMismatch
+        brew_book_core::query::QueryError::CursorMismatch
             .code()
             .status(),
         400
     );
     assert!(!CursorError::Invalid.message().is_empty());
+    assert!(!SortKeyError::Unknown.message().is_empty());
+    assert!(!SortOrderError::Unknown.message().is_empty());
 }
 
 #[test]
@@ -106,16 +229,29 @@ fn a_cursor_whose_payload_is_not_the_expected_json_is_rejected() {
     // base64url の "bm90IGpzb24" は "not json"。
     assert_eq!(CursorKey::decode("bm90IGpzb24"), Err(CursorError::Invalid));
     for payload in [
-        r#"{"at":"2026-09-21T12:34:56.789Z"}"#,
-        r#"{"id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
-        r#"{"at":"2026-09-21T12:34:56.789Z","on":"2026-09-21","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
-        r#"{"at":"2026-09-21T12:34:56.789Z","id":""}"#,
-        r#"{"on":"2026-09-21","id":""}"#,
-        r#"{"at":"2026-09-21T12:34:56.789Z","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60","extra":1}"#,
-        r#"{"at":"2026-09-21T12:34:56Z","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
-        r#"{"at":"garbage","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
-        r#"{"on":"2026-02-30","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
-        r#"{"on":"2026-09-21","id":1}"#,
+        r#"{"sort":"created_at","order":"desc","value":"2026-09-21T12:34:56.789Z"}"#,
+        r#"{"order":"desc","value":"2026-09-21T12:34:56.789Z","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
+        r#"{"sort":"created_at","order":"desc","value":"2026-09-21T12:34:56.789Z","id":""}"#,
+        r#"{"sort":"created_at","order":"desc","value":"2026-09-21T12:34:56.789Z","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60","extra":1}"#,
+        // 知らない並び順のキー。
+        r#"{"sort":"unknown","order":"desc","value":"2026-09-21T12:34:56.789Z","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
+        // 知らない方向。
+        r#"{"sort":"created_at","order":"up","value":"2026-09-21T12:34:56.789Z","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
+        // 日時のキーに日時でない文字列。
+        r#"{"sort":"created_at","order":"desc","value":"2026-09-21T12:34:56Z","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
+        r#"{"sort":"created_at","order":"desc","value":"garbage","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
+        // 日付のキーに実在しない日付。
+        r#"{"sort":"purchased_on","order":"desc","value":"2026-02-30","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
+        // 数値のキーに文字列。
+        r#"{"sort":"rating","order":"desc","value":"4","id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
+        // 整数のキーに小数。
+        r#"{"sort":"rating","order":"desc","value":4.5,"id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
+        // 文字列のキーに数値。
+        r#"{"sort":"name","order":"desc","value":4,"id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
+        // 値の型が JSON のオブジェクト。
+        r#"{"sort":"name","order":"desc","value":{},"id":"9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60"}"#,
+        // id が数値。
+        r#"{"sort":"created_at","order":"desc","value":"2026-09-21T12:34:56.789Z","id":1}"#,
     ] {
         let encoded = base64url(payload);
         assert_eq!(

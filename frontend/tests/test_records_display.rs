@@ -17,6 +17,7 @@ fn shop(id: &str, name: &str, address: Option<&str>) -> Shop {
         address: address.map(str::to_string),
         created_at: "2026-10-01T00:00:00.000Z".to_string(),
         updated_at: "2026-10-01T00:00:00.000Z".to_string(),
+        favorited_at: None,
     }
 }
 
@@ -33,6 +34,7 @@ fn product() -> Product {
         flavor_notes: Vec::new(),
         created_at: "2026-10-01T00:00:00.000Z".to_string(),
         updated_at: "2026-10-01T00:00:00.000Z".to_string(),
+        favorited_at: None,
     }
 }
 
@@ -51,6 +53,7 @@ fn purchase(with_shop: bool) -> Purchase {
         photo_key: None,
         created_at: "2026-10-01T00:00:00.000Z".to_string(),
         updated_at: "2026-10-01T00:00:00.000Z".to_string(),
+        favorited_at: None,
         product: product(),
         shop: with_shop.then(|| shop("s1", "店", None)),
     }
@@ -72,6 +75,7 @@ fn brew(with_shop: bool) -> Brew {
         notes: None,
         created_at: "2026-10-01T00:00:00.000Z".to_string(),
         updated_at: "2026-10-01T00:00:00.000Z".to_string(),
+        favorited_at: None,
         purchase: purchase(with_shop),
     }
 }

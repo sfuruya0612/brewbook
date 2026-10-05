@@ -3,7 +3,7 @@
 //!
 //! 組み立てる関数ごとの SQL は [`record_queries`]、条件の付け忘れの検出は [`conditions`] が検査する。
 
-use brew_book_core::cursor::CursorKey;
+use brew_book_core::cursor::{CursorKey, CursorValue, SortKey, SortOrder};
 use brew_book_core::query::{QueryError, Statement, Value};
 
 const USER_ID: &str = "9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60";
@@ -12,18 +12,30 @@ const AT: &str = "2026-09-21T12:34:56.789Z";
 
 mod list_builders {
     use super::*;
-    use brew_book_core::query::{list, ListQuery, OrderKind};
+    use brew_book_core::cursor::{CursorValue, SortKey, SortOrder};
+    use brew_book_core::query::{list, ListQuery};
 
     fn shop_query(cursor: Option<CursorKey>, limit: u32) -> ListQuery<'static> {
         ListQuery {
             table: "shops",
             columns: "id, user_id, name, address, created_at, updated_at",
             user_id: USER_ID,
-            order_column: "created_at",
-            order_kind: OrderKind::DateTime,
+            sort: SortKey::CreatedAt,
+            order: SortOrder::Desc,
+            favorite_only: false,
             cursor,
             limit,
             name: None,
+        }
+    }
+
+    /// キーの値が文字列のカーソルを作る。
+    fn text_cursor(sort: SortKey, value: &str, order: SortOrder) -> CursorKey {
+        CursorKey {
+            sort,
+            order,
+            value: Some(CursorValue::Text(value.to_owned())),
+            id: SHOP_ID.to_owned(),
         }
     }
 
@@ -33,7 +45,8 @@ mod list_builders {
         assert_eq!(
             statement.sql,
             "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
-             WHERE user_id = ? ORDER BY created_at DESC, id ASC LIMIT ?"
+             WHERE user_id = ? \
+             ORDER BY created_at DESC NULLS LAST, id ASC LIMIT ?"
         );
         assert_eq!(
             statement.params,
@@ -48,24 +61,21 @@ mod list_builders {
 
     #[test]
     fn a_list_query_with_a_cursor_adds_the_keyset_condition() {
-        let cursor = CursorKey::DateTime {
-            at: "2026-09-21T12:34:56.789Z".to_owned(),
-            id: SHOP_ID.to_owned(),
-        };
+        let cursor = text_cursor(SortKey::CreatedAt, AT, SortOrder::Desc);
         let statement = list(&shop_query(Some(cursor), 10)).unwrap();
         assert_eq!(
             statement.sql,
             "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
              WHERE user_id = ? \
-             AND (created_at < ? OR (created_at = ? AND id > ?)) \
-             ORDER BY created_at DESC, id ASC LIMIT ?"
+             AND (created_at IS NULL OR created_at < ? OR (created_at = ? AND id > ?)) \
+             ORDER BY created_at DESC NULLS LAST, id ASC LIMIT ?"
         );
         assert_eq!(
             statement.params,
             vec![
                 Value::Text(USER_ID.to_owned()),
-                Value::Text("2026-09-21T12:34:56.789Z".to_owned()),
-                Value::Text("2026-09-21T12:34:56.789Z".to_owned()),
+                Value::Text(AT.to_owned()),
+                Value::Text(AT.to_owned()),
                 Value::Text(SHOP_ID.to_owned()),
                 Value::Integer(10),
             ]
@@ -74,29 +84,167 @@ mod list_builders {
 
     #[test]
     fn a_list_query_of_a_date_order_key_uses_the_date_column() {
-        let cursor = CursorKey::Date {
-            on: "2026-09-21".to_owned(),
-            id: SHOP_ID.to_owned(),
-        };
         let query = ListQuery {
             table: "purchases",
             columns: "id, user_id, purchased_on",
             user_id: USER_ID,
-            order_column: "purchased_on",
-            order_kind: OrderKind::Date,
-            cursor: Some(cursor),
+            sort: SortKey::PurchasedOn,
+            order: SortOrder::Desc,
+            favorite_only: false,
+            cursor: Some(text_cursor(
+                SortKey::PurchasedOn,
+                "2026-09-21",
+                SortOrder::Desc,
+            )),
             limit: 200,
+            name: None,
+        };
+        let statement = list(&query).unwrap();
+        assert!(statement.sql.contains(
+            "AND (purchased_on IS NULL OR purchased_on < ? OR (purchased_on = ? AND id > ?))"
+        ));
+        assert!(statement
+            .sql
+            .contains("ORDER BY purchased_on DESC NULLS LAST, id ASC LIMIT ?"));
+        assert_eq!(statement.params.len(), 5);
+        assert_eq!(statement.params[4], Value::Integer(200));
+    }
+
+    #[test]
+    fn an_ascending_list_query_compares_the_other_way() {
+        let cursor = text_cursor(SortKey::CreatedAt, AT, SortOrder::Asc);
+        let mut query = shop_query(Some(cursor), 10);
+        query.order = SortOrder::Asc;
+        let statement = list(&query).unwrap();
+        assert!(statement
+            .sql
+            .contains("AND (created_at IS NULL OR created_at > ? OR (created_at = ? AND id > ?))"));
+        assert!(statement
+            .sql
+            .contains("ORDER BY created_at ASC NULLS LAST, id ASC LIMIT ?"));
+    }
+
+    #[test]
+    fn a_cursor_with_a_null_key_continues_from_the_null_rows() {
+        let cursor = CursorKey {
+            sort: SortKey::CreatedAt,
+            order: SortOrder::Desc,
+            value: None,
+            id: SHOP_ID.to_owned(),
+        };
+        let statement = list(&shop_query(Some(cursor), 50)).unwrap();
+        assert_eq!(
+            statement.sql,
+            "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
+             WHERE user_id = ? AND (created_at IS NULL AND id > ?) \
+             ORDER BY created_at DESC NULLS LAST, id ASC LIMIT ?"
+        );
+        assert_eq!(
+            statement.params,
+            vec![
+                Value::Text(USER_ID.to_owned()),
+                Value::Text(SHOP_ID.to_owned()),
+                Value::Integer(50),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_numeric_cursor_binds_the_number_with_its_type() {
+        let integer = CursorKey {
+            sort: SortKey::Rating,
+            order: SortOrder::Desc,
+            value: Some(CursorValue::Integer(4)),
+            id: SHOP_ID.to_owned(),
+        };
+        let query = ListQuery {
+            table: "brews",
+            columns: "id, user_id, rating",
+            user_id: USER_ID,
+            sort: SortKey::Rating,
+            order: SortOrder::Desc,
+            favorite_only: false,
+            cursor: Some(integer),
+            limit: 50,
             name: None,
         };
         let statement = list(&query).unwrap();
         assert!(statement
             .sql
-            .contains("AND (purchased_on < ? OR (purchased_on = ? AND id > ?))"));
+            .contains("AND (rating IS NULL OR rating < ? OR (rating = ? AND id > ?))"));
         assert!(statement
             .sql
-            .contains("ORDER BY purchased_on DESC, id ASC LIMIT ?"));
-        assert_eq!(statement.params.len(), 5);
-        assert_eq!(statement.params[4], Value::Integer(200));
+            .contains("ORDER BY rating DESC NULLS LAST, id ASC"));
+        assert_eq!(
+            statement.params,
+            vec![
+                Value::Text(USER_ID.to_owned()),
+                Value::Integer(4),
+                Value::Integer(4),
+                Value::Text(SHOP_ID.to_owned()),
+                Value::Integer(50),
+            ]
+        );
+
+        let real = CursorKey {
+            sort: SortKey::DoseGrams,
+            order: SortOrder::Asc,
+            value: Some(CursorValue::Real(15.5)),
+            id: SHOP_ID.to_owned(),
+        };
+        let query = ListQuery {
+            table: "brews",
+            columns: "id, user_id, dose_grams",
+            user_id: USER_ID,
+            sort: SortKey::DoseGrams,
+            order: SortOrder::Asc,
+            favorite_only: false,
+            cursor: Some(real),
+            limit: 50,
+            name: None,
+        };
+        let statement = list(&query).unwrap();
+        assert!(statement
+            .sql
+            .contains("AND (dose_grams IS NULL OR dose_grams > ? OR (dose_grams = ? AND id > ?))"));
+        assert!(statement.params.contains(&Value::Real(15.5)));
+    }
+
+    #[test]
+    fn a_name_cursor_compares_without_case() {
+        let cursor = text_cursor(SortKey::Name, "Ethiopia", SortOrder::Asc);
+        let query = ListQuery {
+            table: "shops",
+            columns: "id, user_id, name",
+            user_id: USER_ID,
+            sort: SortKey::Name,
+            order: SortOrder::Asc,
+            favorite_only: false,
+            cursor: Some(cursor),
+            limit: 50,
+            name: None,
+        };
+        let statement = list(&query).unwrap();
+        assert!(statement.sql.contains(
+            "AND (name IS NULL OR name COLLATE NOCASE > ? OR (name COLLATE NOCASE = ? AND id > ?))"
+        ));
+        assert!(statement
+            .sql
+            .contains("ORDER BY name COLLATE NOCASE ASC NULLS LAST, id ASC"));
+    }
+
+    #[test]
+    fn a_favorite_only_list_filters_by_the_favorited_column() {
+        let mut query = shop_query(None, 50);
+        query.favorite_only = true;
+        let statement = list(&query).unwrap();
+        assert_eq!(
+            statement.sql,
+            "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
+             WHERE user_id = ? AND favorited_at IS NOT NULL \
+             ORDER BY created_at DESC NULLS LAST, id ASC LIMIT ?"
+        );
+        assert_eq!(statement.params.len(), 2);
     }
 
     #[test]
@@ -108,7 +256,7 @@ mod list_builders {
             statement.sql,
             "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
              WHERE user_id = ? AND name = ? COLLATE NOCASE \
-             ORDER BY created_at DESC, id ASC LIMIT ?"
+             ORDER BY created_at DESC NULLS LAST, id ASC LIMIT ?"
         );
         assert_eq!(
             statement.params,
@@ -121,59 +269,79 @@ mod list_builders {
     }
 
     #[test]
-    fn a_cursor_of_another_kind_is_rejected() {
-        let date_cursor = CursorKey::Date {
-            on: "2026-09-21".to_owned(),
-            id: SHOP_ID.to_owned(),
-        };
+    fn a_cursor_of_another_key_or_order_is_rejected() {
+        // 別のキーのカーソル。
+        let other_key = text_cursor(SortKey::PurchasedOn, "2026-09-21", SortOrder::Desc);
         assert_eq!(
-            list(&shop_query(Some(date_cursor), 50)),
-            Err(QueryError::CursorKindMismatch)
+            list(&shop_query(Some(other_key), 50)),
+            Err(QueryError::CursorMismatch)
+        );
+        // 別の方向のカーソル。
+        let other_order = text_cursor(SortKey::CreatedAt, AT, SortOrder::Asc);
+        assert_eq!(
+            list(&shop_query(Some(other_order), 50)),
+            Err(QueryError::CursorMismatch)
         );
     }
 
     #[test]
     fn every_list_query_keeps_the_user_condition() {
-        for order_kind in [OrderKind::DateTime, OrderKind::Date] {
-            for cursor in [None, Some(cursor_for(order_kind))] {
-                let query = ListQuery {
-                    table: "brews",
-                    columns: "id, user_id, brewed_at",
-                    user_id: USER_ID,
-                    order_column: "brewed_at",
-                    order_kind,
-                    cursor,
-                    limit: 50,
-                    name: None,
+        for sort in [
+            SortKey::CreatedAt,
+            SortKey::Name,
+            SortKey::UpdatedAt,
+            SortKey::BrewedAt,
+            SortKey::Rating,
+            SortKey::DoseGrams,
+        ] {
+            for order in [SortOrder::Desc, SortOrder::Asc] {
+                let value = match sort.value_kind() {
+                    brew_book_core::cursor::SortValueKind::Integer => Some(CursorValue::Integer(4)),
+                    brew_book_core::cursor::SortValueKind::Real => Some(CursorValue::Real(15.5)),
+                    _ => Some(CursorValue::Text(AT.to_owned())),
                 };
-                let statement = list(&query).unwrap();
-                assert!(
-                    statement.sql.contains("WHERE user_id = ?"),
-                    "the user filter is missing: {}",
-                    statement.sql
-                );
-                assert_eq!(statement.params[0], Value::Text(USER_ID.to_owned()));
-                let placeholders = statement.sql.matches('?').count();
-                assert_eq!(
-                    placeholders,
-                    statement.params.len(),
-                    "every placeholder must have a value: {}",
-                    statement.sql
-                );
+                for cursor in [
+                    None,
+                    Some(CursorKey {
+                        sort,
+                        order,
+                        value: value.clone(),
+                        id: SHOP_ID.to_owned(),
+                    }),
+                    Some(CursorKey {
+                        sort,
+                        order,
+                        value: None,
+                        id: SHOP_ID.to_owned(),
+                    }),
+                ] {
+                    let query = ListQuery {
+                        table: "brews",
+                        columns: "id, user_id, brewed_at",
+                        user_id: USER_ID,
+                        sort,
+                        order,
+                        favorite_only: false,
+                        cursor,
+                        limit: 50,
+                        name: None,
+                    };
+                    let statement = list(&query).unwrap();
+                    assert!(
+                        statement.sql.contains("WHERE user_id = ?"),
+                        "the user filter is missing: {}",
+                        statement.sql
+                    );
+                    assert_eq!(statement.params[0], Value::Text(USER_ID.to_owned()));
+                    let placeholders = statement.sql.matches('?').count();
+                    assert_eq!(
+                        placeholders,
+                        statement.params.len(),
+                        "every placeholder must have a value: {}",
+                        statement.sql
+                    );
+                }
             }
-        }
-    }
-
-    fn cursor_for(order_kind: OrderKind) -> CursorKey {
-        match order_kind {
-            OrderKind::DateTime => CursorKey::DateTime {
-                at: AT.to_owned(),
-                id: SHOP_ID.to_owned(),
-            },
-            OrderKind::Date => CursorKey::Date {
-                on: "2026-09-21".to_owned(),
-                id: SHOP_ID.to_owned(),
-            },
         }
     }
 }
@@ -204,7 +372,7 @@ mod record_queries {
         let statement = query::shop_find(USER_ID, SHOP_ID);
         assert_eq!(
             statement.sql,
-            "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
+            "SELECT id, user_id, name, address, created_at, updated_at, favorited_at FROM shops \
              WHERE id = ? AND user_id = ?"
         );
         assert_eq!(
@@ -423,7 +591,7 @@ mod record_queries {
     #[test]
     fn the_code_errors_map_to_the_internal_status() {
         assert_eq!(QueryError::ColumnCountMismatch.code().status(), 500);
-        assert_eq!(QueryError::CursorKindMismatch.code().status(), 400);
+        assert_eq!(QueryError::CursorMismatch.code().status(), 400);
         assert!(!QueryError::ColumnCountMismatch.message().is_empty());
     }
 }
@@ -437,15 +605,17 @@ mod purchase_and_brew_queries {
         p.product_id AS p_product_id, p.shop_id AS p_shop_id, p.purchased_on AS p_purchased_on, \
         p.roast AS p_roast, p.roast_date AS p_roast_date, p.price_amount AS p_price_amount, \
         p.price_currency AS p_price_currency, p.weight_grams AS p_weight_grams, \
-        p.photo_key AS p_photo_key, p.created_at AS p_created_at, p.updated_at AS p_updated_at";
+        p.photo_key AS p_photo_key, p.created_at AS p_created_at, p.updated_at AS p_updated_at, \
+        p.favorited_at AS p_favorited_at";
     /// 商品の列の別名。
     const PRODUCT_COLUMNS: &str = "pr.id AS pr_id, pr.user_id AS pr_user_id, pr.name AS pr_name, \
         pr.producer AS pr_producer, pr.origin AS pr_origin, pr.region AS pr_region, \
         pr.process AS pr_process, pr.variety AS pr_variety, pr.created_at AS pr_created_at, \
-        pr.updated_at AS pr_updated_at";
+        pr.updated_at AS pr_updated_at, pr.favorited_at AS pr_favorited_at";
     /// 店の列の別名。
     const SHOP_COLUMNS: &str = "sh.id AS sh_id, sh.user_id AS sh_user_id, sh.name AS sh_name, \
-        sh.address AS sh_address, sh.created_at AS sh_created_at, sh.updated_at AS sh_updated_at";
+        sh.address AS sh_address, sh.created_at AS sh_created_at, sh.updated_at AS sh_updated_at, \
+        sh.favorited_at AS sh_favorited_at";
 
     fn purchase_values<'a>(product_id: &'a str, shop_id: Option<&'a str>) -> PurchaseValues<'a> {
         PurchaseValues {
@@ -477,7 +647,15 @@ mod purchase_and_brew_queries {
 
     #[test]
     fn a_purchases_list_query_joins_the_product_and_the_shop() {
-        let statement = query::purchases_list(USER_ID, None, 50).unwrap();
+        let statement = query::purchases_list(
+            USER_ID,
+            SortKey::PurchasedOn,
+            SortOrder::Desc,
+            false,
+            None,
+            50,
+        )
+        .unwrap();
         assert_eq!(
             statement.sql,
             format!(
@@ -486,7 +664,7 @@ mod purchase_and_brew_queries {
                  INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
                  LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id \
                  WHERE p.user_id = ? \
-                 ORDER BY p.purchased_on DESC, p.id ASC LIMIT ?"
+                 ORDER BY p.purchased_on DESC NULLS LAST, p.id ASC LIMIT ?"
             )
         );
         assert_eq!(
@@ -497,15 +675,25 @@ mod purchase_and_brew_queries {
 
     #[test]
     fn a_purchases_list_query_with_a_cursor_uses_the_purchase_date() {
-        let cursor = CursorKey::Date {
-            on: "2026-09-21".to_owned(),
+        let cursor = CursorKey {
+            sort: SortKey::PurchasedOn,
+            order: SortOrder::Desc,
+            value: Some(CursorValue::Text("2026-09-21".to_owned())),
             id: SHOP_ID.to_owned(),
         };
-        let statement = query::purchases_list(USER_ID, Some(cursor), 10).unwrap();
+        let statement = query::purchases_list(
+            USER_ID,
+            SortKey::PurchasedOn,
+            SortOrder::Desc,
+            false,
+            Some(cursor),
+            10,
+        )
+        .unwrap();
         assert!(
-            statement
-                .sql
-                .contains("AND (p.purchased_on < ? OR (p.purchased_on = ? AND p.id > ?))"),
+            statement.sql.contains(
+                "AND (p.purchased_on IS NULL OR p.purchased_on < ? OR (p.purchased_on = ? AND p.id > ?))"
+            ),
             "{}",
             statement.sql
         );
@@ -515,20 +703,37 @@ mod purchase_and_brew_queries {
     }
 
     #[test]
-    fn a_purchases_cursor_of_another_kind_is_rejected() {
-        let cursor = CursorKey::DateTime {
-            at: AT.to_owned(),
+    fn a_purchases_cursor_of_another_key_is_rejected() {
+        let cursor = CursorKey {
+            sort: SortKey::PriceAmount,
+            order: SortOrder::Desc,
+            value: Some(CursorValue::Integer(1200)),
             id: SHOP_ID.to_owned(),
         };
         assert_eq!(
-            query::purchases_list(USER_ID, Some(cursor), 50),
-            Err(QueryError::CursorKindMismatch)
+            query::purchases_list(
+                USER_ID,
+                SortKey::PurchasedOn,
+                SortOrder::Desc,
+                false,
+                Some(cursor),
+                50,
+            ),
+            Err(QueryError::CursorMismatch)
         );
     }
 
     #[test]
     fn a_brews_list_query_joins_the_purchase_the_product_and_the_shop() {
-        let statement = query::brews_list(USER_ID, None, 200).unwrap();
+        let statement = query::brews_list(
+            USER_ID,
+            SortKey::BrewedAt,
+            SortOrder::Desc,
+            false,
+            None,
+            200,
+        )
+        .unwrap();
         assert_eq!(
             statement.sql,
             format!(
@@ -538,13 +743,14 @@ mod purchase_and_brew_queries {
                  b.brew_time_seconds AS b_brew_time_seconds, b.method AS b_method, \
                  b.grind_setting AS b_grind_setting, b.rating AS b_rating, b.notes AS b_notes, \
                  b.created_at AS b_created_at, b.updated_at AS b_updated_at, \
+                 b.favorited_at AS b_favorited_at, \
                  {PURCHASE_COLUMNS}, {PRODUCT_COLUMNS}, {SHOP_COLUMNS} \
                  FROM brews AS b \
                  INNER JOIN purchases AS p ON p.id = b.purchase_id AND p.user_id = b.user_id \
                  INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
                  LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id \
                  WHERE b.user_id = ? \
-                 ORDER BY b.brewed_at DESC, b.id ASC LIMIT ?"
+                 ORDER BY b.brewed_at DESC NULLS LAST, b.id ASC LIMIT ?"
             )
         );
         assert_eq!(
@@ -565,6 +771,7 @@ mod purchase_and_brew_queries {
                  b.brew_time_seconds AS b_brew_time_seconds, b.method AS b_method, \
                  b.grind_setting AS b_grind_setting, b.rating AS b_rating, b.notes AS b_notes, \
                  b.created_at AS b_created_at, b.updated_at AS b_updated_at, \
+                 b.favorited_at AS b_favorited_at, \
                  {PURCHASE_COLUMNS}, {PRODUCT_COLUMNS}, {SHOP_COLUMNS} \
                  FROM brews AS b \
                  INNER JOIN purchases AS p ON p.id = b.purchase_id AND p.user_id = b.user_id \
@@ -844,7 +1051,7 @@ mod export_queries {
             query::export_rows(query::SHOPS_TABLE, query::SHOP_COLUMNS, "id ASC", USER_ID);
         assert_eq!(
             statement.sql,
-            "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
+            "SELECT id, user_id, name, address, created_at, updated_at, favorited_at FROM shops \
              WHERE user_id = ? ORDER BY id ASC"
         );
         assert_eq!(statement.params, vec![Value::Text(USER_ID.to_owned())]);
@@ -956,39 +1163,88 @@ mod conditions {
         let mut checked = Vec::new();
         checked.push(Checked {
             name: "shops list",
-            statement: query::shops_list(USER_ID, None, 50).unwrap(),
+            statement: query::shops_list(
+                USER_ID,
+                SortKey::CreatedAt,
+                SortOrder::Desc,
+                false,
+                None,
+                50,
+            )
+            .unwrap(),
             kind: Kind::List,
         });
         checked.push(Checked {
             name: "products list",
-            statement: query::products_list(USER_ID, None, 50, None).unwrap(),
+            statement: query::products_list(
+                USER_ID,
+                SortKey::CreatedAt,
+                SortOrder::Desc,
+                false,
+                None,
+                50,
+                None,
+            )
+            .unwrap(),
             kind: Kind::List,
         });
         checked.push(Checked {
-            name: "products list with a name",
-            statement: query::products_list(USER_ID, None, 50, Some("名前")).unwrap(),
+            name: "products list with a name and favorites",
+            statement: query::products_list(
+                USER_ID,
+                SortKey::Name,
+                SortOrder::Asc,
+                true,
+                None,
+                50,
+                Some("名前"),
+            )
+            .unwrap(),
             kind: Kind::List,
         });
-        let cursor = CursorKey::DateTime {
-            at: AT.to_owned(),
+        let cursor = CursorKey {
+            sort: SortKey::CreatedAt,
+            order: SortOrder::Desc,
+            value: Some(CursorValue::Text(AT.to_owned())),
             id: SHOP_ID.to_owned(),
         };
         checked.push(Checked {
             name: "purchases list",
-            statement: query::purchases_list(USER_ID, None, 50).unwrap(),
+            statement: query::purchases_list(
+                USER_ID,
+                SortKey::PurchasedOn,
+                SortOrder::Desc,
+                false,
+                None,
+                50,
+            )
+            .unwrap(),
             kind: Kind::List,
         });
         checked.push(Checked {
             name: "brews list",
-            statement: query::brews_list(USER_ID, None, 50).unwrap(),
+            statement: query::brews_list(
+                USER_ID,
+                SortKey::BrewedAt,
+                SortOrder::Desc,
+                false,
+                None,
+                50,
+            )
+            .unwrap(),
             kind: Kind::List,
         });
         checked.push(Checked {
             name: "purchases list with a date cursor",
             statement: query::purchases_list(
                 USER_ID,
-                Some(CursorKey::Date {
-                    on: "2026-09-21".to_owned(),
+                SortKey::PurchasedOn,
+                SortOrder::Desc,
+                false,
+                Some(CursorKey {
+                    sort: SortKey::PurchasedOn,
+                    order: SortOrder::Desc,
+                    value: Some(CursorValue::Text("2026-09-21".to_owned())),
                     id: SHOP_ID.to_owned(),
                 }),
                 50,
@@ -998,7 +1254,20 @@ mod conditions {
         });
         checked.push(Checked {
             name: "brews list with a cursor",
-            statement: query::brews_list(USER_ID, Some(cursor.clone()), 50).unwrap(),
+            statement: query::brews_list(
+                USER_ID,
+                SortKey::BrewedAt,
+                SortOrder::Desc,
+                false,
+                Some(CursorKey {
+                    sort: SortKey::BrewedAt,
+                    order: SortOrder::Desc,
+                    value: Some(CursorValue::Text(AT.to_owned())),
+                    id: SHOP_ID.to_owned(),
+                }),
+                50,
+            )
+            .unwrap(),
             kind: Kind::List,
         });
         checked.push(Checked {
@@ -1099,13 +1368,35 @@ mod conditions {
         });
         checked.push(Checked {
             name: "shops list with a cursor",
-            statement: query::shops_list(USER_ID, Some(cursor.clone()), 50).unwrap(),
+            statement: query::shops_list(
+                USER_ID,
+                SortKey::CreatedAt,
+                SortOrder::Desc,
+                false,
+                Some(cursor.clone()),
+                50,
+            )
+            .unwrap(),
             kind: Kind::List,
         });
         checked.push(Checked {
             name: "products list with a cursor",
-            statement: query::products_list(USER_ID, Some(cursor), 50, None).unwrap(),
+            statement: query::products_list(
+                USER_ID,
+                SortKey::CreatedAt,
+                SortOrder::Desc,
+                false,
+                Some(cursor),
+                50,
+                None,
+            )
+            .unwrap(),
             kind: Kind::List,
+        });
+        checked.push(Checked {
+            name: "set the favorite",
+            statement: query::set_favorited_at(query::SHOPS_TABLE, SHOP_ID, USER_ID, Some(AT), AT),
+            kind: Kind::Row,
         });
         checked.push(Checked {
             name: "shop find",

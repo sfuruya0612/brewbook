@@ -6,13 +6,17 @@
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 //! `updated_at` は更新で現在時刻にする (ADR-0006)。
 
-use brew_book_core::query::{self, OrderKind, ShopValues};
+use brew_book_core::cursor::{CursorValue, SortKey};
+use brew_book_core::query::{self, ShopValues};
 use brew_book_core::records::{trim_optional, validate_name};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Database;
 use worker::{Env, Request, Response, Result};
 
-use super::{invalid_input, merge_name, not_found, query_error_response, read_input, ListParams};
+use super::{
+    apply_favorite, internal_error, invalid_input, merge_name, not_found, query_error_response,
+    read_input, ListParams,
+};
 use crate::auth::session::Session;
 use crate::db;
 use crate::respond;
@@ -26,6 +30,8 @@ pub struct ShopResponse {
     pub address: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// お気に入りにした日時。未設定のときは null (FR-21)。
+    pub favorited_at: Option<String>,
 }
 
 /// 店の一覧の応答。
@@ -59,26 +65,39 @@ struct UpdateInput {
     address: Option<Option<String>>,
 }
 
-/// 店の一覧を返す。認証が必要。
+/// 店の一覧を返す。認証が必要。`sort`、`order`、`favorite` を受け付ける (FR-20、FR-21)。
 pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Response> {
-    let params = match ListParams::from_request(req) {
+    let params = match ListParams::from_request(req, SortKey::CreatedAt, query::SHOP_SORT_KEYS) {
         Ok(params) => params,
         Err(response) => return Ok(response),
     };
     let d1 = db::database(env)?;
-    let statement = match query::shops_list(&session.user_id, params.cursor.clone(), params.limit) {
+    let statement = match query::shops_list(
+        &session.user_id,
+        params.sort,
+        params.order,
+        params.favorite,
+        params.cursor.clone(),
+        params.limit,
+    ) {
         Ok(statement) => statement,
         Err(error) => return Ok(query_error_response(error)),
     };
     let shops: Vec<ShopResponse> = db::prepared(&d1, &statement)?.all().await?.results()?;
-    let next_cursor = params.next_cursor(
-        OrderKind::DateTime,
-        shops
-            .last()
-            .map(|shop| (shop.created_at.as_str(), shop.id.as_str())),
-        shops.len(),
-    );
+    let next_cursor = shops
+        .last()
+        .and_then(|shop| params.next_cursor(sort_value(shop, params.sort), &shop.id, shops.len()));
     respond::json(&ShopListResponse { shops, next_cursor })
+}
+
+/// 並び順のキーの値を、応答の行から取り出す (FR-20)。
+fn sort_value(shop: &ShopResponse, sort: SortKey) -> Option<CursorValue> {
+    match sort {
+        SortKey::CreatedAt => Some(CursorValue::Text(shop.created_at.clone())),
+        SortKey::Name => Some(CursorValue::Text(shop.name.clone())),
+        SortKey::UpdatedAt => Some(CursorValue::Text(shop.updated_at.clone())),
+        _ => None,
+    }
 }
 
 /// 店を登録する。認証が必要。
@@ -110,6 +129,7 @@ pub async fn create(req: &mut Request, env: &Env, session: &Session) -> Result<R
         address,
         created_at: now.clone(),
         updated_at: now,
+        favorited_at: None,
     })
 }
 
@@ -166,7 +186,53 @@ pub async fn update(
         address,
         created_at: shop.created_at,
         updated_at: now,
+        favorited_at: shop.favorited_at,
     })
+}
+
+/// お気に入りを付ける (FR-21)。認証が必要。
+pub async fn favorite_put(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    set_favorite(env, session, id, true).await
+}
+
+/// お気に入りを外す (FR-21)。認証が必要。
+pub async fn favorite_delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    set_favorite(env, session, id, false).await
+}
+
+/// お気に入りを付け外しする (FR-21)。
+///
+/// 既に同じ状態のときは `favorited_at` と `updated_at` を変えず、現在の応答をそのまま返す
+/// (繰り返し呼んでも状態と応答が同じになる)。
+async fn set_favorite(
+    env: &Env,
+    session: &Session,
+    id: Option<&str>,
+    favorite: bool,
+) -> Result<Response> {
+    let Some(id) = id else {
+        return Ok(not_found("the shop does not exist"));
+    };
+    let d1 = db::database(env)?;
+    let Some(shop) = find(&d1, &session.user_id, Some(id)).await? else {
+        return Ok(not_found("the shop does not exist"));
+    };
+    let changed = apply_favorite(
+        &d1,
+        query::SHOPS_TABLE,
+        id,
+        &session.user_id,
+        shop.favorited_at.as_deref(),
+        favorite,
+    )
+    .await?;
+    if changed.is_none() {
+        return respond::json(&shop);
+    }
+    match find(&d1, &session.user_id, Some(id)).await? {
+        Some(shop) => respond::json(&shop),
+        None => Ok(internal_error()),
+    }
 }
 
 /// 店を 1 件引く。ID が無いときと行が無いときは None。

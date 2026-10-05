@@ -11,7 +11,8 @@ use std::rc::Rc;
 use brew_book_frontend::api::Method;
 use brew_book_frontend::records::{
     inputs::{BrewInput, ProductInput, PurchaseInput, ShopInput},
-    ConvertedImage, PhotoUpload, PhotoUploader, RecordError, RecordsApi, SuggestionTarget,
+    ConvertedImage, ListOptions, PhotoUpload, PhotoUploader, RecordError, RecordsApi, SortOrder,
+    SuggestionTarget,
 };
 use serde_json::{json, Value};
 
@@ -101,21 +102,26 @@ fn with_response(body: Value) -> (RecordsApi, Rc<support::FakeTransport>) {
 fn the_shops_list_sends_the_paging_query_and_reads_the_page() {
     let (api, transport) =
         with_response(json!({"shops": [shop_json("s1", "店")], "next_cursor": "cur"}));
-    let page = block_on(api.shops(None)).expect("the page must be read");
+    let page =
+        block_on(api.shops(&ListOptions::new("created_at"), None)).expect("the page must be read");
     assert_eq!(page.items.len(), 1);
     assert_eq!(page.items[0].name, "店");
     assert_eq!(page.next_cursor.as_deref(), Some("cur"));
     let request = transport.last_request();
     assert_eq!(request.method, Method::Get);
-    assert_eq!(request.path, "/api/shops?limit=50");
+    assert_eq!(
+        request.path,
+        "/api/shops?limit=50&sort=created_at&order=desc"
+    );
 
     let (api, transport) = with_response(json!({"shops": [], "next_cursor": null}));
-    let page = block_on(api.shops(Some("cur"))).expect("the page must be read");
+    let page = block_on(api.shops(&ListOptions::new("created_at"), Some("cur")))
+        .expect("the page must be read");
     assert!(page.items.is_empty());
     assert_eq!(page.next_cursor, None);
     assert_eq!(
         transport.last_request().path,
-        "/api/shops?limit=50&cursor=cur"
+        "/api/shops?limit=50&sort=created_at&order=desc&cursor=cur"
     );
 }
 
@@ -149,11 +155,36 @@ fn a_shop_is_read_created_and_updated() {
 fn the_products_list_sends_the_name_filter_and_reads_the_page() {
     let (api, transport) =
         with_response(json!({"products": [product_json("p1", "豆")], "next_cursor": null}));
-    let page = block_on(api.products(None, Some("豆 山"))).expect("the page must be read");
+    let page = block_on(api.products(&ListOptions::new("name"), None, Some("豆 山")))
+        .expect("the page must be read");
     assert_eq!(page.items[0].name, "豆");
     assert_eq!(
         transport.last_request().path,
-        "/api/products?limit=50&name=%E8%B1%86%20%E5%B1%B1"
+        "/api/products?limit=50&sort=name&order=desc&name=%E8%B1%86%20%E5%B1%B1"
+    );
+}
+
+/// 並び順と方向とお気に入りの絞り込みが、そのままクエリパラメータになる (FR-20、FR-21)。
+#[test]
+fn the_list_options_are_sent_as_the_query_parameters() {
+    let (api, transport) = with_response(json!({"products": [], "next_cursor": null}));
+    let options = ListOptions {
+        sort: "updated_at",
+        order: SortOrder::Asc,
+        favorite_only: true,
+    };
+    let _ = block_on(api.products(&options, None, None)).expect("the page must be read");
+    assert_eq!(
+        transport.last_request().path,
+        "/api/products?limit=50&sort=updated_at&order=asc&favorite=true"
+    );
+
+    // 並び順を指定しない (選択のシート) ときは `sort` を送らず、API の既定に任せる。
+    let (api, transport) = with_response(json!({"purchases": [], "next_cursor": null}));
+    let _ = block_on(api.purchases(&ListOptions::default(), None)).expect("the page must be read");
+    assert_eq!(
+        transport.last_request().path,
+        "/api/purchases?limit=50&order=desc"
     );
 }
 
@@ -236,16 +267,88 @@ fn a_purchase_is_read_created_and_updated() {
 fn the_purchases_and_brews_lists_send_the_paging_query() {
     let (api, transport) =
         with_response(json!({"purchases": [purchase_json("b1", "p1", None)], "next_cursor": null}));
-    let page = block_on(api.purchases(None)).expect("the page must be read");
+    let page = block_on(api.purchases(&ListOptions::new("purchased_on"), None))
+        .expect("the page must be read");
     assert_eq!(page.items.len(), 1);
-    assert_eq!(transport.last_request().path, "/api/purchases?limit=50");
+    assert_eq!(
+        transport.last_request().path,
+        "/api/purchases?limit=50&sort=purchased_on&order=desc"
+    );
 
     let (api, transport) =
         with_response(json!({"brews": [brew_json("w1", "b1")], "next_cursor": "c"}));
-    let page = block_on(api.brews(None)).expect("the page must be read");
+    let page =
+        block_on(api.brews(&ListOptions::new("brewed_at"), None)).expect("the page must be read");
     assert_eq!(page.items[0].purchase.product.name, "豆");
     assert_eq!(page.next_cursor.as_deref(), Some("c"));
-    assert_eq!(transport.last_request().path, "/api/brews?limit=50");
+    assert_eq!(
+        transport.last_request().path,
+        "/api/brews?limit=50&sort=brewed_at&order=desc"
+    );
+}
+
+/// お気に入りの付け外しが `PUT` と `DELETE` の経路になり、応答を読む (FR-21)。
+#[test]
+fn the_favorites_are_put_and_deleted() {
+    let (api, transport) = with_response(shop_json("s1", "店"));
+    let shop = block_on(api.set_shop_favorite("s1", true)).expect("the favorite must be set");
+    assert_eq!(shop.id, "s1");
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Put);
+    assert_eq!(request.path, "/api/shops/s1/favorite");
+
+    let (api, transport) = with_response(shop_json("s1", "店"));
+    let _ = block_on(api.set_shop_favorite("s1", false)).expect("the favorite must be removed");
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Delete);
+    assert_eq!(request.path, "/api/shops/s1/favorite");
+
+    let (api, transport) = with_response(product_json("p1", "豆"));
+    let _ = block_on(api.set_product_favorite("p1", true)).expect("the favorite must be set");
+    assert_eq!(transport.last_request().path, "/api/products/p1/favorite");
+
+    let (api, transport) = with_response(purchase_json("b1", "p1", None));
+    let _ = block_on(api.set_purchase_favorite("b1", true)).expect("the favorite must be set");
+    assert_eq!(transport.last_request().path, "/api/purchases/b1/favorite");
+
+    let (api, transport) = with_response(brew_json("w1", "b1"));
+    let _ = block_on(api.set_brew_favorite("w1", false)).expect("the favorite must be removed");
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Delete);
+    assert_eq!(request.path, "/api/brews/w1/favorite");
+}
+
+/// 応答の `favorited_at` を読み、無い場合と null は未設定にする (FR-21)。
+#[test]
+fn the_favorited_at_is_read_from_the_records_and_the_nested_records() {
+    let mut shop = shop_json("s1", "店");
+    shop["favorited_at"] = json!("2026-10-05T00:00:00.000Z");
+    let (api, _) = with_response(shop);
+    let shop = block_on(api.shop("s1")).expect("the shop must be read");
+    assert_eq!(
+        shop.favorited_at.as_deref(),
+        Some("2026-10-05T00:00:00.000Z")
+    );
+
+    // 入れ子の商品と店にも `favorited_at` が入る (FR-9、FR-11)。
+    let mut purchase = purchase_json("b1", "p1", Some("s1"));
+    purchase["favorited_at"] = json!(null);
+    purchase["product"]["favorited_at"] = json!("2026-10-05T00:00:00.000Z");
+    purchase["shop"]["favorited_at"] = json!("2026-10-05T00:00:00.000Z");
+    let (api, _) = with_response(purchase);
+    let purchase = block_on(api.purchase("b1")).expect("the purchase must be read");
+    assert_eq!(purchase.favorited_at, None);
+    assert_eq!(
+        purchase.product.favorited_at.as_deref(),
+        Some("2026-10-05T00:00:00.000Z")
+    );
+    assert_eq!(
+        purchase
+            .shop
+            .as_ref()
+            .and_then(|shop| shop.favorited_at.as_deref()),
+        Some("2026-10-05T00:00:00.000Z")
+    );
 }
 
 #[test]
@@ -370,7 +473,8 @@ fn the_suggestions_query_is_encoded_and_the_values_are_read() {
 #[test]
 fn a_broken_response_is_a_format_error() {
     let (api, _) = with_response(json!({"shops": "not an array"}));
-    let error = block_on(api.shops(None)).expect_err("the response must be rejected");
+    let error = block_on(api.shops(&ListOptions::default(), None))
+        .expect_err("the response must be rejected");
     assert!(matches!(error, RecordError::Format(_)), "{error:?}");
 }
 

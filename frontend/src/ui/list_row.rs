@@ -6,7 +6,8 @@
 
 use dioxus::prelude::*;
 
-use crate::ui::{is_activation_key, Icon};
+use crate::i18n::{t, Key};
+use crate::ui::{is_activation_key, Icon, IconButton};
 
 /// 一覧の行。
 #[component]
@@ -25,6 +26,12 @@ pub fn ListRow(
     /// 2 行目の下のタグ (商品の行だけ)。
     #[props(default)]
     tags: Option<Element>,
+    /// お気に入りか。星の見た目を変える (FR-21)。
+    #[props(default = false)]
+    favorited: bool,
+    /// 星を押したときの動き。無いときは星を置かない (選択のシートなど)。
+    #[props(default)]
+    on_favorite: Option<EventHandler<()>>,
     /// 広い画面で選択中か。地を `roast-soft` にする。
     #[props(default = false)]
     selected: bool,
@@ -38,6 +45,26 @@ pub fn ListRow(
     }
     let class = classes.join(" ");
     let interactive = on_click.is_some();
+    let favorite = on_favorite.map(|handler| {
+        let class = if favorited { "fav on" } else { "fav" };
+        let name = if favorited { "star" } else { "star_border" }.to_string();
+        let label = t(if favorited {
+            Key::FavoriteRemoveLabel
+        } else {
+            Key::FavoriteAddLabel
+        })
+        .to_string();
+        rsx! {
+            div { class,
+                IconButton {
+                    name,
+                    label,
+                    stop_propagation: true,
+                    onclick: move |_| handler.call(()),
+                }
+            }
+        }
+    });
     rsx! {
         div {
             class,
@@ -69,6 +96,7 @@ pub fn ListRow(
             if trailing.is_some() {
                 div { class: "side", {trailing} }
             }
+            {favorite}
         }
     }
 }

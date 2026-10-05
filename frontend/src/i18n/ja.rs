@@ -227,4 +227,12 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "抽出条件と評価",                                            // statsScatterSection
     "購入金額",                                                  // statsPurchaseAmountLabel
     "購入重量",                                                  // statsPurchaseWeightLabel
+    "並び順",                                                    // sortLabel
+    "昇順",                                                      // sortAscending
+    "降順",                                                      // sortDescending
+    "お気に入りのみ",                                            // favoritesOnlyLabel
+    "お気に入りに追加",                                          // favoriteAddLabel
+    "お気に入りから削除",                                        // favoriteRemoveLabel
+    "登録日",                                                    // sortCreatedAt
+    "更新日",                                                    // sortUpdatedAt
 ];

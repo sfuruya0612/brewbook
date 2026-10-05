@@ -10,6 +10,7 @@
 //! 組み立てる SELECT は、この検査が知らない列を足せない (列の並びは定数だけが持つ)。
 
 use brew_book::queries::{self, STATEMENTS};
+use brew_book_core::cursor::{SortKey, SortOrder};
 use brew_book_core::query::{self, SuggestionItem};
 use brew_book_core::stats::{self, Granularity};
 
@@ -25,28 +26,44 @@ fn statements() -> Vec<String> {
 
     // 記録の一覧と 1 件の取得 (brew_book_core::query)。列の並びは定数が持つ。
     statements.push(
-        query::shops_list(USER, None, 20)
+        query::shops_list(USER, SortKey::CreatedAt, SortOrder::Desc, false, None, 20)
             .expect("the shops list must be built")
             .sql,
     );
     statements.push(
-        query::products_list(USER, None, 20, None)
-            .expect("the products list must be built")
-            .sql,
+        query::products_list(
+            USER,
+            SortKey::CreatedAt,
+            SortOrder::Desc,
+            false,
+            None,
+            20,
+            None,
+        )
+        .expect("the products list must be built")
+        .sql,
     );
     // 名前の絞り込み (FR-19) を付けた商品の一覧も、同じ検査の対象にする。
     statements.push(
-        query::products_list(USER, None, 20, Some("名前"))
-            .expect("the products list with a name must be built")
-            .sql,
+        query::products_list(
+            USER,
+            SortKey::Name,
+            SortOrder::Asc,
+            true,
+            None,
+            20,
+            Some("名前"),
+        )
+        .expect("the products list with a name must be built")
+        .sql,
     );
     statements.push(
-        query::purchases_list(USER, None, 20)
+        query::purchases_list(USER, SortKey::PurchasedOn, SortOrder::Desc, false, None, 20)
             .expect("the purchases list must be built")
             .sql,
     );
     statements.push(
-        query::brews_list(USER, None, 20)
+        query::brews_list(USER, SortKey::BrewedAt, SortOrder::Desc, false, None, 20)
             .expect("the brews list must be built")
             .sql,
     );

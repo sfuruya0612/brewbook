@@ -190,9 +190,9 @@ pub fn BrewForm(
 
     // 購入の選択のシートの一覧 (FR-11)。
     let picker_services = services.clone();
-    let picker_load = RecordLoader::new(move |cursor| {
+    let picker_load = RecordLoader::new(move |cursor, options| {
         let api = RecordsApi::new(picker_services.api.clone());
-        Box::pin(async move { api.purchases(cursor.as_deref()).await })
+        Box::pin(async move { api.purchases(&options, cursor.as_deref()).await })
     });
     let picker_row = Callback::new(move |choice: Purchase| {
         let caption = purchase_row_subtitle(&choice, current_language());

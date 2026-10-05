@@ -74,9 +74,20 @@ a { color: var(--link); }
 .row .side { flex: none; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .row .val { font-family: var(--font-mono); font-size: 15px; line-height: 22px; font-variant-numeric: tabular-nums; }
 .row.selected { background: var(--roast-soft); }
+/* 行の右端の星 (0051)。押すとお気に入りを付け外しする (FR-21)。 */
+.row .fav { flex: none; display: flex; align-items: center; }
+.row .fav .iconbtn { width: 36px; height: 36px; }
+.row .fav svg { width: 22px; height: 22px; fill: none; stroke: var(--ink-muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.row .fav.on svg { fill: var(--crema-ink); stroke: var(--crema-ink); }
 .thumb { width: 44px; height: 44px; border-radius: var(--radius-sm); background: var(--paper-sunken); flex: none; display: flex; align-items: center; justify-content: center; color: var(--ink-faint); overflow: hidden; }
 .thumb svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .empty { padding: var(--space-12) var(--space-6); text-align: center; color: var(--ink-muted); }
+
+/* 一覧のツールバー (0051)。並び順の選択と昇順/降順の切り替えとお気に入りのみの切り替え。 */
+.list-toolbar { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); background: var(--paper); flex: none; }
+.list-toolbar .sort-select { height: 36px; padding: 0 var(--space-2); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--paper-sunken); color: var(--ink); font-family: var(--font-sans); font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; }
+.list-toolbar .iconbtn { width: 36px; height: 36px; }
+.list-toolbar .chip { height: 32px; }
 
 /* 評価 */
 .rating { display: inline-flex; gap: 4px; align-items: center; }
@@ -209,9 +220,9 @@ a { color: var(--link); }
 <body>
 
 <div style="padding:24px"><div class="list" style="border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden;background:var(--paper)">
-  <div class="row"><div class="main"><div class="name">Ethiopia Guji Natural</div><div class="sub"><span class="v">2026-09-26 08:12</span> / Kaido Coffee Roasters</div></div><div class="side"><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i></span></div></div>
-  <div class="row"><div class="thumb"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div><div class="main"><div class="name">Colombia Huila Washed</div><div class="sub"><span class="v">2026-09-07</span> / 喫茶ひかり</div></div><div class="side"><span class="val">250 g</span><span class="t-caption muted">2,200 JPY</span></div></div>
-  <div class="row selected" style="border-bottom:0"><div class="main"><div class="name">Kenya Kirinyaga AA</div><div class="sub"><span class="v">2026-09-24 19:05</span></div></div><div class="side"><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></span></div></div>
+  <div class="row"><div class="main"><div class="name">Ethiopia Guji Natural</div><div class="sub"><span class="v">2026-09-26 08:12</span> / Kaido Coffee Roasters</div></div><div class="side"><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i></span></div><span class="fav"><span class="iconbtn"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.9z"/></svg></span></span></div>
+  <div class="row"><div class="thumb"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div><div class="main"><div class="name">Colombia Huila Washed</div><div class="sub"><span class="v">2026-09-07</span> / 喫茶ひかり</div></div><div class="side"><span class="val">250 g</span><span class="t-caption muted">2,200 JPY</span></div><span class="fav on"><span class="iconbtn"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.9z"/></svg></span></span></div>
+  <div class="row selected" style="border-bottom:0"><div class="main"><div class="name">Kenya Kirinyaga AA</div><div class="sub"><span class="v">2026-09-24 19:05</span></div></div><div class="side"><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></span></div><span class="fav"><span class="iconbtn"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.9z"/></svg></span></span></div>
 </div></div>
 </body>
 </html>

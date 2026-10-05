@@ -8,15 +8,16 @@
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 //! `updated_at` は更新で現在時刻にする (ADR-0006)。
 
-use brew_book_core::query::{self, OrderKind, ProductValues};
+use brew_book_core::cursor::{CursorValue, SortKey};
+use brew_book_core::query::{self, ProductValues};
 use brew_book_core::records::{trim_optional, validate_flavor_notes, validate_name};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Database;
 use worker::{console_error, Env, Request, Response, Result};
 
 use super::{
-    flavor_notes, flavor_notes_for, internal_error, invalid_input, merge_name, not_found,
-    query_error_response, read_input, replace_flavor_notes, ListParams,
+    apply_favorite, flavor_notes, flavor_notes_for, internal_error, invalid_input, merge_name,
+    not_found, query_error_response, read_input, replace_flavor_notes, ListParams,
 };
 use crate::auth::session::Session;
 use crate::db;
@@ -38,6 +39,8 @@ pub struct ProductResponse {
     pub flavor_notes: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// お気に入りにした日時。未設定のときは null (FR-21)。
+    pub favorited_at: Option<String>,
 }
 
 /// 商品の一覧の応答。
@@ -144,9 +147,9 @@ impl NameFilter {
     }
 }
 
-/// 商品の一覧を返す。認証が必要。
+/// 商品の一覧を返す。認証が必要。`sort`、`order`、`favorite` を受け付ける (FR-20、FR-21)。
 pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Response> {
-    let params = match ListParams::from_request(req) {
+    let params = match ListParams::from_request(req, SortKey::CreatedAt, query::PRODUCT_SORT_KEYS) {
         Ok(params) => params,
         Err(response) => return Ok(response),
     };
@@ -158,6 +161,9 @@ pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Respons
     let d1 = db::database(env)?;
     let statement = match query::products_list(
         &session.user_id,
+        params.sort,
+        params.order,
+        params.favorite,
         params.cursor.clone(),
         params.limit,
         name.as_deref(),
@@ -167,13 +173,13 @@ pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Respons
     };
     let mut products: Vec<ProductResponse> =
         db::prepared(&d1, &statement)?.all().await?.results()?;
-    let next_cursor = params.next_cursor(
-        OrderKind::DateTime,
-        products
-            .last()
-            .map(|product| (product.created_at.as_str(), product.id.as_str())),
-        products.len(),
-    );
+    let next_cursor = products.last().and_then(|product| {
+        params.next_cursor(
+            sort_value(product, params.sort),
+            &product.id,
+            products.len(),
+        )
+    });
     let ids: Vec<&str> = products.iter().map(|product| product.id.as_str()).collect();
     let mut notes = flavor_notes_for(&d1, &session.user_id, &ids).await?;
     for product in &mut products {
@@ -183,6 +189,16 @@ pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Respons
         products,
         next_cursor,
     })
+}
+
+/// 並び順のキーの値を、応答の行から取り出す (FR-20)。
+fn sort_value(product: &ProductResponse, sort: SortKey) -> Option<CursorValue> {
+    match sort {
+        SortKey::CreatedAt => Some(CursorValue::Text(product.created_at.clone())),
+        SortKey::Name => Some(CursorValue::Text(product.name.clone())),
+        SortKey::UpdatedAt => Some(CursorValue::Text(product.updated_at.clone())),
+        _ => None,
+    }
 }
 
 /// 商品を登録する。認証が必要。
@@ -239,6 +255,7 @@ pub async fn create(req: &mut Request, env: &Env, session: &Session) -> Result<R
         flavor_notes,
         created_at: now.clone(),
         updated_at: now,
+        favorited_at: None,
     })
 }
 
@@ -327,7 +344,57 @@ pub async fn update(
         flavor_notes,
         created_at: product.created_at,
         updated_at: now,
+        favorited_at: product.favorited_at,
     })
+}
+
+/// お気に入りを付ける (FR-21)。認証が必要。
+pub async fn favorite_put(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    set_favorite(env, session, id, true).await
+}
+
+/// お気に入りを外す (FR-21)。認証が必要。
+pub async fn favorite_delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    set_favorite(env, session, id, false).await
+}
+
+/// お気に入りを付け外しする (FR-21)。
+///
+/// 既に同じ状態のときは `favorited_at` と `updated_at` を変えず、現在の応答をそのまま返す。
+async fn set_favorite(
+    env: &Env,
+    session: &Session,
+    id: Option<&str>,
+    favorite: bool,
+) -> Result<Response> {
+    let Some(id) = id else {
+        return Ok(not_found("the product does not exist"));
+    };
+    let d1 = db::database(env)?;
+    let Some(product) = find(&d1, &session.user_id, id).await? else {
+        return Ok(not_found("the product does not exist"));
+    };
+    let changed = apply_favorite(
+        &d1,
+        query::PRODUCTS_TABLE,
+        id,
+        &session.user_id,
+        product.favorited_at.as_deref(),
+        favorite,
+    )
+    .await?;
+    if changed.is_none() {
+        let mut product = product;
+        product.flavor_notes = flavor_notes(&d1, &session.user_id, id).await?;
+        return respond::json(&product);
+    }
+    match find(&d1, &session.user_id, id).await? {
+        Some(mut product) => {
+            product.flavor_notes = flavor_notes(&d1, &session.user_id, id).await?;
+            respond::json(&product)
+        }
+        None => Ok(internal_error()),
+    }
 }
 
 /// 商品を 1 件引く。

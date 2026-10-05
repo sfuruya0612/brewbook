@@ -64,6 +64,7 @@ const TABLES: &[Table] = &[
             "address",
             "created_at",
             "updated_at",
+            "favorited_at",
         ],
     },
     Table {
@@ -80,6 +81,7 @@ const TABLES: &[Table] = &[
             "variety",
             "created_at",
             "updated_at",
+            "favorited_at",
         ],
     },
     Table {
@@ -109,6 +111,7 @@ const TABLES: &[Table] = &[
             "photo_key",
             "created_at",
             "updated_at",
+            "favorited_at",
         ],
     },
     Table {
@@ -129,6 +132,7 @@ const TABLES: &[Table] = &[
             "notes",
             "created_at",
             "updated_at",
+            "favorited_at",
         ],
     },
 ];
@@ -256,8 +260,8 @@ fn build_data() -> TestData {
 fn records(seed: &mut Seed, user: &str, prefix: &str) {
     // 店。添字 0 は住所あり、添字 1 は住所なし。
     seed.raw(&format!(
-        "INSERT INTO shops (id, user_id, name, address, created_at, updated_at) \
-         VALUES ('{}', '{user}', '{prefix} の店 0 O''Brien', '{prefix} の住所 0', '{T21}', '{T21}')",
+        "INSERT INTO shops (id, user_id, name, address, created_at, updated_at, favorited_at) \
+         VALUES ('{}', '{user}', '{prefix} の店 0 O''Brien', '{prefix} の住所 0', '{T21}', '{T21}', '{T21}')",
         row_id(prefix, "shop", 0)
     ));
     seed.raw(&format!(
@@ -269,9 +273,9 @@ fn records(seed: &mut Seed, user: &str, prefix: &str) {
     // 商品。添字 0 は任意の列を埋め、添字 1 は名前以外を NULL にする。
     seed.raw(&format!(
         "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
-         created_at, updated_at) VALUES \
+         created_at, updated_at, favorited_at) VALUES \
          ('{}', '{user}', '{prefix} の商品 0', '{prefix} の生産者 0', 'エチオピア', \
-          'イルガチェフェ', 'ウォッシュト', '在来種', '{T21}', '{T21}')",
+          'イルガチェフェ', 'ウォッシュト', '在来種', '{T21}', '{T21}', '{T21}')",
         row_id(prefix, "product", 0)
     ));
     seed.raw(&format!(
@@ -308,9 +312,9 @@ fn records(seed: &mut Seed, user: &str, prefix: &str) {
     // 購入。添字 0 は全列を埋め、添字 1 は店と任意の列を NULL にし、添字 2 は店を参照する。
     seed.raw(&format!(
         "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, roast_date, \
-         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at) \
+         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at, favorited_at) \
          VALUES ('{}', '{user}', '{}', '{}', '{D21}', '中煎り', '{D19}', 1200, 'JPY', 200, '{}', \
-          '{T21}', '{T21}')",
+          '{T21}', '{T21}', '{T21}')",
         row_id(prefix, "purchase", 0),
         row_id(prefix, "product", 0),
         row_id(prefix, "shop", 0),
@@ -339,9 +343,9 @@ fn records(seed: &mut Seed, user: &str, prefix: &str) {
     seed.raw(&format!(
         "INSERT INTO brews (id, user_id, purchase_id, brewed_at, dose_grams, water_grams, \
          water_temp_c, brew_time_seconds, method, grind_setting, rating, notes, created_at, \
-         updated_at) VALUES \
+         updated_at, favorited_at) VALUES \
          ('{}', '{user}', '{}', '{B21}', 15.5, 250.5, 92.5, 150, 'ペーパードリップ', '中細', 4, \
-          '良い出来', '{T21}', '{T21}')",
+          '良い出来', '{T21}', '{T21}', '{T21}')",
         row_id(prefix, "brew", 0),
         row_id(prefix, "purchase", 0)
     ));

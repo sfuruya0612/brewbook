@@ -50,3 +50,21 @@ ADR-0006 は、店、商品、購入、抽出の 4 つの記録の削除を論�
 - スキーマの検証は、0001、0002、0003 を順に適用した最終スキーマ (4 テーブルに `archived_at` が無いこと、4 つのインデックスが `archived_at` を含まないこと) を対象にする。
   ADR-0006 との列の照合は、本 ADR が定める最終スキーマとの照合に置き換える。
 - 本番の D1 への 0003 の適用は、デプロイの issue で行う。
+
+## 追記: お気に入り (0051、2026-10-05)
+
+一覧の並び替えとお気に入り (PRD の FR-20、FR-21) のため、店、商品、購入、抽出の 4 テーブルに `favorited_at` (TEXT、NULL は未設定) を足す。
+最終スキーマの列は次の通りとする。
+
+| テーブル | 主な列 | 参照 |
+| --- | --- | --- |
+| shops | id、user_id、店名、住所、created_at、updated_at、favorited_at | users |
+| products | id、user_id、商品名、producer、origin、region、process、variety、created_at、updated_at、favorited_at | users |
+| flavor_tags | id、user_id、タグ名 | users |
+| product_flavor_tags | user_id、product_id、flavor_tag_id | users、products、flavor_tags |
+| purchases | id、user_id、product_id、shop_id (NULL 許容)、purchased_on、roast、roast_date、price_amount、price_currency、weight_grams、photo_key、created_at、updated_at、favorited_at | users、products、shops |
+| brews | id、user_id、purchase_id、brewed_at、dose_grams、water_grams、water_temp_c、brew_time_seconds、method、grind_setting、rating、notes、created_at、updated_at、favorited_at | users、purchases |
+
+- お気に入りだけに絞る一覧のインデックス `(user_id, favorited_at)` を 4 テーブルに足す。
+- 並び順のキーのインデックス `(user_id, name COLLATE NOCASE)`、`(user_id, updated_at DESC, id)`、`(user_id, price_amount)`、`(user_id, weight_grams)`、`(user_id, rating)`、`(user_id, dose_grams)` を足す。
+- マイグレーションは `backend/brew_book/migrations/0004_add_favorites.sql` とする。

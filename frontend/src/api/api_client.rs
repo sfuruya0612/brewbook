@@ -23,6 +23,8 @@ pub enum Method {
     Post,
     /// `PATCH`。
     Patch,
+    /// `PUT`。
+    Put,
     /// `DELETE`。
     Delete,
 }
@@ -34,6 +36,7 @@ impl Method {
             Self::Get => "GET",
             Self::Post => "POST",
             Self::Patch => "PATCH",
+            Self::Put => "PUT",
             Self::Delete => "DELETE",
         }
     }
@@ -198,6 +201,12 @@ impl ApiClient {
         let response = self
             .send(Method::Patch, path, Some("application/json"), body)
             .await?;
+        decode_json(&response)
+    }
+
+    /// `PUT` を呼び、JSON のオブジェクトを返す。本文は送らない (FR-21 のお気に入り)。
+    pub async fn put_json(&self, path: &str) -> Result<Map<String, Value>, ApiCallError> {
+        let response = self.send(Method::Put, path, None, Vec::new()).await?;
         decode_json(&response)
     }
 

@@ -172,6 +172,24 @@ pub const ROUTES: &[Route] = &[
         ok_test: OkTest::Ci,
     },
     Route {
+        // お気に入りを付ける (FR-21)。
+        name: "shops_favorite_put",
+        method: Method::Put,
+        pattern: "/api/shops/:id/favorite",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // お気に入りを外す (FR-21)。
+        name: "shops_favorite_delete",
+        method: Method::Delete,
+        pattern: "/api/shops/:id/favorite",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
+    Route {
         name: "products_list",
         method: Method::Get,
         pattern: "/api/products",
@@ -201,6 +219,24 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/products/:id",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // お気に入りを付ける (FR-21)。
+        name: "products_favorite_put",
+        method: Method::Put,
+        pattern: "/api/products/:id/favorite",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // お気に入りを外す (FR-21)。
+        name: "products_favorite_delete",
+        method: Method::Delete,
+        pattern: "/api/products/:id/favorite",
+        auth_required: true,
+        has_input: false,
         ok_test: OkTest::Ci,
     },
     Route {
@@ -241,6 +277,24 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/purchases/:id",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // お気に入りを付ける (FR-21)。
+        name: "purchases_favorite_put",
+        method: Method::Put,
+        pattern: "/api/purchases/:id/favorite",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // お気に入りを外す (FR-21)。
+        name: "purchases_favorite_delete",
+        method: Method::Delete,
+        pattern: "/api/purchases/:id/favorite",
+        auth_required: true,
+        has_input: false,
         ok_test: OkTest::Ci,
     },
     Route {
@@ -305,6 +359,24 @@ pub const ROUTES: &[Route] = &[
         pattern: "/api/brews/:id",
         auth_required: true,
         has_input: true,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // お気に入りを付ける (FR-21)。
+        name: "brews_favorite_put",
+        method: Method::Put,
+        pattern: "/api/brews/:id/favorite",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // お気に入りを外す (FR-21)。
+        name: "brews_favorite_delete",
+        method: Method::Delete,
+        pattern: "/api/brews/:id/favorite",
+        auth_required: true,
+        has_input: false,
         ok_test: OkTest::Ci,
     },
     Route {

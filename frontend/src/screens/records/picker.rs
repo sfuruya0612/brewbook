@@ -45,6 +45,9 @@ pub fn RecordPickerSheet<T: Clone + PartialEq + 'static>(
                 RecordListView::<T> {
                     load,
                     row,
+                    // 選択のシートは API の既定の並び順で、お気に入りの絞り込みと星を出さない
+                    // (FR-20、FR-21)。
+                    show_toolbar: false,
                 }
                 div { class: "acts",
                     if let Some(label) = clear_label {

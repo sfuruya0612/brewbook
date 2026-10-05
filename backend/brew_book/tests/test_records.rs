@@ -3,60 +3,101 @@
 mod support;
 
 use brew_book::records::ListParams;
-use brew_book_core::cursor::CursorKey;
-use brew_book_core::query::OrderKind;
+use brew_book_core::cursor::{CursorKey, CursorValue, SortKey, SortOrder};
 
-/// 並び順のキーの種類以外は固定のパラメータ。
-fn params(limit: u32) -> ListParams {
+/// 並び順以外は固定のパラメータ。
+fn list_params(limit: u32) -> ListParams {
     ListParams {
         limit,
         cursor: None,
+        sort: SortKey::CreatedAt,
+        order: SortOrder::Desc,
+        favorite: false,
     }
 }
 
 #[test]
-fn the_next_cursor_uses_the_kind_of_the_ordering() {
-    let params = params(50);
-    // 日時の並び順では日時のカーソルを返す。
+fn the_next_cursor_carries_the_sort_key_and_the_order() {
+    let params = list_params(50);
+    // 日時のキーでは文字列の値のカーソルを返す。
     let cursor = params
         .next_cursor(
-            OrderKind::DateTime,
-            Some(("2026-09-23T00:00:00.000Z", "shop-1")),
+            Some(CursorValue::Text("2026-09-23T00:00:00.000Z".to_owned())),
+            "shop-1",
             50,
         )
         .expect("a full page must have a cursor");
     assert_eq!(
         CursorKey::decode(&cursor),
-        Ok(CursorKey::DateTime {
-            at: "2026-09-23T00:00:00.000Z".to_owned(),
+        Ok(CursorKey {
+            sort: SortKey::CreatedAt,
+            order: SortOrder::Desc,
+            value: Some(CursorValue::Text("2026-09-23T00:00:00.000Z".to_owned())),
             id: "shop-1".to_owned(),
         })
     );
-    // 日付の並び順では日付のカーソルを返す (購入のように日付で並ぶ一覧のため)。
+
+    // 並び順と方向は params のものをそのまま運ぶ (FR-20)。
+    let mut params = list_params(50);
+    params.sort = SortKey::PurchasedOn;
+    params.order = SortOrder::Asc;
     let cursor = params
-        .next_cursor(OrderKind::Date, Some(("2026-09-23", "purchase-1")), 50)
+        .next_cursor(
+            Some(CursorValue::Text("2026-09-23".to_owned())),
+            "purchase-1",
+            50,
+        )
         .expect("a full page must have a cursor");
     assert_eq!(
         CursorKey::decode(&cursor),
-        Ok(CursorKey::Date {
-            on: "2026-09-23".to_owned(),
+        Ok(CursorKey {
+            sort: SortKey::PurchasedOn,
+            order: SortOrder::Asc,
+            value: Some(CursorValue::Text("2026-09-23".to_owned())),
             id: "purchase-1".to_owned(),
+        })
+    );
+
+    // 数値のキーと NULL の値もそのまま運ぶ。
+    let mut params = list_params(50);
+    params.sort = SortKey::Rating;
+    let cursor = params
+        .next_cursor(Some(CursorValue::Integer(4)), "brew-1", 50)
+        .expect("a full page must have a cursor");
+    assert_eq!(
+        CursorKey::decode(&cursor),
+        Ok(CursorKey {
+            sort: SortKey::Rating,
+            order: SortOrder::Desc,
+            value: Some(CursorValue::Integer(4)),
+            id: "brew-1".to_owned(),
+        })
+    );
+    let cursor = params
+        .next_cursor(None, "brew-1", 50)
+        .expect("a full page must have a cursor");
+    assert_eq!(
+        CursorKey::decode(&cursor),
+        Ok(CursorKey {
+            sort: SortKey::Rating,
+            order: SortOrder::Desc,
+            value: None,
+            id: "brew-1".to_owned(),
         })
     );
 }
 
 #[test]
 fn a_page_without_the_full_count_has_no_next_cursor() {
-    let params = params(50);
+    let params = list_params(50);
     assert_eq!(
         params.next_cursor(
-            OrderKind::DateTime,
-            Some(("2026-09-23T00:00:00.000Z", "shop-1")),
+            Some(CursorValue::Text("2026-09-23T00:00:00.000Z".to_owned())),
+            "shop-1",
             49
         ),
         None
     );
-    assert_eq!(params.next_cursor(OrderKind::DateTime, None, 50), None);
 }
 
 #[test]

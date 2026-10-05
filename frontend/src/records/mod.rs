@@ -26,7 +26,7 @@ use std::rc::Rc;
 use crate::api::{ApiCallError, ApiClient};
 use crate::i18n::Key;
 
-pub use api::{RecordsApi, SuggestionTarget, PAGE_SIZE};
+pub use api::{ListOptions, RecordsApi, SortOrder, SuggestionTarget, PAGE_SIZE};
 pub use clock::Clock;
 pub use currencies::{currency_name, currency_option_label, currency_options, DEFAULT_CURRENCY};
 pub use display::{

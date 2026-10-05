@@ -9,7 +9,8 @@
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 //! `updated_at` は更新で現在時刻にする (ADR-0006)。
 
-use brew_book_core::query::{self, BrewValues, OrderKind};
+use brew_book_core::cursor::{CursorValue, SortKey};
+use brew_book_core::query::{self, BrewValues};
 use brew_book_core::records::{
     trim_optional, validate_count, validate_decimal, validate_rating, validate_timestamp,
 };
@@ -20,8 +21,8 @@ use worker::{Env, Request, Response, Result};
 use super::products::ProductResponse;
 use super::purchases::{PurchaseJoinRow, PurchaseResponse};
 use super::{
-    attach_flavor_notes, invalid_input, not_found, query_error_response, read_input,
-    require_purchase, ListParams,
+    apply_favorite, attach_flavor_notes, invalid_input, not_found, query_error_response,
+    read_input, require_purchase, ListParams,
 };
 use crate::auth::session::Session;
 use crate::db;
@@ -44,6 +45,8 @@ pub struct BrewResponse {
     pub notes: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// お気に入りにした日時。未設定のときは null (FR-21)。
+    pub favorited_at: Option<String>,
     /// 購入。必須の参照のため常にある (FR-11)。
     pub purchase: PurchaseResponse,
 }
@@ -73,6 +76,7 @@ struct BrewJoinRow {
     b_notes: Option<String>,
     b_created_at: String,
     b_updated_at: String,
+    b_favorited_at: Option<String>,
     p_id: String,
     p_user_id: String,
     p_product_id: String,
@@ -86,6 +90,7 @@ struct BrewJoinRow {
     p_photo_key: Option<String>,
     p_created_at: String,
     p_updated_at: String,
+    p_favorited_at: Option<String>,
     pr_id: String,
     pr_user_id: String,
     pr_name: String,
@@ -96,12 +101,14 @@ struct BrewJoinRow {
     pr_variety: Option<String>,
     pr_created_at: String,
     pr_updated_at: String,
+    pr_favorited_at: Option<String>,
     sh_id: Option<String>,
     sh_user_id: Option<String>,
     sh_name: Option<String>,
     sh_address: Option<String>,
     sh_created_at: Option<String>,
     sh_updated_at: Option<String>,
+    sh_favorited_at: Option<String>,
 }
 
 impl BrewJoinRow {
@@ -123,6 +130,7 @@ impl BrewJoinRow {
             p_photo_key: self.p_photo_key,
             p_created_at: self.p_created_at,
             p_updated_at: self.p_updated_at,
+            p_favorited_at: self.p_favorited_at,
             pr_id: self.pr_id,
             pr_user_id: self.pr_user_id,
             pr_name: self.pr_name,
@@ -133,12 +141,14 @@ impl BrewJoinRow {
             pr_variety: self.pr_variety,
             pr_created_at: self.pr_created_at,
             pr_updated_at: self.pr_updated_at,
+            pr_favorited_at: self.pr_favorited_at,
             sh_id: self.sh_id,
             sh_user_id: self.sh_user_id,
             sh_name: self.sh_name,
             sh_address: self.sh_address,
             sh_created_at: self.sh_created_at,
             sh_updated_at: self.sh_updated_at,
+            sh_favorited_at: self.sh_favorited_at,
         };
         BrewResponse {
             id: self.b_id,
@@ -155,6 +165,7 @@ impl BrewJoinRow {
             notes: self.b_notes,
             created_at: self.b_created_at,
             updated_at: self.b_updated_at,
+            favorited_at: self.b_favorited_at,
             purchase: purchase.into_response(),
         }
     }
@@ -230,28 +241,41 @@ struct UpdateInput {
     notes: Option<Option<String>>,
 }
 
-/// 抽出の一覧を返す。認証が必要。
+/// 抽出の一覧を返す。認証が必要。`sort`、`order`、`favorite` を受け付ける (FR-20、FR-21)。
 pub async fn list(req: &Request, env: &Env, session: &Session) -> Result<Response> {
-    let params = match ListParams::from_request(req) {
+    let params = match ListParams::from_request(req, SortKey::BrewedAt, query::BREW_SORT_KEYS) {
         Ok(params) => params,
         Err(response) => return Ok(response),
     };
     let d1 = db::database(env)?;
-    let statement = match query::brews_list(&session.user_id, params.cursor.clone(), params.limit) {
+    let statement = match query::brews_list(
+        &session.user_id,
+        params.sort,
+        params.order,
+        params.favorite,
+        params.cursor.clone(),
+        params.limit,
+    ) {
         Ok(statement) => statement,
         Err(error) => return Ok(query_error_response(error)),
     };
     let rows: Vec<BrewJoinRow> = db::prepared(&d1, &statement)?.all().await?.results()?;
     let mut brews: Vec<BrewResponse> = rows.into_iter().map(BrewJoinRow::into_response).collect();
     attach_notes(&d1, &session.user_id, &mut brews).await?;
-    let next_cursor = params.next_cursor(
-        OrderKind::DateTime,
-        brews
-            .last()
-            .map(|brew| (brew.brewed_at.as_str(), brew.id.as_str())),
-        brews.len(),
-    );
+    let next_cursor = brews
+        .last()
+        .and_then(|brew| params.next_cursor(sort_value(brew, params.sort), &brew.id, brews.len()));
     respond::json(&BrewListResponse { brews, next_cursor })
+}
+
+/// 並び順のキーの値を、応答の行から取り出す (FR-20)。
+fn sort_value(brew: &BrewResponse, sort: SortKey) -> Option<CursorValue> {
+    match sort {
+        SortKey::BrewedAt => Some(CursorValue::Text(brew.brewed_at.clone())),
+        SortKey::Rating => brew.rating.map(CursorValue::Integer),
+        SortKey::DoseGrams => brew.dose_grams.map(CursorValue::Real),
+        _ => None,
+    }
 }
 
 /// 抽出を登録する。認証が必要。
@@ -455,6 +479,47 @@ async fn respond_fetched(d1: &D1Database, user_id: &str, id: &str) -> Result<Res
         Some(brew) => respond::json(&brew),
         None => Ok(super::internal_error()),
     }
+}
+
+/// お気に入りを付ける (FR-21)。認証が必要。
+pub async fn favorite_put(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    set_favorite(env, session, id, true).await
+}
+
+/// お気に入りを外す (FR-21)。認証が必要。
+pub async fn favorite_delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    set_favorite(env, session, id, false).await
+}
+
+/// お気に入りを付け外しする (FR-21)。
+///
+/// 既に同じ状態のときは `favorited_at` と `updated_at` を変えず、現在の応答をそのまま返す。
+async fn set_favorite(
+    env: &Env,
+    session: &Session,
+    id: Option<&str>,
+    favorite: bool,
+) -> Result<Response> {
+    let Some(id) = id else {
+        return Ok(not_found("the brew does not exist"));
+    };
+    let d1 = db::database(env)?;
+    let Some(brew) = find(&d1, &session.user_id, id).await? else {
+        return Ok(not_found("the brew does not exist"));
+    };
+    let changed = apply_favorite(
+        &d1,
+        query::BREWS_TABLE,
+        id,
+        &session.user_id,
+        brew.favorited_at.as_deref(),
+        favorite,
+    )
+    .await?;
+    if changed.is_none() {
+        return respond::json(&brew);
+    }
+    respond_fetched(&d1, &session.user_id, id).await
 }
 
 /// 応答の商品に Flavor Notes を付ける (FR-8)。

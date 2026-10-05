@@ -1,15 +1,16 @@
 //! マイグレーションの SQL と、ADR-0018 が定める最終スキーマの照合。
 //!
-//! 0001、0002、0003 を順に適用した最終スキーマを読み、次を確認する。
+//! 0001、0002、0003、0004 を順に適用した最終スキーマを読み、次を確認する。
 //!
 //! - 11 テーブルの列が ADR-0018 の表と一致する (過不足のどちらも許さない)。
 //! - ADR-0006 の参照 (外部キー) がある。
 //! - 設計判断の UNIQUE 制約 (利用者ごとのタグ名、全利用者で一意の credential_id) がある。
-//! - 複合インデックス (利用者 ID、並び順のキーの降順、ID) があり、`archived_at` を含まない。
-//! - 店、商品、購入、抽出の 4 テーブルに `archived_at` が無い (ADR-0018)。
+//! - 複合インデックス (利用者 ID、並び順のキー、ID) があり、`archived_at` を含まない。
+//! - 店、商品、購入、抽出の 4 テーブルに `archived_at` が無く、`favorited_at` がある
+//!   (ADR-0018、FR-21)。
 //!
 //! 期待値は issue 本文と ADR の一覧を写したテストデータとして、SQL の解析結果と突き合わせる。
-//! 列の比較は並び順を問わない (0002 と 0003 の `ALTER TABLE` が列の位置を変えるため)。
+//! 列の比較は並び順を問わない (0002 と 0003 と 0004 の `ALTER TABLE` が列の位置を変えるため)。
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -19,6 +20,7 @@ const MIGRATIONS: &[&str] = &[
     "migrations/0001_initial_schema.sql",
     "migrations/0002_purchases_price_currency_nullable.sql",
     "migrations/0003_remove_archive.sql",
+    "migrations/0004_add_favorites.sql",
 ];
 
 /// ADR-0018 の 11 テーブルと列。列の順は ADR-0018 の表に合わせる。
@@ -58,6 +60,7 @@ const EXPECTED_TABLES: &[(&str, &[&str])] = &[
             "address",
             "created_at",
             "updated_at",
+            "favorited_at",
         ],
     ),
     (
@@ -73,6 +76,7 @@ const EXPECTED_TABLES: &[(&str, &[&str])] = &[
             "variety",
             "created_at",
             "updated_at",
+            "favorited_at",
         ],
     ),
     ("flavor_tags", &["id", "user_id", "name"]),
@@ -93,6 +97,7 @@ const EXPECTED_TABLES: &[(&str, &[&str])] = &[
             "photo_key",
             "created_at",
             "updated_at",
+            "favorited_at",
         ],
     ),
     (
@@ -112,6 +117,7 @@ const EXPECTED_TABLES: &[(&str, &[&str])] = &[
             "notes",
             "created_at",
             "updated_at",
+            "favorited_at",
         ],
     ),
 ];
@@ -127,7 +133,7 @@ const EXPECTED_UNIQUE: &[(&str, &[&[&str]])] = &[
     ("passkey_credentials", &[&["credential_id"]]),
 ];
 
-/// ADR-0018 の複合インデックス (利用者 ID、並び順のキー)。
+/// ADR-0018 の複合インデックス (利用者 ID、並び順のキー)。0004 の分も含む (FR-20、FR-21)。
 const EXPECTED_INDEXES: &[(&str, &str, &[&str])] = &[
     (
         "idx_shops_user_created_at",
@@ -148,6 +154,64 @@ const EXPECTED_INDEXES: &[(&str, &str, &[&str])] = &[
         "idx_brews_user_brewed_at",
         "brews",
         &["user_id", "brewed_at DESC", "id"],
+    ),
+    // お気に入りだけに絞る一覧 (FR-21)。
+    (
+        "idx_shops_user_favorited_at",
+        "shops",
+        &["user_id", "favorited_at"],
+    ),
+    (
+        "idx_products_user_favorited_at",
+        "products",
+        &["user_id", "favorited_at"],
+    ),
+    (
+        "idx_purchases_user_favorited_at",
+        "purchases",
+        &["user_id", "favorited_at"],
+    ),
+    (
+        "idx_brews_user_favorited_at",
+        "brews",
+        &["user_id", "favorited_at"],
+    ),
+    // 並び順のキー (FR-20)。名前は大文字と小文字を区別しない比較に揃える。
+    (
+        "idx_shops_user_name",
+        "shops",
+        &["user_id", "name COLLATE NOCASE"],
+    ),
+    (
+        "idx_shops_user_updated_at",
+        "shops",
+        &["user_id", "updated_at DESC", "id"],
+    ),
+    (
+        "idx_products_user_name",
+        "products",
+        &["user_id", "name COLLATE NOCASE"],
+    ),
+    (
+        "idx_products_user_updated_at",
+        "products",
+        &["user_id", "updated_at DESC", "id"],
+    ),
+    (
+        "idx_purchases_user_price_amount",
+        "purchases",
+        &["user_id", "price_amount"],
+    ),
+    (
+        "idx_purchases_user_weight_grams",
+        "purchases",
+        &["user_id", "weight_grams"],
+    ),
+    ("idx_brews_user_rating", "brews", &["user_id", "rating"]),
+    (
+        "idx_brews_user_dose_grams",
+        "brews",
+        &["user_id", "dose_grams"],
     ),
 ];
 
@@ -198,6 +262,37 @@ fn the_final_schema_has_no_archived_column() {
         assert!(
             !table.columns.iter().any(|column| column == "archived_at"),
             "the table {name} must not have archived_at (ADR-0018)"
+        );
+    }
+}
+
+/// 店、商品、購入、抽出の 4 テーブルが `favorited_at` を持つ (FR-21)。
+const TABLES_WITH_FAVORITED_AT: &[&str] = &["shops", "products", "purchases", "brews"];
+
+#[test]
+fn the_final_schema_has_the_favorited_column_in_the_four_record_tables() {
+    let parsed = apply_migrations(&read_migrations());
+    for name in TABLES_WITH_FAVORITED_AT {
+        let table = parsed
+            .tables
+            .iter()
+            .find(|table| table.name == *name)
+            .unwrap_or_else(|| panic!("the migrations must produce the table {name}"));
+        assert!(
+            table.columns.iter().any(|column| column == "favorited_at"),
+            "the table {name} must have favorited_at (FR-21)"
+        );
+    }
+    // タグの 2 テーブルはお気に入りを持たない (0051 の設計判断)。
+    for name in ["flavor_tags", "product_flavor_tags"] {
+        let table = parsed
+            .tables
+            .iter()
+            .find(|table| table.name == name)
+            .unwrap_or_else(|| panic!("the migrations must produce the table {name}"));
+        assert!(
+            !table.columns.iter().any(|column| column == "favorited_at"),
+            "the table {name} must not have favorited_at"
         );
     }
 }
@@ -559,7 +654,8 @@ fn columns_of(body: &str) -> Vec<String> {
         .collect()
 }
 
-/// 索引の列の並びを返す。並び順の指定は大文字にそろえる (省略時は付けない)。
+/// 索引の列の並びを返す。並び順の指定は大文字にそろえ (省略時は付けない)、
+/// `COLLATE` は照合の名前を大文字にそろえて付ける。
 fn index_columns_of(body: &str) -> Vec<String> {
     body.split(',')
         .map(|column| {
@@ -567,7 +663,12 @@ fn index_columns_of(body: &str) -> Vec<String> {
             match words.as_slice() {
                 [name] => (*name).to_owned(),
                 [name, direction] => format!("{} {}", name, direction.to_ascii_uppercase()),
-                _ => panic!("an index column is a name and an optional direction: {column}"),
+                [name, collate, collation] if collate.eq_ignore_ascii_case("COLLATE") => {
+                    format!("{name} COLLATE {}", collation.to_ascii_uppercase())
+                }
+                _ => panic!(
+                    "an index column is a name with an optional direction or collation: {column}"
+                ),
             }
         })
         .filter(|column| !column.is_empty())

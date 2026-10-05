@@ -17,9 +17,11 @@ pub mod tags;
 
 use std::collections::HashMap;
 
-use brew_book_core::cursor::{parse_page_size, CursorKey};
+use brew_book_core::cursor::{
+    parse_page_size, parse_sort_key, CursorKey, CursorValue, SortKey, SortOrder,
+};
 use brew_book_core::error::ErrorCode;
-use brew_book_core::query::{self, OrderKind, QueryError};
+use brew_book_core::query::{self, QueryError};
 use brew_book_core::records::validate_name;
 use worker::d1::D1Database;
 use worker::{console_error, Request, Response, Result};
@@ -31,18 +33,31 @@ use self::products::ProductResponse;
 use self::purchases::PurchaseJoinRow;
 use self::shops::ShopResponse;
 
-/// 一覧のクエリパラメータ (limit、cursor)。
+/// 一覧のクエリパラメータ (limit、cursor、sort、order、favorite)。
 pub struct ListParams {
     /// 取得件数。既定は 50、最大は 200 (PRD の性能)。
     pub limit: u32,
     /// 直前のページの最後の行を指すカーソル。
     pub cursor: Option<CursorKey>,
+    /// 並び順のキー (FR-20)。既定は一覧ごとに決まる。
+    pub sort: SortKey,
+    /// 並び順の方向 (FR-20)。既定は降順。
+    pub order: SortOrder,
+    /// お気に入りだけに絞るか (FR-21)。既定は false。
+    pub favorite: bool,
 }
 
 impl ListParams {
     /// リクエストのクエリ文字列から読む。誤りは 400 の応答にする。
-    /// 受け取らないパラメータ (`include_archived` など) は未知のパラメータとして無視する。
-    pub fn from_request(req: &Request) -> Result<Self, Response> {
+    ///
+    /// `default_sort` は `sort` を省略したときのキー、`allowed` は受け付けるキーの並び
+    /// (FR-20)。受け取らないパラメータ (`include_archived` など) は未知のパラメータとして
+    /// 無視する。
+    pub fn from_request(
+        req: &Request,
+        default_sort: SortKey,
+        allowed: &[SortKey],
+    ) -> Result<Self, Response> {
         let url = match req.url() {
             Ok(url) => url,
             Err(error) => {
@@ -52,10 +67,16 @@ impl ListParams {
         };
         let mut limit = None;
         let mut cursor = None;
+        let mut sort = None;
+        let mut order = None;
+        let mut favorite = None;
         for (name, value) in url.query_pairs() {
             match name.as_ref() {
                 "limit" => limit = Some(value.into_owned()),
                 "cursor" => cursor = Some(value.into_owned()),
+                "sort" => sort = Some(value.into_owned()),
+                "order" => order = Some(value.into_owned()),
+                "favorite" => favorite = Some(value.into_owned()),
                 _ => {}
             }
         }
@@ -67,35 +88,75 @@ impl ListParams {
             }
             None => None,
         };
-        Ok(Self { limit, cursor })
+        let sort = match sort {
+            Some(name) => {
+                parse_sort_key(&name, allowed).map_err(|error| invalid_input(error.message()))?
+            }
+            None => default_sort,
+        };
+        let order = match order {
+            Some(name) => {
+                SortOrder::parse(&name).map_err(|error| invalid_input(error.message()))?
+            }
+            None => SortOrder::Desc,
+        };
+        let favorite = match favorite.as_deref() {
+            None | Some("false") => false,
+            Some("true") => true,
+            Some(_) => return Err(invalid_input("invalid favorite")),
+        };
+        Ok(Self {
+            limit,
+            cursor,
+            sort,
+            order,
+            favorite,
+        })
     }
 
-    /// ページの続きのカーソル。最後の行の並び順のキーと ID を指す。
+    /// ページの続きのカーソル。最後の行の並び順のキーの値と ID を指す。
     /// 行数が `limit` に満たないときは None を返す (続きが無い可能性が高い)。
-    /// カーソルの種類は並び順に合わせる (日付の並び順に日時のカーソルを返さない)。
     pub fn next_cursor(
         &self,
-        order: OrderKind,
-        last: Option<(&str, &str)>,
+        value: Option<CursorValue>,
+        id: &str,
         count: usize,
     ) -> Option<String> {
         if count < self.limit as usize {
             return None;
         }
-        last.map(|(key, id)| {
-            let cursor = match order {
-                OrderKind::DateTime => CursorKey::DateTime {
-                    at: key.to_owned(),
-                    id: id.to_owned(),
-                },
-                OrderKind::Date => CursorKey::Date {
-                    on: key.to_owned(),
-                    id: id.to_owned(),
-                },
-            };
-            cursor.encode()
-        })
+        Some(
+            CursorKey {
+                sort: self.sort,
+                order: self.order,
+                value,
+                id: id.to_owned(),
+            }
+            .encode(),
+        )
     }
+}
+
+/// お気に入りの状態を変える (FR-21)。
+///
+/// 現在の値が既に希望の状態と同じなら何もせず None を返す (繰り返し呼んでも状態と応答が
+/// 同じになる)。変えたときは `favorited_at` と `updated_at` を現在時刻にして、その時刻を返す。
+pub async fn apply_favorite(
+    d1: &D1Database,
+    table: &'static str,
+    id: &str,
+    user_id: &str,
+    current: Option<&str>,
+    favorite: bool,
+) -> Result<Option<String>> {
+    if current.is_some() == favorite {
+        return Ok(None);
+    }
+    let now = db::now_text()?;
+    let favorited_at = favorite.then(|| now.clone());
+    let statement = query::set_favorited_at(table, id, user_id, favorited_at.as_deref(), &now);
+    db::prepared(d1, &statement)?.run().await?;
+    Ok(Some(now))
 }
 
 /// 400 の応答を組み立てる。

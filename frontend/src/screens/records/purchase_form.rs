@@ -13,7 +13,7 @@ use crate::records::values::format_day;
 use crate::records::{
     apply_purchase_suggestion, currency_option_label, currency_options,
     product_match as decide_product_match, record_error_key, save_target, suggested_product_name,
-    validate_purchase_form, ConvertedImage, Product, ProductMatch, ProductSuggestion,
+    validate_purchase_form, ConvertedImage, ListOptions, Product, ProductMatch, ProductSuggestion,
     PurchaseFormErrors, PurchaseFormValues, RecordError, RecordServices, RecordsApi, SaveTarget,
     Shop, DEFAULT_CURRENCY, MAX_PHOTO_BYTES, MAX_PHOTO_LONG_SIDE,
 };
@@ -200,7 +200,10 @@ pub fn PurchaseForm(
                 unmatched_product.set(None);
                 return;
             }
-            let matched = match api.products(None, name.as_deref()).await {
+            let matched = match api
+                .products(&ListOptions::default(), None, name.as_deref())
+                .await
+            {
                 Ok(page) => page.items.into_iter().next(),
                 Err(_) => {
                     if suggestion_generation() == generation {
@@ -391,16 +394,16 @@ pub fn PurchaseForm(
     let picker_services = services.clone();
     let product_load = RecordLoader::new({
         let services = picker_services.clone();
-        move |cursor| {
+        move |cursor, options| {
             let api = RecordsApi::new(services.api.clone());
-            Box::pin(async move { api.products(cursor.as_deref(), None).await })
+            Box::pin(async move { api.products(&options, cursor.as_deref(), None).await })
         }
     });
     let shop_load = RecordLoader::new({
         let services = picker_services.clone();
-        move |cursor| {
+        move |cursor, options| {
             let api = RecordsApi::new(services.api.clone());
-            Box::pin(async move { api.shops(cursor.as_deref()).await })
+            Box::pin(async move { api.shops(&options, cursor.as_deref()).await })
         }
     });
     let product_row = Callback::new(move |choice: Product| {

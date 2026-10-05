@@ -1,11 +1,11 @@
 //! 翻訳のキー (FR-16)。
 //!
 //! 移行前の Flutter 版の ARB (`frontend/lib/l10n/app_ja.arb` と `app_en.arb`。0045 で削除) の
-//! 221 キーから作る。表 ([`super::ja`] と [`super::en`]) はこの添字で引く。キーの順序は ARB と
-//! 同じにしていた。
+//! 221 キーから作る (0051 で並び替えとお気に入りの 8 キーを足した)。表 ([`super::ja`] と
+//! [`super::en`]) はこの添字で引く。キーの順序は ARB と同じにしていた。
 
 /// キーの数。
-pub const KEY_COUNT: usize = 221;
+pub const KEY_COUNT: usize = 229;
 
 /// 翻訳のキー (FR-16)。
 ///
@@ -454,6 +454,22 @@ pub enum Key {
     StatsPurchaseAmountLabel,
     /// `statsPurchaseWeightLabel`。
     StatsPurchaseWeightLabel,
+    /// `sortLabel`。
+    SortLabel,
+    /// `sortAscending`。
+    SortAscending,
+    /// `sortDescending`。
+    SortDescending,
+    /// `favoritesOnlyLabel`。
+    FavoritesOnlyLabel,
+    /// `favoriteAddLabel`。
+    FavoriteAddLabel,
+    /// `favoriteRemoveLabel`。
+    FavoriteRemoveLabel,
+    /// `sortCreatedAt`。
+    SortCreatedAt,
+    /// `sortUpdatedAt`。
+    SortUpdatedAt,
 }
 
 impl Key {
@@ -680,6 +696,14 @@ impl Key {
         Key::StatsScatterSection,
         Key::StatsPurchaseAmountLabel,
         Key::StatsPurchaseWeightLabel,
+        Key::SortLabel,
+        Key::SortAscending,
+        Key::SortDescending,
+        Key::FavoritesOnlyLabel,
+        Key::FavoriteAddLabel,
+        Key::FavoriteRemoveLabel,
+        Key::SortCreatedAt,
+        Key::SortUpdatedAt,
     ];
 
     /// 表の添字。

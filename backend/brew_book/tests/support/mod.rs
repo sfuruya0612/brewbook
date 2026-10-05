@@ -73,7 +73,8 @@ pub struct SuiteEntry {
 /// このスイートが持つテストの種別。0005 が認証の 10 経路、0006 が店と商品とタグの 11 経路、
 /// 0007 が購入と抽出の 10 経路、0008 がサジェストの 1 経路、0009 が購入の写真の 4 経路、
 /// 0010 が統計と評価の推移の 4 経路、0011 がエクスポートの 1 経路、
-/// 0012 がアカウント削除の 1 経路、0034 が写真からの推測の 1 経路を追加する。
+/// 0012 がアカウント削除の 1 経路、0034 が写真からの推測の 1 経路、
+/// 0051 がお気に入りの 8 経路を追加する。
 /// 写真からの推測の正常系は Workers AI の推論を要するため CI では実行せず、staging への
 /// デプロイで実写真を送って確認する (PRD の成功指標の測定方法。FR-19)。
 pub const SUITE: &[SuiteEntry] = &[
@@ -134,6 +135,14 @@ pub const SUITE: &[SuiteEntry] = &[
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
     },
     SuiteEntry {
+        route: "shops_favorite_put",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "shops_favorite_delete",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
         route: "products_list",
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
     },
@@ -148,6 +157,14 @@ pub const SUITE: &[SuiteEntry] = &[
     SuiteEntry {
         route: "products_update",
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "products_favorite_put",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "products_favorite_delete",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
     },
     SuiteEntry {
         route: "flavor_tags_list",
@@ -168,6 +185,14 @@ pub const SUITE: &[SuiteEntry] = &[
     SuiteEntry {
         route: "purchases_update",
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "purchases_favorite_put",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "purchases_favorite_delete",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
     },
     SuiteEntry {
         route: "purchases_photo_upload_url",
@@ -200,6 +225,14 @@ pub const SUITE: &[SuiteEntry] = &[
     SuiteEntry {
         route: "brews_update",
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "brews_favorite_put",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        route: "brews_favorite_delete",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
     },
     SuiteEntry {
         route: "suggestions_list",

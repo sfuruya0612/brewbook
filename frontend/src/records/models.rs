@@ -25,6 +25,8 @@ pub struct Shop {
     pub created_at: String,
     /// 更新日時。
     pub updated_at: String,
+    /// お気に入りにした日時。未設定のときは None (FR-21)。
+    pub favorited_at: Option<String>,
 }
 
 impl Shop {
@@ -36,6 +38,7 @@ impl Shop {
             address: optional_string(json, "address")?,
             created_at: string_field(json, "created_at")?,
             updated_at: string_field(json, "updated_at")?,
+            favorited_at: optional_string(json, "favorited_at")?,
         })
     }
 }
@@ -63,6 +66,8 @@ pub struct Product {
     pub created_at: String,
     /// 更新日時。
     pub updated_at: String,
+    /// お気に入りにした日時。未設定のときは None (FR-21)。
+    pub favorited_at: Option<String>,
 }
 
 impl Product {
@@ -79,6 +84,7 @@ impl Product {
             flavor_notes: string_list(json, "flavor_notes")?,
             created_at: string_field(json, "created_at")?,
             updated_at: string_field(json, "updated_at")?,
+            favorited_at: optional_string(json, "favorited_at")?,
         })
     }
 }
@@ -110,6 +116,8 @@ pub struct Purchase {
     pub created_at: String,
     /// 更新日時。
     pub updated_at: String,
+    /// お気に入りにした日時。未設定のときは None (FR-21)。
+    pub favorited_at: Option<String>,
     /// 商品。必須の参照のため常にある (FR-9)。
     pub product: Product,
     /// 店。店が無い購入では None (FR-9)。
@@ -135,6 +143,7 @@ impl Purchase {
             photo_key: optional_string(json, "photo_key")?,
             created_at: string_field(json, "created_at")?,
             updated_at: string_field(json, "updated_at")?,
+            favorited_at: optional_string(json, "favorited_at")?,
             product: Product::from_json(&object_field(json, "product")?)?,
             shop,
         })
@@ -170,6 +179,8 @@ pub struct Brew {
     pub created_at: String,
     /// 更新日時。
     pub updated_at: String,
+    /// お気に入りにした日時。未設定のときは None (FR-21)。
+    pub favorited_at: Option<String>,
     /// 購入。必須の参照のため常にある。中に商品と店を含む (FR-11)。
     pub purchase: Purchase,
 }
@@ -191,6 +202,7 @@ impl Brew {
             notes: optional_string(json, "notes")?,
             created_at: string_field(json, "created_at")?,
             updated_at: string_field(json, "updated_at")?,
+            favorited_at: optional_string(json, "favorited_at")?,
             purchase: Purchase::from_json(&object_field(json, "purchase")?)?,
         })
     }

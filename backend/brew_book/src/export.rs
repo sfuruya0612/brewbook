@@ -30,6 +30,8 @@ struct ShopRow {
     address: Option<String>,
     created_at: String,
     updated_at: String,
+    /// お気に入りにした日時。未設定のときは null (FR-21)。
+    favorited_at: Option<String>,
 }
 
 /// 商品の行。列は products テーブルと同じ。
@@ -45,6 +47,8 @@ struct ProductRow {
     variety: Option<String>,
     created_at: String,
     updated_at: String,
+    /// お気に入りにした日時。未設定のときは null (FR-21)。
+    favorited_at: Option<String>,
 }
 
 /// Flavor Notes のタグの行。列は flavor_tags テーブルと同じ。
@@ -79,6 +83,8 @@ struct PurchaseRow {
     photo_key: Option<String>,
     created_at: String,
     updated_at: String,
+    /// お気に入りにした日時。未設定のときは null (FR-21)。
+    favorited_at: Option<String>,
 }
 
 /// エクスポートの購入の行。テーブルの列に写真取得 API のパスを加える (ADR-0003)。
@@ -115,6 +121,8 @@ struct BrewRow {
     notes: Option<String>,
     created_at: String,
     updated_at: String,
+    /// お気に入りにした日時。未設定のときは null (FR-21)。
+    favorited_at: Option<String>,
 }
 
 /// `GET /api/export` の応答。トップレベルに 6 テーブルの名前を持つ配列を並べる (FR-14)。

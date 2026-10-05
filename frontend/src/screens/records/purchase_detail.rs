@@ -11,7 +11,9 @@ use crate::records::display::{
     purchase_reference_tiles, purchase_row_subtitle, purchase_tile_name,
 };
 use crate::records::stats::RatingHistoryEntry;
-use crate::records::{RecordError, RecordServices, RecordsApi, StatsApi, MAX_PHOTO_LONG_SIDE};
+use crate::records::{
+    record_error_key, RecordError, RecordServices, RecordsApi, StatsApi, MAX_PHOTO_LONG_SIDE,
+};
 use crate::router::Route;
 use crate::screens::stats::RatingHistoryChart;
 use crate::screens::ScreenAppBar;
@@ -140,8 +142,39 @@ pub fn PurchaseDetail(
     let ratings_failure = ratings_error();
     let photo_failure = photo_error();
     let photo_url = format!("{}/purchases/{}/photo", services.api.base_path(), id);
+    let favorited = current
+        .as_ref()
+        .is_some_and(|purchase| purchase.favorited_at.is_some());
+    let favorite_services = services.clone();
+    let favorite_id = id.clone();
+    let mut favorite_revision = revision;
+    let mut favorite_notice = notice;
+    let favorite = EventHandler::new(move |_| {
+        let api = RecordsApi::new(favorite_services.api.clone());
+        let id = favorite_id.clone();
+        spawn(async move {
+            match api.set_purchase_favorite(&id, !favorited).await {
+                Ok(_) => mark_records_changed(&mut favorite_revision),
+                Err(failure) => {
+                    favorite_notice.set(Some(t(record_error_key(&failure)).to_string()))
+                }
+            }
+        });
+    });
     let actions = current.as_ref().map(|_| {
+        let favorite_name = if favorited { "star" } else { "star_border" }.to_string();
+        let favorite_label = t(if favorited {
+            Key::FavoriteRemoveLabel
+        } else {
+            Key::FavoriteAddLabel
+        })
+        .to_string();
         rsx! {
+            IconButton {
+                name: favorite_name,
+                label: favorite_label,
+                onclick: move |_| favorite.call(()),
+            }
             IconButton {
                 name: "edit".to_string(),
                 label: t(Key::EditButton).to_string(),

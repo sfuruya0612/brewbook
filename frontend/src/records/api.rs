@@ -66,6 +66,56 @@ impl SuggestionTarget {
 /// 一覧の 1 ページの件数 (API の既定と同じ。PRD の性能)。
 pub const PAGE_SIZE: u32 = 50;
 
+/// 一覧の並び順の方向 (FR-20)。`order` の値。
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum SortOrder {
+    /// 降順 (既定)。
+    #[default]
+    Desc,
+    /// 昇順。
+    Asc,
+}
+
+impl SortOrder {
+    /// クエリパラメータに送る名前。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Desc => "desc",
+            Self::Asc => "asc",
+        }
+    }
+
+    /// 切り替えたときの反対の方向 (昇順/降順の切り替え。FR-20)。
+    pub fn toggled(self) -> Self {
+        match self {
+            Self::Desc => Self::Asc,
+            Self::Asc => Self::Desc,
+        }
+    }
+}
+
+/// 一覧の並び順と絞り込みの条件 (FR-20、FR-21)。
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct ListOptions {
+    /// 並び順のキー (`sort` の値)。空のときは API の既定に任せる (選択のシート)。
+    pub sort: &'static str,
+    /// 並び順の方向。
+    pub order: SortOrder,
+    /// お気に入りだけに絞るか。
+    pub favorite_only: bool,
+}
+
+impl ListOptions {
+    /// 並び順のキーを指定して、降順でお気に入りの絞り込みなしの条件を作る。
+    pub fn new(sort: &'static str) -> Self {
+        Self {
+            sort,
+            order: SortOrder::Desc,
+            favorite_only: false,
+        }
+    }
+}
+
 /// 記録の API を [`ApiClient`] で呼ぶ。
 #[derive(Clone)]
 pub struct RecordsApi {
@@ -90,16 +140,25 @@ impl RecordsApi {
         &self.api
     }
 
-    /// 店の一覧を引く (FR-6)。
-    pub async fn shops(&self, cursor: Option<&str>) -> Result<RecordPage<Shop>, RecordError> {
+    /// 店の一覧を引く (FR-6、FR-20、FR-21)。
+    pub async fn shops(
+        &self,
+        options: &ListOptions,
+        cursor: Option<&str>,
+    ) -> Result<RecordPage<Shop>, RecordError> {
         let json = self
             .api
-            .get_json(&list_path("/shops", cursor, None))
+            .get_json(&list_path("/shops", *options, cursor, None))
             .await?;
         Ok(RecordPage {
             items: items_field(&json, "shops", Shop::from_json)?,
             next_cursor: next_cursor_field(&json)?,
         })
+    }
+
+    /// 店のお気に入りを付け外しする (FR-21)。更新後の店を返す。
+    pub async fn set_shop_favorite(&self, id: &str, favorite: bool) -> Result<Shop, RecordError> {
+        favorite_record(&self.api, "shops", id, favorite, Shop::from_json).await
     }
 
     /// 店を 1 件引く (FR-6)。
@@ -122,23 +181,33 @@ impl RecordsApi {
         )
     }
 
-    /// 商品の一覧を引く (FR-7、FR-8)。
+    /// 商品の一覧を引く (FR-7、FR-8、FR-20、FR-21)。
     ///
     /// `name` を指定したときは、前後の空白を除いて大文字と小文字を区別しない名前の完全一致で
     /// 絞り込む (FR-19。写真からの推測で一致する商品を 1 リクエストで引くために使う)。
     pub async fn products(
         &self,
+        options: &ListOptions,
         cursor: Option<&str>,
         name: Option<&str>,
     ) -> Result<RecordPage<Product>, RecordError> {
         let json = self
             .api
-            .get_json(&list_path("/products", cursor, name))
+            .get_json(&list_path("/products", *options, cursor, name))
             .await?;
         Ok(RecordPage {
             items: items_field(&json, "products", Product::from_json)?,
             next_cursor: next_cursor_field(&json)?,
         })
+    }
+
+    /// 商品のお気に入りを付け外しする (FR-21)。更新後の商品を返す。
+    pub async fn set_product_favorite(
+        &self,
+        id: &str,
+        favorite: bool,
+    ) -> Result<Product, RecordError> {
+        favorite_record(&self.api, "products", id, favorite, Product::from_json).await
     }
 
     /// 商品を 1 件引く (FR-7)。
@@ -165,19 +234,29 @@ impl RecordsApi {
         )
     }
 
-    /// 購入の一覧を引く (FR-9)。
+    /// 購入の一覧を引く (FR-9、FR-20、FR-21)。
     pub async fn purchases(
         &self,
+        options: &ListOptions,
         cursor: Option<&str>,
     ) -> Result<RecordPage<Purchase>, RecordError> {
         let json = self
             .api
-            .get_json(&list_path("/purchases", cursor, None))
+            .get_json(&list_path("/purchases", *options, cursor, None))
             .await?;
         Ok(RecordPage {
             items: items_field(&json, "purchases", Purchase::from_json)?,
             next_cursor: next_cursor_field(&json)?,
         })
+    }
+
+    /// 購入のお気に入りを付け外しする (FR-21)。更新後の購入を返す。
+    pub async fn set_purchase_favorite(
+        &self,
+        id: &str,
+        favorite: bool,
+    ) -> Result<Purchase, RecordError> {
+        favorite_record(&self.api, "purchases", id, favorite, Purchase::from_json).await
     }
 
     /// 購入を 1 件引く (FR-9)。
@@ -204,16 +283,25 @@ impl RecordsApi {
         )
     }
 
-    /// 抽出の一覧を引く (FR-11)。
-    pub async fn brews(&self, cursor: Option<&str>) -> Result<RecordPage<Brew>, RecordError> {
+    /// 抽出の一覧を引く (FR-11、FR-20、FR-21)。
+    pub async fn brews(
+        &self,
+        options: &ListOptions,
+        cursor: Option<&str>,
+    ) -> Result<RecordPage<Brew>, RecordError> {
         let json = self
             .api
-            .get_json(&list_path("/brews", cursor, None))
+            .get_json(&list_path("/brews", *options, cursor, None))
             .await?;
         Ok(RecordPage {
             items: items_field(&json, "brews", Brew::from_json)?,
             next_cursor: next_cursor_field(&json)?,
         })
+    }
+
+    /// 抽出のお気に入りを付け外しする (FR-21)。更新後の抽出を返す。
+    pub async fn set_brew_favorite(&self, id: &str, favorite: bool) -> Result<Brew, RecordError> {
+        favorite_record(&self.api, "brews", id, favorite, Brew::from_json).await
     }
 
     /// 抽出を 1 件引く (FR-11)。
@@ -329,9 +417,20 @@ impl RecordsApi {
     }
 }
 
-/// 一覧の経路に、件数とカーソルと名前の絞り込みを付ける。
-fn list_path(path: &str, cursor: Option<&str>, name: Option<&str>) -> String {
+/// 一覧の経路に、件数と並び順と絞り込みとカーソルを付ける (FR-19、FR-20、FR-21)。
+///
+/// `sort` が空のときは送らない (API の既定に任せる。選択のシート)。
+fn list_path(path: &str, options: ListOptions, cursor: Option<&str>, name: Option<&str>) -> String {
     let mut query = format!("?limit={PAGE_SIZE}");
+    if !options.sort.is_empty() {
+        query.push_str("&sort=");
+        query.push_str(options.sort);
+    }
+    query.push_str("&order=");
+    query.push_str(options.order.as_str());
+    if options.favorite_only {
+        query.push_str("&favorite=true");
+    }
     if let Some(cursor) = cursor {
         query.push_str("&cursor=");
         query.push_str(&encode_query(cursor));
@@ -341,6 +440,23 @@ fn list_path(path: &str, cursor: Option<&str>, name: Option<&str>) -> String {
         query.push_str(&encode_query(name));
     }
     format!("{path}{query}")
+}
+
+/// お気に入りを付け外しする (FR-21)。`PUT` で付け、`DELETE` で外し、更新後の記録を返す。
+async fn favorite_record<T>(
+    api: &ApiClient,
+    resource: &str,
+    id: &str,
+    favorite: bool,
+    parse: fn(&serde_json::Map<String, serde_json::Value>) -> Result<T, RecordError>,
+) -> Result<T, RecordError> {
+    let path = format!("/{resource}/{id}/favorite");
+    let json = if favorite {
+        api.put_json(&path).await?
+    } else {
+        api.delete_json(&path).await?
+    };
+    parse(&json)
 }
 
 /// クエリ文字列の値をパーセントエンコードする (RFC 3986 の unreserved 以外を `%XX` にする)。

@@ -8,19 +8,39 @@ use dioxus_router::navigator;
 
 use crate::i18n::{current_language, t, Key};
 use crate::records::display::{purchase_price_text, purchase_row_subtitle, purchase_weight_text};
-use crate::records::{RecordServices, RecordsApi};
+use crate::records::{record_error_key, RecordServices, RecordsApi};
 use crate::router::Route;
 use crate::screens::ScreenAppBar;
 use crate::ui::{Fab, ListRow, ListThumb, NavigationRail, RowValue, WideLayout};
 
-use super::{clear_notice_after, rail_items, use_wide_layout, RecordListView, RecordLoader};
+use super::{
+    clear_notice_after, mark_records_changed, rail_items, use_wide_layout, RecordListView,
+    RecordLoader, SortChoice,
+};
 use super::{purchase_detail::PurchaseDetail, purchase_form::PurchaseForm};
+
+/// 購入の一覧の並び順の選択肢 (FR-20)。
+const SORT_CHOICES: [SortChoice; 3] = [
+    SortChoice {
+        key: "purchased_on",
+        label: Key::PurchasedOnLabel,
+    },
+    SortChoice {
+        key: "price_amount",
+        label: Key::PriceLabel,
+    },
+    SortChoice {
+        key: "weight_grams",
+        label: Key::WeightLabel,
+    },
+];
 
 /// 購入の一覧 (FR-9)。
 #[component]
 pub fn PurchaseListScreen() -> Element {
     let services = use_context::<RecordServices>();
     let notice = use_context::<Signal<Option<String>>>();
+    let revision = use_context::<Signal<u64>>();
     let navigator = navigator();
     let wide = use_wide_layout();
     let mut selected = use_signal(|| None::<String>);
@@ -28,12 +48,13 @@ pub fn PurchaseListScreen() -> Element {
     let mut editing = use_signal(|| false);
 
     let load_services = services.clone();
-    let load = RecordLoader::new(move |cursor| {
+    let load = RecordLoader::new(move |cursor, options| {
         let api = RecordsApi::new(load_services.api.clone());
-        Box::pin(async move { api.purchases(cursor.as_deref()).await })
+        Box::pin(async move { api.purchases(&options, cursor.as_deref()).await })
     });
 
     let photo_services = services.clone();
+    let favorite_services = services.clone();
     let row = Callback::new(move |purchase: crate::records::Purchase| {
         let subtitle = purchase_row_subtitle(&purchase, current_language());
         let photo = purchase.photo_key.as_ref().map(|_| {
@@ -50,6 +71,11 @@ pub fn PurchaseListScreen() -> Element {
         let id = purchase.id.clone();
         let click_id = id.clone();
         let selected_now = selected() == Some(id);
+        let favorited = purchase.favorited_at.is_some();
+        let favorite_id = purchase.id.clone();
+        let favorite_api = RecordsApi::new(favorite_services.api.clone());
+        let mut favorite_revision = revision;
+        let mut favorite_notice = notice;
         rsx! {
             ListRow {
                 leading: Some(rsx! {
@@ -63,6 +89,18 @@ pub fn PurchaseListScreen() -> Element {
                         div { class: "t-caption muted", "{price}" }
                     }
                 }),
+                favorited,
+                on_favorite: Some(EventHandler::new(move |_| {
+                    let api = favorite_api.clone();
+                    let id = favorite_id.clone();
+                    spawn(async move {
+                        match api.set_purchase_favorite(&id, !favorited).await {
+                            Ok(_) => mark_records_changed(&mut favorite_revision),
+                            Err(failure) => favorite_notice
+                                .set(Some(t(record_error_key(&failure)).to_string())),
+                        }
+                    });
+                })),
                 selected: selected_now,
                 on_click: Some(EventHandler::new(move |_| {
                     if wide() {
@@ -119,6 +157,8 @@ pub fn PurchaseListScreen() -> Element {
                 load,
                 row,
                 empty_hint: Some(t(Key::PurchasesEmptyHint).to_string()),
+                show_toolbar: true,
+                sort_options: SORT_CHOICES.to_vec(),
             }
             Fab {
                 label: t(Key::NewPurchaseButton).to_string(),

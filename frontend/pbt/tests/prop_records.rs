@@ -155,6 +155,7 @@ proptest! {
             flavor_notes: Vec::new(),
             created_at: "2026-10-01T00:00:00.000Z".to_string(),
             updated_at: "2026-10-01T00:00:00.000Z".to_string(),
+            favorited_at: None,
         });
         prop_assert_eq!(product_match(true, &suggestion, matched_product), ProductMatch::None);
     }
