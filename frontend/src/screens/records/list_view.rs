@@ -94,11 +94,16 @@ pub fn RecordListView<T: Clone + PartialEq + 'static>(
     let effect_choices = sort_options.clone();
     use_effect(move || {
         let _ = revision();
-        let options = list_options(&effect_choices, sort_index(), order(), favorite_only());
+        // signal をここで読んで、変更のたびに effect を再実行させる (値そのものは load_pages が
+        // ループのたびに読み直す。0051 のレビューの指摘)。
+        let _ = (sort_index(), order(), favorite_only());
         let request = list.write().reset();
         if let Some(request) = request {
             let load = effect_load.clone();
+            let choices = effect_choices.clone();
             spawn(async move {
+                let options =
+                    move || list_options(&choices, sort_index(), order(), favorite_only());
                 load_pages(load, list, items, options, Some(request)).await;
             });
         }
@@ -168,11 +173,13 @@ pub fn RecordListView<T: Clone + PartialEq + 'static>(
                 div { class: "list-error",
                     if crate::records::record_error_retry(&error) {
                         {retryable_banner(&error, EventHandler::new(move |_| {
-                            let options = list_options(&retry_choices, sort_index(), order(), favorite_only());
                             let request = list.write().retry();
                             if let Some(request) = request {
                                 let load = retry_load.clone();
+                                let choices = retry_choices.clone();
                                 spawn(async move {
+                                    let options =
+                    move || list_options(&choices, sort_index(), order(), favorite_only());
                                     load_pages(load, list, items, options, Some(request)).await;
                                 });
                             }
@@ -189,11 +196,13 @@ pub fn RecordListView<T: Clone + PartialEq + 'static>(
                         - event.scroll_top()
                         - f64::from(event.client_height());
                     if list.read().should_load_more(remaining) {
-                        let options = list_options(&scroll_choices, sort_index(), order(), favorite_only());
                         let request = list.write().load_more();
                         if let Some(request) = request {
                             let load = scroll_load.clone();
+                            let choices = scroll_choices.clone();
                             spawn(async move {
+                                let options =
+                    move || list_options(&choices, sort_index(), order(), favorite_only());
                                 load_pages(load, list, items, options, Some(request)).await;
                             });
                         }
@@ -246,14 +255,19 @@ fn list_options(
 }
 
 /// ページを続けて読む。読み込み中に届いた読み直しの要求があれば、その要求も送る。
+///
+/// 条件 (`options`) はループのたびに読み直す。読み込み中に並び順、方向、お気に入りのみが
+/// 変わると、`reset` は保留の要求を返し、その要求を古い条件で送ると選択と一覧が食い違う
+/// (0051 のレビューの指摘)。
 async fn load_pages<T: Clone + 'static>(
     load: RecordLoader<T>,
     mut list: Signal<RecordList>,
     mut items: Signal<Vec<T>>,
-    options: ListOptions,
+    options: impl Fn() -> ListOptions,
     mut request: Option<PageRequest>,
 ) {
     while let Some(page_request) = request {
+        let options = options();
         let reset = page_request.cursor.is_none();
         if reset {
             // 読み直しは前の条件の行を消してから読む (失敗しても古い行を残さない。

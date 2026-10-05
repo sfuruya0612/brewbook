@@ -305,6 +305,11 @@ fn assert_nested_product(
         json!(flavor_notes),
         "{body}"
     );
+    // 入れ子の商品にも favorited_at が含まれる (FR-21)。
+    assert!(
+        body["product"].get("favorited_at").is_some(),
+        "the nested product must carry favorited_at: {body}"
+    );
 }
 
 /// ネストした店を確かめる (FR-9、FR-11)。
@@ -312,6 +317,11 @@ fn assert_nested_shop(body: &Value, shop: &SeededShop, user_id: &str) {
     assert_eq!(body["shop"]["id"], shop.id, "{body}");
     assert_eq!(body["shop"]["name"], shop.name, "{body}");
     assert_eq!(body["shop"]["user_id"], user_id, "{body}");
+    // 入れ子の店にも favorited_at が含まれる (FR-21)。
+    assert!(
+        body["shop"].get("favorited_at").is_some(),
+        "the nested shop must carry favorited_at: {body}"
+    );
 }
 
 mod purchases {
@@ -450,10 +460,99 @@ mod purchases {
         for query in ["limit=0", "limit=abc", "limit=201", "cursor=x", "cursor="] {
             assert_bad_request(client.get(&format!("/api/purchases?{query}")));
         }
+        // sort、order、favorite は受け付けない値を 400 にする (FR-20、FR-21)。
+        for query in ["sort=unknown", "order=up", "favorite=yes", "favorite=1"] {
+            assert_bad_request(client.get(&format!("/api/purchases?{query}")));
+        }
         // 200 ぴったりは受け付ける。
         assert_status(client.get("/api/purchases?limit=200"), 200);
         // 受け取らないパラメータは未知のパラメータとして無視する (400 にしない)。
         assert_status(client.get("/api/purchases?include_archived=yes"), 200);
+    }
+
+    #[test]
+    fn wrangler_purchases_list_sorts_and_filters() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.purchase_list_session));
+
+        // 購入日の昇順で並ぶ (FR-20)。既定は購入日の降順。
+        let asc = assert_status(
+            client.get("/api/purchases?sort=purchased_on&order=asc"),
+            200,
+        );
+        let purchases = asc["purchases"].as_array().expect("purchases");
+        assert_eq!(
+            purchases[0]["id"], data.purchase_list_old_purchase.id,
+            "{asc}"
+        );
+        assert_eq!(
+            purchases[1]["id"], data.purchase_list_purchases[0].id,
+            "{asc}"
+        );
+        assert_eq!(
+            purchases[2]["id"], data.purchase_list_purchases[1].id,
+            "{asc}"
+        );
+        // 応答に favorited_at が含まれる (FR-21)。
+        for purchase in purchases {
+            assert!(purchase.get("favorited_at").is_some(), "{purchase}");
+        }
+    }
+
+    #[test]
+    fn wrangler_purchases_favorite_put_and_delete() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.purchase_write_session));
+        let created = assert_status(
+            client.post_json(
+                "/api/purchases",
+                &json!({
+                    "product_id": data.purchase_write_product.id,
+                    "purchased_on": D21,
+                    "price_amount": 1200,
+                    "price_currency": "JPY",
+                }),
+            ),
+            200,
+        );
+        let id = created["id"]
+            .as_str()
+            .expect("the id must be present")
+            .to_owned();
+        assert_eq!(created["favorited_at"], Value::Null, "{created}");
+
+        let first = assert_status(client.put(&format!("/api/purchases/{id}/favorite")), 200);
+        assert!(first["favorited_at"].is_string(), "{first}");
+        let favorited_at = first["favorited_at"].clone();
+        let updated_at = first["updated_at"].clone();
+        let again = assert_status(client.put(&format!("/api/purchases/{id}/favorite")), 200);
+        assert_eq!(again["favorited_at"], favorited_at, "{again}");
+        assert_eq!(again["updated_at"], updated_at, "{again}");
+
+        let removed = assert_status(client.delete(&format!("/api/purchases/{id}/favorite")), 200);
+        assert_eq!(removed["favorited_at"], Value::Null, "{removed}");
+        let removed_updated_at = removed["updated_at"].clone();
+        let again = assert_status(client.delete(&format!("/api/purchases/{id}/favorite")), 200);
+        assert_eq!(again["favorited_at"], Value::Null, "{again}");
+        assert_eq!(again["updated_at"], removed_updated_at, "{again}");
+
+        // お気に入りのみの一覧に反映される (FR-21)。
+        assert_status(client.put(&format!("/api/purchases/{id}/favorite")), 200);
+        let body = assert_status(client.get("/api/purchases?favorite=true"), 200);
+        let purchases = body["purchases"].as_array().expect("purchases");
+        assert_eq!(purchases.len(), 1, "{body}");
+        assert_eq!(purchases[0]["id"], id, "{body}");
+
+        // 未認証は 401、他の利用者の ID は 404。
+        assert_unauthorized(anonymous(&base_url).put(&format!("/api/purchases/{id}/favorite")));
+        assert_unauthorized(anonymous(&base_url).delete(&format!("/api/purchases/{id}/favorite")));
+        let other = ApiClient::new(&base_url, Some(&data.other_session));
+        assert_not_found(other.put(&format!("/api/purchases/{id}/favorite")));
+        assert_not_found(other.delete(&format!("/api/purchases/{id}/favorite")));
     }
 
     #[test]
@@ -1141,8 +1240,89 @@ mod brews {
         for query in ["limit=0", "limit=abc", "limit=201", "cursor=x"] {
             assert_bad_request(client.get(&format!("/api/brews?{query}")));
         }
+        // sort、order、favorite は受け付けない値を 400 にする (FR-20、FR-21)。
+        for query in ["sort=unknown", "order=up", "favorite=yes", "favorite=1"] {
+            assert_bad_request(client.get(&format!("/api/brews?{query}")));
+        }
         // 受け取らないパラメータは未知のパラメータとして無視する (400 にしない)。
         assert_status(client.get("/api/brews?include_archived=1"), 200);
+    }
+
+    #[test]
+    fn wrangler_brews_list_sorts_and_filters() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.brew_list_session));
+
+        // 抽出日時の昇順で並ぶ (FR-20)。既定は抽出日時の降順。
+        let asc = assert_status(client.get("/api/brews?sort=brewed_at&order=asc"), 200);
+        let brews = asc["brews"].as_array().expect("brews");
+        assert_eq!(brews[0]["id"], data.brew_list_old_brew.id, "{asc}");
+        assert_eq!(brews[1]["id"], data.brew_list_brews[0].id, "{asc}");
+        assert_eq!(brews[2]["id"], data.brew_list_brews[1].id, "{asc}");
+        // 評価が未設定 (NULL) の行は末尾になる (FR-20)。3 件とも未設定のため ID の昇順。
+        let nulls = assert_status(client.get("/api/brews?sort=rating&order=desc"), 200);
+        let brews = nulls["brews"].as_array().expect("brews");
+        assert_eq!(brews[0]["id"], data.brew_list_brews[0].id, "{nulls}");
+        assert_eq!(brews[1]["id"], data.brew_list_brews[1].id, "{nulls}");
+        assert_eq!(brews[2]["id"], data.brew_list_old_brew.id, "{nulls}");
+        // 応答に favorited_at が含まれる (FR-21)。
+        for brew in brews {
+            assert!(brew.get("favorited_at").is_some(), "{brew}");
+        }
+    }
+
+    #[test]
+    fn wrangler_brews_favorite_put_and_delete() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.brew_write_session));
+        let created = assert_status(
+            client.post_json(
+                "/api/brews",
+                &json!({
+                    "purchase_id": data.brew_write_purchase.id,
+                    "brewed_at": B21,
+                }),
+            ),
+            200,
+        );
+        let id = created["id"]
+            .as_str()
+            .expect("the id must be present")
+            .to_owned();
+        assert_eq!(created["favorited_at"], Value::Null, "{created}");
+
+        let first = assert_status(client.put(&format!("/api/brews/{id}/favorite")), 200);
+        assert!(first["favorited_at"].is_string(), "{first}");
+        let favorited_at = first["favorited_at"].clone();
+        let updated_at = first["updated_at"].clone();
+        let again = assert_status(client.put(&format!("/api/brews/{id}/favorite")), 200);
+        assert_eq!(again["favorited_at"], favorited_at, "{again}");
+        assert_eq!(again["updated_at"], updated_at, "{again}");
+
+        let removed = assert_status(client.delete(&format!("/api/brews/{id}/favorite")), 200);
+        assert_eq!(removed["favorited_at"], Value::Null, "{removed}");
+        let removed_updated_at = removed["updated_at"].clone();
+        let again = assert_status(client.delete(&format!("/api/brews/{id}/favorite")), 200);
+        assert_eq!(again["favorited_at"], Value::Null, "{again}");
+        assert_eq!(again["updated_at"], removed_updated_at, "{again}");
+
+        // お気に入りのみの一覧に反映される (FR-21)。
+        assert_status(client.put(&format!("/api/brews/{id}/favorite")), 200);
+        let body = assert_status(client.get("/api/brews?favorite=true"), 200);
+        let brews = body["brews"].as_array().expect("brews");
+        assert_eq!(brews.len(), 1, "{body}");
+        assert_eq!(brews[0]["id"], id, "{body}");
+
+        // 未認証は 401、他の利用者の ID は 404。
+        assert_unauthorized(anonymous(&base_url).put(&format!("/api/brews/{id}/favorite")));
+        assert_unauthorized(anonymous(&base_url).delete(&format!("/api/brews/{id}/favorite")));
+        let other = ApiClient::new(&base_url, Some(&data.other_session));
+        assert_not_found(other.put(&format!("/api/brews/{id}/favorite")));
+        assert_not_found(other.delete(&format!("/api/brews/{id}/favorite")));
     }
 
     #[test]

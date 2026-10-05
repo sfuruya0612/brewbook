@@ -2,6 +2,7 @@
 
 Created: 2026-10-03
 Model: DeepSeek V4.1 Flash
+Completed: 2026-10-05
 
 ## 背景
 
@@ -71,3 +72,50 @@ Model: DeepSeek V4.1 Flash
 - 0050 の完了後に着手する (一覧のツールバーと `include_archived` を置き換えるため)。
 - 0039 のデザインシステムの `ListRow` と `IconButton` を拡張する。
 - 0047 のヘッダーの変更とは独立である (詳細の星を `AppBar` の操作として置く場合だけ `ScreenAppBar` の操作の並びに足す)。
+
+## 解決方法
+
+購入、商品、店、抽出の 4 つの一覧に並び替えとお気に入りの絞り込みを足し、一覧の行と詳細 (抽出と購入) と商品と店の編集の画面に星を置いた。
+
+- データベース: `backend/brew_book/migrations/0004_add_favorites.sql` を追加し、4 テーブルに `favorited_at TEXT` (NULL は未設定) を足し、絞り込み用の `(user_id, favorited_at)` の 4 インデックスと、並び順のキーのインデックス (`(user_id, name COLLATE NOCASE)`、`(user_id, updated_at DESC, id)`、`(user_id, price_amount)`、`(user_id, weight_grams)`、`(user_id, rating)`、`(user_id, dose_grams)`) を足した。ADR-0018 の最終スキーマの表にも `favorited_at` を追記した。
+- API の一覧: `sort`、`order` (`asc` / `desc`、既定は `desc`)、`favorite` (`true` のときだけ絞る) を受け付け、資源ごとのキーだけを許し、それ以外は 400 にした。`ORDER BY キー <方向> NULLS LAST, id ASC` とし、`name` は索引、`ORDER BY`、カーソルの比較の 3 か所で `COLLATE NOCASE` に揃えた。
+- カーソル: `CursorKey` を、並び順のキーの名前、方向、キーの値 (NULL のときは null)、ID を持つ形に広げた。`sort` と `order` の組がカーソルと一致しないときと、復号できない値は 400 にした。`encode` の `from_f64` の失敗は NaN と ±inf だけでこの経路に到達しないことをコメントに書いた。
+- お気に入りの操作: `PUT` と `DELETE /api/<資源>/:id/favorite` の 8 経路を足した。既に同じ状態のときは `favorited_at` と `updated_at` を変えずに 200 を返す。未認証は 401、存在しない ID と他の利用者の ID は 404 にする。`routes.rs` の `ROUTES` と `tests/support/mod.rs` の `SUITE` に登録した。
+- 応答: 4 つの記録の応答に `favorited_at` を足し、結合した購入と抽出の入れ子の `product` と `shop` にも含めた。エクスポート (FR-14) の 4 テーブルの列に `favorited_at` を含めた。
+- Frontend: `RecordListView` のツールバーに並び順の選択と昇順/降順の切り替えとお気に入りのみの切り替えを置き、画面ごとの選択肢を渡すようにした。選択のシートには出さない。並び順、方向、お気に入りのみを変えたときはカーソルを捨てて先頭から読み直す。読み込み中に変えたときも、`load_pages` が条件をループのたびに読み直して新しい条件で読み直す (レビューの指摘、高)。行の右端の星でお気に入りを切り替え、行の押下 (詳細を開く) を発火させない。抽出と購入の詳細、商品と店の編集 (id があるとき) にも星を置いた。`frontend/src/api/api_client.rs` に `put_json` を足した。
+- i18n: `SortLabel`、`SortAscending`、`SortDescending`、`FavoritesOnlyLabel`、`FavoriteAddLabel`、`FavoriteRemoveLabel`、`SortCreatedAt`、`SortUpdatedAt` の 8 キーを足した (`KEY_COUNT` は 221 から 229 になった)。
+- PRD: FR-20 (一覧の並び替え) と FR-21 (お気に入り) を追加し、スコープと用語を更新し、性能の節の一覧の対象に `sort`、`order`、`favorite` を含むことを明記した。
+- 原本: `docs/design/components/Lists/README.md`、`ListRow/README.md`、`Home/README.md`、`bundle.css` (並び順の `select` と星の見た目)、各 `preview.html` を更新した。
+- テスト: `backend/brew_book/tests/schema.rs` (0004 の列とインデックス)、API テスト (4 つの一覧の `sort` / `order` / `favorite` の正常系と入力不正の 400、お気に入り 8 経路の付け外し・冪等 200・401・404、`favorited_at` の応答と入れ子の `product` / `shop`、カーソルのページングと `sort` / `order` 不一致の 400)、`test_query.rs` (全 9 キー × 両方向の `ORDER BY`)、`test_queries.rs` (SQL 台帳に `set_favorited_at`)、`test_cursor.rs` と `prop_cursor.rs` (符号化と復号の PBT)、`frontend/tests/test_records_lists_web.rs` (新規。ツールバー、星、選択のシート、行の押下との分離) を追加または更新した。`backend/pbt/tests/prop_cursor.proptest-regressions` を追加し、見つかったケースを固定した。
+
+完了条件の検証:
+
+- `0004_add_favorites.sql` が `favorited_at` とインデックスを足し、ADR-0018 の表にも追記: `schema.rs` の最終スキーマの検査が通過した。
+- 4 つの一覧が `sort`、`order`、`favorite` を受け付け、指定したキーと方向で並べ、`favorite=true` で絞る。不正な値は 400: `wrangler_records_api.rs` の `wrangler_shops_list_sorts_and_filters` と `wrangler_products_list_sorts_and_filters`、`wrangler_purchases_brews_api.rs` の `wrangler_purchases_list_sorts_and_filters` と `wrangler_brews_list_sorts_and_filters` が並び順と絞り込みを検証し、4 つの `*_list_invalid_input_400` が `sort=unknown`、`order=up`、`favorite=yes`、`favorite=1` を 400 にすることを検証した。`backend:test-integration` 17 suite 通過。
+- カーソルのページングが全てのキーと両方の方向で重複と漏れなく続きを返し、`sort` と `order` の組がカーソルと一致しないときは 400: `wrangler_shops_list_pages_with_a_sort_key` が `sort=name&order=asc&limit=2` で重複なく続きを返し、カーソルと違う組が 400 になることを検証した。`test_query.rs` の `every_sort_key_orders_with_its_column_and_direction` が全 9 キー × 両方向の `ORDER BY` を、`prop_cursor.rs` が符号化と復号の往復を検証した。
+- 8 つのお気に入りの経路が付け外しし、同じ状態では 200 を返し、未認証は 401、他の利用者は 404: `wrangler_shops_favorite_put_and_delete`、`wrangler_products_favorite_put_and_delete`、`wrangler_purchases_favorite_put_and_delete`、`wrangler_brews_favorite_put_and_delete` が 4 資源の PUT と DELETE で検証し、台帳の照合 (`api_suite.rs`) も通過した。
+- 4 つの記録と入れ子の `product` と `shop` の応答に `favorited_at` が含まれる: 一覧と単件取得と更新のテストが `favorited_at` を検査し、`assert_nested_product` と `assert_nested_shop` が入れ子の応答の `favorited_at` を検査した。
+- エクスポートの 4 テーブルの列に `favorited_at` が含まれる: `wrangler_export_api.rs` の更新で確認した。
+- Frontend の 4 つの一覧に並び替えとお気に入りの操作があり、操作でカーソルを捨ててパラメータが変わる: `test_records_lists_web.rs` の `the_four_lists_have_the_sort_and_favorite_toolbar` と `changing_the_sort_and_the_order_and_the_favorites_reloads_from_the_first_page` が検証した。
+- 選択のシートには出ない: `the_picker_sheet_has_no_sort_or_favorite_controls` が検証した。
+- 行と詳細と編集の星で切り替えられ、星の押下と Enter と Space では詳細を開かない。新規の登録には出ない: `the_star_on_a_row_toggles_the_favorite_without_opening_the_detail`、`the_detail_screens_have_the_star`、`the_edit_forms_have_the_star_and_the_new_forms_do_not` が検証した。
+- お気に入りのみの切り替えでお気に入りでない行が表示されない: `the_favorites_only_filter_hides_the_records_that_are_not_favorites` が検証した。
+- i18n の 8 キーと `KEY_COUNT` の一致: `test_i18n.rs` が通過した。
+- PRD と `docs/design/` の原本: 上記のとおり。
+- スクリーンショット比較: 実装の完了後にまとめて実行した E2E の 58 件の比較を確認し、原本 (Home、ListRow、Lists、Detail、RecordForms) を更新した。最終の比較は Home、BrewDetail、Purchases、ProductEdit が mean 0.00、ListRow が 0.30 である。PurchaseDetail、Products、Shops、ShopEdit の残差は複数の画面が 1 つの原本を共有することによる差で、今回の変更によるものではない。
+- 既存のテストと E2E、`mise run check`: ユーザーの指示により 0049 から 0051 の実装の完了後に段ごとに実行した。fmt、lint、frontend:build、frontend:lint、formal、backend:test (68 suite)、backend:test-integration (17 suite)、frontend:test (43 suite)、frontend:test-web (11 suite)、frontend:test-same-origin (1 passed) の全てが通過した (2026-10-05)。
+
+方針の方式を保ったままの実装詳細の乖離:
+
+- `d1_binding.rs` のアーカイブのテストで 0004 以降を適用するようにした (一覧の API が `favorited_at` を読むため。check で見つかり、0050 の close で対応した)。
+- `backend/pbt/tests/prop_cursor.proptest-regressions` を追加した (PBT が見つけた境界のケースを固定するため)。
+
+レビューの指摘を受けて変えたもの (方式は変えていない):
+
+- 読み込み中に並び順、方向、お気に入りのみを変えたときに新しい条件で読み直すように `load_pages` を直した (effect は signal を読んで再実行し、条件はループのたびに読み直す)。(レビューの指摘、高)
+- 4 つの一覧の `sort` / `order` / `favorite` の正常系と入力不正の 400、お気に入り 8 経路の付け外し・冪等 200・401・404、`favorited_at` の応答と入れ子の `product` / `shop`、カーソルのページングと不一致 400 の API テストを追加した。(レビューの指摘、高)
+- `test_query.rs` に全 9 キー × 両方向の `ORDER BY` の検査を足した。(レビューの指摘、高)
+- `test_queries.rs` の SQL 台帳に `set_favorited_at` を足した。(レビューの指摘、低)
+- `cursor.rs` の `encode` の `from_f64` の失敗が NaN と ±inf だけでこの経路に到達しないことをコメントに書いた。(レビューの指摘、低)
+- `CHANGES.md` のエントリの種別を `[ADD]` から `[CHANGE]` に直した (カーソル形式の後方互換を壊すため)。(レビューの指摘、中)
+- 記録の修正: スクリーンショット比較の数値と検証行を最終状態に合わせた。(レビューの指摘、低)

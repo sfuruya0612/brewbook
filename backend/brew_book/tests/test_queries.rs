@@ -71,6 +71,19 @@ fn statements() -> Vec<String> {
     statements.push(query::product_find(USER, ID).sql);
     statements.push(query::purchase_find(USER, ID).sql);
     statements.push(query::brew_find(USER, ID).sql);
+    // お気に入りの付け外しの UPDATE (FR-21)。
+    statements.push(
+        query::set_favorited_at(
+            "shops",
+            ID,
+            USER,
+            Some("2026-09-21T00:00:00.000Z"),
+            "2026-09-21T00:00:00.000Z",
+        )
+        .sql,
+    );
+    statements
+        .push(query::set_favorited_at("shops", ID, USER, None, "2026-09-21T00:00:00.000Z").sql);
     statements.push(query::flavor_tags_list(USER).sql);
     statements.push(query::suggestions(USER, SuggestionItem::Producer, "q").sql);
 

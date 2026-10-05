@@ -234,6 +234,40 @@ mod list_builders {
     }
 
     #[test]
+    fn every_sort_key_orders_with_its_column_and_direction() {
+        // 9 つのキーすべてが、両方の方向で自分の列と NULLS LAST と ID の昇順で並ぶ (FR-20)。
+        let cases = [
+            (SortKey::BrewedAt, "brewed_at", false),
+            (SortKey::Rating, "rating", false),
+            (SortKey::DoseGrams, "dose_grams", false),
+            (SortKey::PurchasedOn, "purchased_on", false),
+            (SortKey::PriceAmount, "price_amount", false),
+            (SortKey::WeightGrams, "weight_grams", false),
+            (SortKey::CreatedAt, "created_at", false),
+            (SortKey::Name, "name", true),
+            (SortKey::UpdatedAt, "updated_at", false),
+        ];
+        for (sort, column, nocase) in cases {
+            for (order, direction) in [(SortOrder::Asc, "ASC"), (SortOrder::Desc, "DESC")] {
+                let mut query = shop_query(None, 50);
+                query.sort = sort;
+                query.order = order;
+                let statement = list(&query).unwrap();
+                let ordered = if nocase {
+                    format!("ORDER BY {column} COLLATE NOCASE {direction} NULLS LAST, id ASC")
+                } else {
+                    format!("ORDER BY {column} {direction} NULLS LAST, id ASC")
+                };
+                assert!(
+                    statement.sql.contains(&ordered),
+                    "the {sort:?} {order:?} query must contain {ordered}: {}",
+                    statement.sql
+                );
+            }
+        }
+    }
+
+    #[test]
     fn a_favorite_only_list_filters_by_the_favorited_column() {
         let mut query = shop_query(None, 50);
         query.favorite_only = true;

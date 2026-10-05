@@ -247,6 +247,9 @@ impl CursorKey {
             CursorValue::Integer(number) => serde_json::Value::Number((*number).into()),
             CursorValue::Real(number) => serde_json::Number::from_f64(*number)
                 .map(serde_json::Value::Number)
+                // `from_f64` が None になるのは NaN と ±inf だけである。数値のキーは D1 の
+                // 応答を読んだ値 (SQLite の REAL) から作るため、この経路には到達しない。
+                // 到達した場合は値が NULL のカーソルになる (0051 のレビューの指摘)。
                 .unwrap_or(serde_json::Value::Null),
         });
         let json = CursorJson {
