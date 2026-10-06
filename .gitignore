@@ -15,3 +15,6 @@
 # wrangler のローカル状態と、開発用の環境変数 (環境ごとの .dev.vars.<名前> も含める)
 .wrangler/
 .dev.vars*
+
+# 手元だけの mise の設定 (並列度など)
+/mise.local.toml

@@ -8,6 +8,19 @@ Frontend は Rust (Dioxus) の Web アプリ、Backend は Rust の Cloudflare W
 
 - mise を入れ、リポジトリのルートで `mise install` を実行して `mise.toml` のツール (Rust、Dioxus CLI、wrangler、worker-build など) を入れる。
 - コマンドラインは `mise.toml` のタスクに集約する (ADR-0009)。静的検査と全ての自動テストは `mise run check` で実行する。
+- `mise run check` は既定で 8 並列で実行する (mise の `jobs`)。実行中にマシンが固まる、ネットワークが不安定になるなどの場合は、手元だけ並列度を下げる。
+  リポジトリのルートに `mise.local.toml` (git 管理外) を置き、`mise trust mise.local.toml` を実行する。例:
+
+  ```toml
+  [settings]
+  jobs = 2
+
+  [env]
+  CARGO_BUILD_JOBS = "4"
+  ```
+
+  `jobs` は mise のタスクの並列度、`CARGO_BUILD_JOBS` は各 cargo の並列度である。安定しない場合は `jobs = 1` にする。
+  CI は既定の並列度のまま `mise run check` を実行する (ADR-0009)。
 
 ## 環境
 
