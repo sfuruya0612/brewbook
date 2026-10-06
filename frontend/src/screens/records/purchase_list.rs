@@ -152,7 +152,7 @@ pub fn PurchaseListScreen() -> Element {
 
     let list = rsx! {
         div { class: "screen",
-            ScreenAppBar { title: t(Key::PurchasesTitle).to_string() }
+            ScreenAppBar { title: t(Key::PurchasesTitle).to_string(), brand: true }
             RecordListView::<crate::records::Purchase> {
                 load,
                 row,

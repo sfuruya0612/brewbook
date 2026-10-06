@@ -693,8 +693,8 @@ async fn the_edit_forms_have_the_star_and_the_new_forms_do_not() {
         ],
     )
     .await;
-    assert_eq!(count(&root, ".appbar > .iconbtn"), 1);
-    let star = select(&root, ".appbar > .iconbtn");
+    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 1);
+    let star = select(&root, ".appbar .acts > .iconbtn");
     assert_eq!(
         star.get_attribute("aria-label").as_deref(),
         Some("Add to favorites")
@@ -705,7 +705,7 @@ async fn the_edit_forms_have_the_star_and_the_new_forms_do_not() {
     assert_eq!(transport.last_request().method.as_str(), "PUT");
     // 押した後は星が塗りになる。
     assert_eq!(
-        select(&root, ".appbar > .iconbtn")
+        select(&root, ".appbar .acts > .iconbtn")
             .get_attribute("aria-label")
             .as_deref(),
         Some("Remove from favorites")
@@ -717,15 +717,15 @@ async fn the_edit_forms_have_the_star_and_the_new_forms_do_not() {
         vec![response(&shop_json("s1", "Shop", None))],
     )
     .await;
-    assert_eq!(count(&root, ".appbar > .iconbtn"), 1);
+    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 1);
 
     // 新規の登録: 星は出ない (保存の文字ボタンだけ)。
     let (root, _) = mount_detail("/products/new", vec![]).await;
-    assert_eq!(count(&root, ".appbar > .iconbtn"), 0);
-    assert_eq!(count(&root, ".appbar > .btn"), 1);
+    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 0);
+    assert_eq!(count(&root, ".appbar .acts > .btn"), 1);
     let (root, _) = mount_detail("/shops/new", vec![]).await;
-    assert_eq!(count(&root, ".appbar > .iconbtn"), 0);
-    assert_eq!(count(&root, ".appbar > .btn"), 1);
+    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 0);
+    assert_eq!(count(&root, ".appbar .acts > .btn"), 1);
 }
 
 /// 抽出と購入の詳細の星でお気に入りを切り替えられる (FR-21)。
@@ -756,8 +756,8 @@ async fn the_detail_screens_have_the_star() {
         ],
     )
     .await;
-    assert_eq!(count(&root, ".appbar > .iconbtn"), 2);
-    let star = select(&root, ".appbar > .iconbtn");
+    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 2);
+    let star = select(&root, ".appbar .acts > .iconbtn");
     assert_eq!(
         star.get_attribute("aria-label").as_deref(),
         Some("Add to favorites")
@@ -769,7 +769,7 @@ async fn the_detail_screens_have_the_star() {
     assert_eq!(transport.requests()[1].method.as_str(), "PUT");
     assert!(transport.requests().len() >= 2);
     assert_eq!(
-        select(&root, ".appbar > .iconbtn")
+        select(&root, ".appbar .acts > .iconbtn")
             .get_attribute("aria-label")
             .as_deref(),
         Some("Remove from favorites")
@@ -781,9 +781,9 @@ async fn the_detail_screens_have_the_star() {
         vec![response(&purchase), response(&json!({"ratings": []}))],
     )
     .await;
-    assert_eq!(count(&root, ".appbar > .iconbtn"), 2);
+    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 2);
     assert_eq!(
-        select(&root, ".appbar > .iconbtn")
+        select(&root, ".appbar .acts > .iconbtn")
             .get_attribute("aria-label")
             .as_deref(),
         Some("Add to favorites")

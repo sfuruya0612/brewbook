@@ -17,13 +17,13 @@ use crate::records::{
 };
 use crate::screens::ScreenAppBar;
 use crate::ui::{
-    Banner, Button, ButtonVariant, Field, Icon, ListRow, RatingInput, RowValue, TextField,
-    TextFieldKind,
+    Banner, Button, ButtonSize, ButtonVariant, Field, Icon, ListRow, RatingInput, RowValue,
+    TextField, TextFieldKind,
 };
 
 use super::{
-    clear_notice_after, mark_records_changed, retryable_banner, RecordLoader, RecordPickerSheet,
-    SuggestionField,
+    clear_notice_after, mark_records_changed, retryable_banner, DiscardConfirm, RecordLoader,
+    RecordPickerSheet, SuggestionField,
 };
 
 /// 抽出の登録 (FR-11)。
@@ -85,6 +85,8 @@ pub fn BrewForm(
     let mut loading = use_signal(|| id.is_some());
     let mut busy = use_signal(|| false);
     let mut picker_open = use_signal(|| false);
+    let mut dirty = use_signal(|| false);
+    let mut discard_open = use_signal(|| false);
 
     // 編集のために現在の値を読み込む。再試行でも同じ処理を呼ぶ。
     let reload_services = services.clone();
@@ -121,6 +123,8 @@ pub fn BrewForm(
                 Err(failure) => load_error.set(Some(failure)),
             }
             loading.set(false);
+            // 読み込みで入った値は変更に数えない (0054)。
+            dirty.set(false);
         });
     });
     use_effect(move || reload.call(()));
@@ -205,15 +209,25 @@ pub fn BrewForm(
                     purchase.set(Some(selected.clone()));
                     picker_open.set(false);
                     errors.set(BrewFormErrors::default());
+                    dirty.set(true);
                 })),
             }
         }
     });
 
-    let close = EventHandler::new(move |_| match on_close {
+    // 変更があるときは、閉じる前に破棄の確認を出す (0054)。
+    let close_now = EventHandler::new(move |_| match on_close {
         Some(handler) => handler.call(()),
         None => navigator.go_back(),
     });
+    let request_close = EventHandler::new(move |_| {
+        if dirty() {
+            discard_open.set(true);
+        } else {
+            close_now.call(());
+        }
+    });
+    let confirm_discard = EventHandler::new(move |_| close_now.call(()));
     let retry = EventHandler::new(move |_| reload.call(()));
     let retry_save = EventHandler::new(move |_| save.call(()));
     let current_purchase = purchase();
@@ -224,13 +238,15 @@ pub fn BrewForm(
         div { class: "screen",
             ScreenAppBar {
                 title: t(if id.is_some() { Key::BrewEditTitle } else { Key::BrewNewTitle }).to_string(),
+                menu: false,
                 leading_icon: Some("close".to_string()),
                 leading_label: Some(t(Key::CancelButton).to_string()),
-                on_leading: move |_| close.call(()),
+                on_leading: move |_| request_close.call(()),
                 actions: rsx! {
                     Button {
                         label: t(Key::SaveButton).to_string(),
-                        variant: ButtonVariant::Text,
+                        variant: ButtonVariant::Primary,
+                        size: ButtonSize::Sm,
                         disabled: busy(),
                         onclick: move |_| save.call(()),
                     }
@@ -286,7 +302,10 @@ pub fn BrewForm(
                                     mono: true,
                                     kind: TextFieldKind::Date,
                                     disabled: busy(),
-                                    oninput: move |event: FormEvent| date.set(event.value()),
+                                    oninput: move |event: FormEvent| {
+                                        date.set(event.value());
+                                        dirty.set(true);
+                                    },
                                 }
                             }
                             Field {
@@ -299,7 +318,10 @@ pub fn BrewForm(
                                     mono: true,
                                     kind: TextFieldKind::Time,
                                     disabled: busy(),
-                                    oninput: move |event: FormEvent| time.set(event.value()),
+                                    oninput: move |event: FormEvent| {
+                                        time.set(event.value());
+                                        dirty.set(true);
+                                    },
                                 }
                             }
                         }
@@ -313,7 +335,10 @@ pub fn BrewForm(
                                     mono: true,
                                     unit: Some(t(Key::GramUnit).to_string()),
                                     disabled: busy(),
-                                    oninput: move |event: FormEvent| dose.set(event.value()),
+                                    oninput: move |event: FormEvent| {
+                                        dose.set(event.value());
+                                        dirty.set(true);
+                                    },
                                 }
                             }
                             Field {
@@ -325,7 +350,10 @@ pub fn BrewForm(
                                     mono: true,
                                     unit: Some(t(Key::GramUnit).to_string()),
                                     disabled: busy(),
-                                    oninput: move |event: FormEvent| water.set(event.value()),
+                                    oninput: move |event: FormEvent| {
+                                        water.set(event.value());
+                                        dirty.set(true);
+                                    },
                                 }
                             }
                         }
@@ -339,7 +367,10 @@ pub fn BrewForm(
                                     mono: true,
                                     unit: Some(t(Key::CelsiusUnit).to_string()),
                                     disabled: busy(),
-                                    oninput: move |event: FormEvent| water_temp.set(event.value()),
+                                    oninput: move |event: FormEvent| {
+                                        water_temp.set(event.value());
+                                        dirty.set(true);
+                                    },
                                 }
                             }
                             Field {
@@ -351,7 +382,10 @@ pub fn BrewForm(
                                     mono: true,
                                     unit: Some(t(Key::SecondUnit).to_string()),
                                     disabled: busy(),
-                                    oninput: move |event: FormEvent| brew_time.set(event.value()),
+                                    oninput: move |event: FormEvent| {
+                                        brew_time.set(event.value());
+                                        dirty.set(true);
+                                    },
                                 }
                             }
                         }
@@ -360,7 +394,9 @@ pub fn BrewForm(
                             target: SuggestionTarget::Method,
                             label: t(Key::MethodLabel).to_string(),
                             value: method,
+                            hint: Some(t(Key::MethodHint).to_string()),
                             disabled: busy(),
+                            on_change: move |_| dirty.set(true),
                         }
                         SuggestionField {
                             api: RecordsApi::new(services.api.clone()),
@@ -369,12 +405,16 @@ pub fn BrewForm(
                             value: grind_setting,
                             hint: Some(t(Key::GrindSettingHint).to_string()),
                             disabled: busy(),
+                            on_change: move |_| dirty.set(true),
                         }
                         Field { label: t(Key::RatingLabel).to_string(), disabled: busy(),
                             RatingInput {
                                 value: rating(),
                                 enabled: !busy(),
-                                on_change: move |value| rating.set(Some(value)),
+                                on_change: move |value| {
+                                    rating.set(Some(value));
+                                    dirty.set(true);
+                                },
                             }
                         }
                         Field { label: t(Key::NotesLabel).to_string(), disabled: busy(),
@@ -382,7 +422,10 @@ pub fn BrewForm(
                                 value: notes(),
                                 area: true,
                                 disabled: busy(),
-                                oninput: move |event: FormEvent| notes.set(event.value()),
+                                oninput: move |event: FormEvent| {
+                                    notes.set(event.value());
+                                    dirty.set(true);
+                                },
                             }
                         }
                         if let Some(failure) = failure {
@@ -399,6 +442,9 @@ pub fn BrewForm(
                 row: picker_row,
                 on_close: EventHandler::new(move |_| picker_open.set(false)),
             }
+        }
+        if discard_open() {
+            DiscardConfirm { open: discard_open, on_discard: confirm_discard }
         }
         if let Some(message) = notice() {
             {clear_notice_after(notice)}

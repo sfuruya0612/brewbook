@@ -254,7 +254,7 @@ pub fn StatsScreen() -> Element {
 
     let content = rsx! {
         div { class: "screen",
-            ScreenAppBar { title: t(Key::StatsTitle).to_string() }
+            ScreenAppBar { title: t(Key::StatsTitle).to_string(), brand: true }
             div { class: "body",
                 div { class: "stats",
                     {chips}

@@ -11,9 +11,9 @@ use crate::records::{
     SaveTarget,
 };
 use crate::screens::ScreenAppBar;
-use crate::ui::{Button, ButtonVariant, Field, IconButton, TextField};
+use crate::ui::{Button, ButtonSize, ButtonVariant, Field, IconButton, TextField};
 
-use super::{clear_notice_after, mark_records_changed, retryable_banner};
+use super::{clear_notice_after, mark_records_changed, retryable_banner, DiscardConfirm};
 
 /// 店の登録 (FR-6)。
 #[component]
@@ -63,6 +63,8 @@ pub fn ShopForm(
     let mut favorited_at = use_signal(|| None::<String>);
     let mut loading = use_signal(|| id.is_some());
     let mut busy = use_signal(|| false);
+    let mut dirty = use_signal(|| false);
+    let mut discard_open = use_signal(|| false);
 
     // 編集のために現在の値を読み込む。再試行でも同じ処理を呼ぶ。
     let reload_services = services.clone();
@@ -84,6 +86,8 @@ pub fn ShopForm(
                 Err(failure) => load_error.set(Some(failure)),
             }
             loading.set(false);
+            // 読み込みで入った値は変更に数えない (0054)。
+            dirty.set(false);
         });
     });
     use_effect(move || reload.call(()));
@@ -127,10 +131,19 @@ pub fn ShopForm(
         });
     });
 
-    let close = EventHandler::new(move |_| match on_close {
+    // 変更があるときは、閉じる前に破棄の確認を出す (0054)。
+    let close_now = EventHandler::new(move |_| match on_close {
         Some(handler) => handler.call(()),
         None => navigator.go_back(),
     });
+    let request_close = EventHandler::new(move |_| {
+        if dirty() {
+            discard_open.set(true);
+        } else {
+            close_now.call(());
+        }
+    });
+    let confirm_discard = EventHandler::new(move |_| close_now.call(()));
     let retry = EventHandler::new(move |_| reload.call(()));
     let retry_save = EventHandler::new(move |_| save.call(()));
     let failure = save_error();
@@ -177,7 +190,8 @@ pub fn ShopForm(
         }
         Button {
             label: t(Key::SaveButton).to_string(),
-            variant: ButtonVariant::Text,
+            variant: ButtonVariant::Primary,
+            size: ButtonSize::Sm,
             disabled: busy(),
             onclick: move |_| save.call(()),
         }
@@ -187,9 +201,10 @@ pub fn ShopForm(
         div { class: "screen",
             ScreenAppBar {
                 title: t(if id.is_some() { Key::ShopEditTitle } else { Key::ShopNewTitle }).to_string(),
+                menu: false,
                 leading_icon: Some("close".to_string()),
                 leading_label: Some(t(Key::CancelButton).to_string()),
-                on_leading: move |_| close.call(()),
+                on_leading: move |_| request_close.call(()),
                 actions,
             }
             div { class: "body",
@@ -209,7 +224,10 @@ pub fn ShopForm(
                             TextField {
                                 value: name(),
                                 disabled: busy(),
-                                oninput: move |event: FormEvent| name.set(event.value()),
+                                oninput: move |event: FormEvent| {
+                                    name.set(event.value());
+                                    dirty.set(true);
+                                },
                             }
                         }
                         Field {
@@ -218,7 +236,10 @@ pub fn ShopForm(
                             TextField {
                                 value: address(),
                                 disabled: busy(),
-                                oninput: move |event: FormEvent| address.set(event.value()),
+                                oninput: move |event: FormEvent| {
+                                    address.set(event.value());
+                                    dirty.set(true);
+                                },
                             }
                         }
                         if let Some(failure) = failure {
@@ -227,6 +248,9 @@ pub fn ShopForm(
                     }
                 }
             }
+        }
+        if discard_open() {
+            DiscardConfirm { open: discard_open, on_discard: confirm_discard }
         }
         if let Some(message) = notice() {
             {clear_notice_after(notice)}

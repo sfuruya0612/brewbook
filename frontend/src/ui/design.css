@@ -50,15 +50,17 @@
   .muted { color: var(--ink-muted); }
   .faint { color: var(--ink-faint); }
 
-  /* AppBar (0047 でハンバーガー、印とアプリ名、その下の画面名の構成にした) */
+  /* AppBar (0054 で画面の種類による 3 つの形にした: 最上位はハンバーガー、印、画面名。
+     詳細は戻る、画面名、末尾の操作。フォームは閉じる、画面名、末尾の操作。詳細とフォームは
+     メニューと印を出さない) */
   .appbar { display: flex; align-items: center; height: 56px; padding: 0 var(--space-2) 0 var(--space-4); border-bottom: 1px solid var(--line); background: var(--paper); flex: none; }
   .appbar .nav { position: relative; flex: none; margin-left: calc(-1 * var(--space-2)); }
-  .appbar .lead { width: 40px; height: 40px; margin: 0 var(--space-1); display: flex; align-items: center; justify-content: center; color: var(--ink); flex: none; }
-  .appbar .brand { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
-  .appbar .app-name { display: inline-flex; align-items: center; gap: var(--space-2); width: fit-content; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
-  .appbar .app-name .mark { width: 32px; height: 32px; flex: none; color: var(--roast); }
-  .appbar .app-name .name { font-family: var(--font-serif); font-size: 18px; line-height: 24px; font-weight: 500; letter-spacing: -0.01em; }
-  .appbar .ttl { font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .appbar .lead { width: 40px; height: 40px; margin: 0 var(--space-1) 0 calc(-1 * var(--space-2)); display: flex; align-items: center; justify-content: center; color: var(--ink); flex: none; }
+  .appbar .brandmark { width: 22px; height: 26px; margin: 0 var(--space-3) 0 var(--space-1); flex: none; padding: 0; border: 0; background: transparent; color: var(--roast); }
+  .appbar .brandmark svg { width: 100%; height: 100%; display: block; }
+  .appbar button.brandmark { cursor: pointer; }
+  .appbar .ttl { flex: 1; font-size: 20px; line-height: 28px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .appbar .ttl.wordmark { font-family: var(--font-serif); font-size: 24px; font-weight: 500; letter-spacing: -0.01em; }
   .iconbtn { width: 40px; height: 40px; border-radius: var(--radius-full); display: inline-flex; align-items: center; justify-content: center; color: var(--ink); background: transparent; }
   /* 無効なアイコンボタンは押せないことを色で示す (docs/design/components/Settings の
    * 「1 つしか無いときは削除を ink-faint で無効化し」。0043)。 */
@@ -68,6 +70,10 @@
   .iconbtn svg, .lead svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .iconbtn .icon, .lead .icon { font-size: 24px; }
   .appbar .textbtn { color: var(--crema-ink); font-size: 15px; font-weight: 500; padding: 0 var(--space-3); height: 40px; display: inline-flex; align-items: center; border-radius: var(--radius-md); }
+  /* フォームの末尾の操作群。保存は高さ 36 px の塗り (0054)。 */
+  .appbar .acts { display: flex; align-items: center; gap: var(--space-1); }
+  .appbar .acts .btn.sm { height: 36px; padding: 0 var(--space-4); }
+  .appbar .acts .btn.text { padding: 0 var(--space-3); height: 36px; }
 
   /* ボタン */
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: 48px; padding: 0 var(--space-6); border-radius: var(--radius-md); font-family: var(--font-sans); font-size: 15px; line-height: 22px; font-weight: 500; letter-spacing: 0.01em; border: 1px solid transparent; cursor: pointer; white-space: nowrap; }
@@ -102,6 +108,8 @@
   .row .side { flex: none; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
   .row .val { font-family: var(--font-mono); font-size: 15px; line-height: 22px; font-variant-numeric: tabular-nums; }
   .row.selected { background: var(--roast-soft); }
+  /* アーカイブ済みの行は文字を落として、切り替えで混ざったことを示す (0054)。 */
+  .row.archived .name, .row.archived .sub { color: var(--ink-muted); }
   /* 行の右端の星 (0051)。押すとお気に入りを付け外しする (FR-21)。 */
   .row .fav { flex: none; display: flex; align-items: center; }
   .row .fav .iconbtn { width: 36px; height: 36px; }
@@ -110,6 +118,14 @@
   .thumb { width: 44px; height: 44px; border-radius: var(--radius-sm); background: var(--paper-sunken); flex: none; display: flex; align-items: center; justify-content: center; color: var(--ink-faint); overflow: hidden; }
   .thumb svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; }
   .thumb .icon { font-size: 22px; color: var(--ink-faint); }
+  /* アーカイブ済みのバッジと、一覧の上部の切り替え (0054)。 */
+  .badge { display: inline-flex; align-items: center; height: 20px; padding: 0 var(--space-2); border-radius: var(--radius-sm); background: var(--paper-sunken); color: var(--ink-muted); font-size: 12px; line-height: 16px; font-weight: 500; }
+  .toolbar { display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink-muted); font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; }
+  .switch { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--ink-muted); }
+  .switch .track { width: 36px; height: 20px; border-radius: var(--radius-full); border: 1px solid var(--line-strong); position: relative; background: transparent; }
+  .switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--line-strong); }
+  .switch.on .track { background: var(--roast); border-color: var(--roast); }
+  .switch.on .track::after { left: 19px; background: var(--on-roast); }
   .empty { padding: var(--space-12) var(--space-6); text-align: center; color: var(--ink-muted); }
 
   /* 一覧のツールバー (0051)。並び順の選択と昇順/降順の切り替えとお気に入りのみの切り替え。 */
@@ -149,7 +165,9 @@
 
   /* 入力欄 */
   .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .field .lbl { font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; color: var(--ink-muted); }
+  /* 項目名の無い欄 (抽出日時の時刻など) も項目名の行の高さを確保し、隣の欄と枠と理由の位置を
+     揃える (0054)。 */
+  .field .lbl { font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; color: var(--ink-muted); min-height: 18px; }
   .field .lbl .req { color: var(--ink-muted); font-weight: 400; margin-left: var(--space-1); }
   .field .box { display: flex; align-items: center; gap: var(--space-2); height: 48px; padding: 0 var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--paper-sunken); font-size: 15px; line-height: 22px; min-width: 0; }
   .field .box.area { height: auto; min-height: 88px; align-items: flex-start; padding: var(--space-3); }
@@ -249,6 +267,20 @@
   .pk .n { font-size: 15px; line-height: 22px; font-weight: 600; }
   .pk .m { font-size: 12px; line-height: 16px; color: var(--ink-muted); font-family: var(--font-mono); }
   .pk .m span { font-family: var(--font-sans); }
+
+  /* ナビゲーションドロワー (0054)。 */
+  .drawer-scrim { position: absolute; inset: 0; background: #2b1d1366; z-index: 2; }
+  .drawer { position: absolute; top: 0; bottom: 0; left: 0; z-index: 3; width: 280px; background: var(--paper-raised); box-shadow: var(--shadow-float); display: flex; flex-direction: column; padding: var(--space-3) var(--space-3) var(--space-4); }
+  .drawer.standard { position: static; width: 240px; flex: none; box-shadow: none; border-right: 1px solid var(--line); background: var(--paper); }
+  .drawer .head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-3) var(--space-4); }
+  .drawer .head .mk { width: 28px; height: 33px; }
+  .drawer .head .mk svg { width: 100%; height: 100%; display: block; }
+  .drawer .head .wm { font-family: var(--font-serif); font-size: 22px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em; }
+  .drawer .item { display: flex; align-items: center; gap: var(--space-3); height: 48px; padding: 0 var(--space-4); border-radius: var(--radius-full); color: var(--ink-muted); font-size: 15px; line-height: 22px; font-weight: 500; }
+  .drawer .item svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .drawer .item.on { background: var(--roast-soft); color: var(--ink); }
+  .drawer .sep { height: 1px; background: var(--line); margin: var(--space-2) var(--space-3); }
+  .drawer .foot { margin-top: auto; }
 
   /* 記録の画面の土台 (0041)。一覧、詳細、フォームの共通の枠。 */
   .screen { position: relative; display: flex; flex-direction: column; height: 100dvh; background: var(--paper); }

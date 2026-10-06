@@ -13,7 +13,7 @@ use brew_book_frontend::i18n::{set_language, Language};
 use brew_book_frontend::router::Route;
 use brew_book_frontend::screens::AppNav;
 use brew_book_frontend::ui::{
-    AppBar, Banner, Button, ButtonVariant, ChartFrame, ChartSection, Chip, ChipVariant,
+    AppBar, Banner, Button, ButtonSize, ButtonVariant, ChartFrame, ChartSection, Chip, ChipVariant,
     ConfirmDialog, Fab, Field, Icon, IconButton, Ledger, LedgerRow, ListRow, ListThumb,
     NavigationRail, PickerTile, RailItem, Rating, RatingInput, ReferenceChain, ReferenceTile,
     RowValue, Snackbar, StatTile, StatTiles, TagChip, TextField, TextFieldKind, WideLayout,
@@ -409,9 +409,6 @@ fn AppBarProbe() -> Element {
     rsx! {
         AppBar {
             title: "x",
-            leading_icon: "close",
-            leading_label: "y",
-            actions: rsx! { IconButton { name: "more_vert", label: "z" } },
             menu: rsx! {
                 AppNav {
                     current: Route::Home {},
@@ -419,12 +416,14 @@ fn AppBarProbe() -> Element {
                     on_logout: move |_| {},
                 }
             },
+            brand: true,
+            actions: rsx! { IconButton { name: "more_vert", label: "z" } },
             on_home: move |_| {},
         }
     }
 }
 
-/// AppBar が印とアプリ名とその下の画面名を原本の値で出すことを検査する (0047)。
+/// AppBar が最上位の形 (ハンバーガー、印、画面名) を原本の値で出すことを検査する (0054)。
 #[wasm_bindgen_test]
 async fn the_app_bar_matches_the_tokens() {
     install_styles();
@@ -447,35 +446,64 @@ async fn the_app_bar_matches_the_tokens() {
     );
     assert_eq!(computed(&hamburger, "width"), "40px");
     assert_eq!(computed(&hamburger, "height"), "40px");
-    // 印は 32 px の roast。
-    let mark = select(&root, ".appbar .app-name .mark");
-    assert_eq!(computed(&mark, "width"), "32px");
-    assert_eq!(computed(&mark, "height"), "32px");
+    // 印は 22 x 26 px の roast。
+    let mark = select(&root, ".appbar .brandmark");
+    assert_eq!(computed(&mark, "width"), "22px");
+    assert_eq!(computed(&mark, "height"), "26px");
     assert_eq!(computed(&mark, "color"), "rgb(74, 47, 28)");
-    // アプリ名は IBM Plex Serif の 18 px の 500。
-    let name = select(&root, ".appbar .app-name .name");
-    assert_eq!(name.text_content().as_deref(), Some("brewbook"));
-    assert!(computed(&name, "font-family").contains("IBM Plex Serif"));
-    assert_eq!(computed(&name, "font-size"), "18px");
-    assert_eq!(computed(&name, "font-weight"), "500");
-    // 画面名はアプリ名の下に、label の 13 px の --ink-muted で出る。
+    // 画面名は印の右に 20 px の 600 の ink で出る。
     let title = select(&root, ".appbar .ttl");
     assert_eq!(title.text_content().as_deref(), Some("x"));
-    assert_eq!(computed(&title, "font-size"), "13px");
-    assert_eq!(computed(&title, "color"), "rgb(106, 88, 71)");
+    assert_eq!(computed(&title, "font-size"), "20px");
+    assert_eq!(computed(&title, "font-weight"), "600");
+    assert_eq!(computed(&title, "color"), "rgb(43, 29, 19)");
     assert!(
-        title.get_bounding_client_rect().top() >= name.get_bounding_client_rect().bottom(),
-        "the screen name must be under the app name"
+        title.get_bounding_client_rect().left() >= mark.get_bounding_client_rect().right(),
+        "the screen name must be beside the mark"
     );
-    // 先頭の操作は 40 px 四方。
-    let lead = select(&root, ".appbar .lead");
-    assert_eq!(computed(&lead, "width"), "40px");
-    assert_eq!(computed(&lead, "height"), "40px");
     // 末尾の操作は 40 px 四方の丸。
-    let action = select(&root, ".appbar > .iconbtn");
+    let action = select(&root, ".appbar .acts > .iconbtn");
     assert_eq!(computed(&action, "width"), "40px");
     assert_eq!(computed(&action, "border-top-left-radius"), "9999px");
     assert_eq!(computed(&action, "background-color"), "rgba(0, 0, 0, 0)");
+}
+
+#[component]
+fn FormAppBarProbe() -> Element {
+    rsx! {
+        AppBar {
+            title: "y",
+            leading_icon: "close",
+            leading_label: "z",
+            actions: rsx! {
+                Button {
+                    label: "Save",
+                    variant: ButtonVariant::Primary,
+                    size: ButtonSize::Sm,
+                }
+            },
+        }
+    }
+}
+
+/// フォームの形の AppBar が閉じると保存を出し、メニューと印を出さないことを検査する (0054)。
+#[wasm_bindgen_test]
+async fn the_form_app_bar_matches_the_tokens() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let root = mount(FormAppBarProbe).await;
+
+    assert_eq!(count(&root, ".appbar .nav"), 0);
+    assert_eq!(count(&root, ".appbar .brandmark"), 0);
+    let lead = select(&root, ".appbar .lead");
+    assert_eq!(computed(&lead, "width"), "40px");
+    assert_eq!(computed(&lead, "height"), "40px");
+    // 保存は高さ 36 px の roast の塗り。
+    let save = select(&root, ".appbar .acts > .btn.sm");
+    assert_eq!(computed(&save, "height"), "36px");
+    assert_eq!(computed(&save, "background-color"), "rgb(74, 47, 28)");
+    assert_eq!(computed(&save, "color"), "rgb(247, 239, 227)");
 }
 
 #[component]

@@ -32,7 +32,7 @@ fn the_japanese_table_has_the_eight_words() {
 
 #[test]
 fn the_key_enum_and_both_tables_cover_all_keys() {
-    assert_eq!(KEY_COUNT, 229);
+    assert_eq!(KEY_COUNT, 233);
     assert_eq!(Key::ALL.len(), KEY_COUNT);
     let unique: HashSet<Key> = Key::ALL.into_iter().collect();
     assert_eq!(unique.len(), KEY_COUNT);

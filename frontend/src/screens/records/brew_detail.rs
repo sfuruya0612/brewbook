@@ -121,6 +121,7 @@ pub fn BrewDetail(
         div { class: "screen",
             ScreenAppBar {
                 title: t(Key::BrewDetailTitle).to_string(),
+                menu: false,
                 leading_icon: (!embedded).then_some("arrow_back_ios_new".to_string()),
                 leading_label: Some(t(Key::CancelButton).to_string()),
                 on_leading: move |_| {

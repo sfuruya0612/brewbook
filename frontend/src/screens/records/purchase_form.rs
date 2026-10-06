@@ -18,11 +18,13 @@ use crate::records::{
     Shop, DEFAULT_CURRENCY, MAX_PHOTO_BYTES, MAX_PHOTO_LONG_SIDE,
 };
 use crate::screens::ScreenAppBar;
-use crate::ui::{Banner, Button, ButtonVariant, Field, Icon, ListRow, TextField, TextFieldKind};
+use crate::ui::{
+    Banner, Button, ButtonSize, ButtonVariant, Field, Icon, ListRow, TextField, TextFieldKind,
+};
 
 use super::{
-    clear_notice_after, mark_records_changed, photo_preview_url, retryable_banner, RecordLoader,
-    RecordPickerSheet,
+    clear_notice_after, mark_records_changed, photo_preview_url, retryable_banner, DiscardConfirm,
+    RecordLoader, RecordPickerSheet,
 };
 
 /// 購入の登録 (FR-9)。
@@ -90,6 +92,8 @@ pub fn PurchaseForm(
     let mut unmatched_product = use_signal(|| None::<ProductSuggestion>);
     let mut suggestion_generation = use_signal(|| 0_u64);
     let mut created_id = use_signal(|| None::<String>);
+    let mut dirty = use_signal(|| false);
+    let mut discard_open = use_signal(|| false);
     // 推測した内容で商品を登録する導線の入力 (FR-19)。
     let mut register_open = use_signal(|| false);
     let mut draft_name = use_signal(String::new);
@@ -142,6 +146,8 @@ pub fn PurchaseForm(
                 Err(failure) => load_error.set(Some(failure)),
             }
             loading.set(false);
+            // 読み込みで入った値は変更に数えない (0054)。
+            dirty.set(false);
         });
     });
     use_effect(move || reload.call(()));
@@ -250,6 +256,7 @@ pub fn PurchaseForm(
                 Ok(image) => {
                     picked.set(Some(image.clone()));
                     remove_photo.set(false);
+                    dirty.set(true);
                     suggest.call(image);
                 }
                 Err(failure) => photo_error.set(Some(failure.into())),
@@ -267,6 +274,7 @@ pub fn PurchaseForm(
         if photo_key().is_some() {
             remove_photo.set(true);
         }
+        dirty.set(true);
     });
 
     // 推測した内容で商品を登録する (FR-19)。
@@ -295,6 +303,7 @@ pub fn PurchaseForm(
                     product.set(Some(created));
                     unmatched_product.set(None);
                     register_open.set(false);
+                    dirty.set(true);
                     mark_records_changed(&mut revision);
                 }
                 Err(failure) => draft_error.set(Some(failure)),
@@ -418,6 +427,7 @@ pub fn PurchaseForm(
                     unmatched_product.set(None);
                     errors.set(PurchaseFormErrors::default());
                     picker.set(None);
+                    dirty.set(true);
                 })),
             }
         }
@@ -432,15 +442,25 @@ pub fn PurchaseForm(
                 on_click: Some(EventHandler::new(move |_| {
                     shop.set(Some(selected.clone()));
                     picker.set(None);
+                    dirty.set(true);
                 })),
             }
         }
     });
 
-    let close = EventHandler::new(move |_| match on_close {
+    // 変更があるときは、閉じる前に破棄の確認を出す (0054)。
+    let close_now = EventHandler::new(move |_| match on_close {
         Some(handler) => handler.call(()),
         None => navigator.go_back(),
     });
+    let request_close = EventHandler::new(move |_| {
+        if dirty() {
+            discard_open.set(true);
+        } else {
+            close_now.call(());
+        }
+    });
+    let confirm_discard = EventHandler::new(move |_| close_now.call(()));
     let retry = EventHandler::new(move |_| reload.call(()));
     let retry_save = EventHandler::new(move |_| save.call(()));
     let failure = save_error();
@@ -465,13 +485,15 @@ pub fn PurchaseForm(
         div { class: "screen",
             ScreenAppBar {
                 title: t(if id.is_some() { Key::PurchaseEditTitle } else { Key::PurchaseNewTitle }).to_string(),
+                menu: false,
                 leading_icon: Some("close".to_string()),
                 leading_label: Some(t(Key::CancelButton).to_string()),
-                on_leading: move |_| close.call(()),
+                on_leading: move |_| request_close.call(()),
                 actions: rsx! {
                     Button {
                         label: t(Key::SaveButton).to_string(),
-                        variant: ButtonVariant::Text,
+                        variant: ButtonVariant::Primary,
+                        size: ButtonSize::Sm,
                         disabled: busy(),
                         onclick: move |_| save.call(()),
                     }
@@ -561,7 +583,10 @@ pub fn PurchaseForm(
                                 mono: true,
                                 kind: TextFieldKind::Date,
                                 disabled: busy(),
-                                oninput: move |event: FormEvent| purchased_on.set(event.value()),
+                                oninput: move |event: FormEvent| {
+                                    purchased_on.set(event.value());
+                                    dirty.set(true);
+                                },
                             }
                         }
                         super::SuggestionField {
@@ -570,6 +595,7 @@ pub fn PurchaseForm(
                             label: t(Key::Roast).to_string(),
                             value: roast,
                             disabled: busy(),
+                            on_change: move |_| dirty.set(true),
                         }
                         Field {
                             label: t(Key::RoastDate).to_string(),
@@ -581,7 +607,10 @@ pub fn PurchaseForm(
                                 mono: true,
                                 kind: TextFieldKind::Date,
                                 disabled: busy(),
-                                oninput: move |event: FormEvent| roast_date.set(event.value()),
+                                oninput: move |event: FormEvent| {
+                                    roast_date.set(event.value());
+                                    dirty.set(true);
+                                },
                             }
                         }
                         div { class: "grid2",
@@ -593,7 +622,10 @@ pub fn PurchaseForm(
                                     value: price(),
                                     mono: true,
                                     disabled: busy(),
-                                    oninput: move |event: FormEvent| price.set(event.value()),
+                                    oninput: move |event: FormEvent| {
+                                        price.set(event.value());
+                                        dirty.set(true);
+                                    },
                                 }
                             }
                             Field { label: t(Key::CurrencyLabel).to_string(), disabled: busy(),
@@ -601,7 +633,10 @@ pub fn PurchaseForm(
                                     select {
                                         class: "in",
                                         disabled: busy(),
-                                        onchange: move |event: FormEvent| currency.set(event.value()),
+                                        onchange: move |event: FormEvent| {
+                                            currency.set(event.value());
+                                            dirty.set(true);
+                                        },
                                         for code in currencies {
                                             option {
                                                 value: "{code}",
@@ -622,7 +657,10 @@ pub fn PurchaseForm(
                                 mono: true,
                                 unit: Some(t(Key::GramUnit).to_string()),
                                 disabled: busy(),
-                                oninput: move |event: FormEvent| weight.set(event.value()),
+                                oninput: move |event: FormEvent| {
+                                    weight.set(event.value());
+                                    dirty.set(true);
+                                },
                             }
                         }
                         Field { label: t(Key::PhotoLabel).to_string(), disabled: busy(),
@@ -690,10 +728,14 @@ pub fn PurchaseForm(
                     on_clear: EventHandler::new(move |_| {
                         shop.set(None);
                         picker.set(None);
+                        dirty.set(true);
                     }),
                     on_close: EventHandler::new(move |_| picker.set(None)),
                 }
             }
+        }
+        if discard_open() {
+            DiscardConfirm { open: discard_open, on_discard: confirm_discard }
         }
         if register_open() {
             div { class: "sheet-scrim",

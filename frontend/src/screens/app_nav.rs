@@ -101,9 +101,9 @@ pub fn AppNav(
 
 /// 認証後の画面のヘッダー (0047)。
 ///
-/// [`crate::ui::AppBar`] にハンバーガーメニュー ([`AppNav`]) と、アプリ名を押してホームへ
-/// 戻る動きを組む。現在の経路がホームのときは何もしない (戻るで元の画面に戻れるように、
-/// それ以外はホームを積む)。
+/// [`crate::ui::AppBar`] にハンバーガーメニュー ([`AppNav`]) と、印を押してホームへ戻る動きを
+/// 組む。最上位の画面はメニューと印を出し、詳細とフォームは出さない (0054)。現在の経路が
+/// ホームのときは何もしない (戻るで元の画面に戻れるように、それ以外はホームを積む)。
 #[component]
 pub fn ScreenAppBar(
     /// 画面の題 (ARB の `*Title` から取る)。
@@ -120,6 +120,12 @@ pub fn ScreenAppBar(
     /// 末尾の操作 (アイコンと文字ボタンで最大 2 つ)。
     #[props(default)]
     actions: Option<Element>,
+    /// ハンバーガーメニューを出すか (最上位の画面だけ true)。
+    #[props(default = true)]
+    menu: bool,
+    /// アプリの印を出すか (最上位の画面だけ true)。
+    #[props(default = false)]
+    brand: bool,
 ) -> Element {
     let navigator = navigator();
     let router = router();
@@ -146,6 +152,11 @@ pub fn ScreenAppBar(
             }
         });
     });
+    let menu = menu.then(|| {
+        rsx! {
+            AppNav { current, on_navigate, on_logout }
+        }
+    });
     rsx! {
         AppBar {
             title,
@@ -153,9 +164,8 @@ pub fn ScreenAppBar(
             leading_label,
             on_leading,
             actions,
-            menu: rsx! {
-                AppNav { current, on_navigate, on_logout }
-            },
+            menu,
+            brand,
             on_home: Some(on_home),
         }
     }

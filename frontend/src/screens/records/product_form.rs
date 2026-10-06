@@ -13,9 +13,13 @@ use crate::records::{
     SaveTarget, SuggestionTarget,
 };
 use crate::screens::ScreenAppBar;
-use crate::ui::{Banner, Button, ButtonVariant, Chip, ChipVariant, Field, IconButton, TextField};
+use crate::ui::{
+    Banner, Button, ButtonSize, ButtonVariant, Chip, ChipVariant, Field, IconButton, TextField,
+};
 
-use super::{clear_notice_after, mark_records_changed, retryable_banner, SuggestionField};
+use super::{
+    clear_notice_after, mark_records_changed, retryable_banner, DiscardConfirm, SuggestionField,
+};
 
 /// 商品の登録 (FR-7)。
 #[component]
@@ -71,6 +75,8 @@ pub fn ProductForm(
     let mut favorited_at = use_signal(|| None::<String>);
     let mut loading = use_signal(|| id.is_some());
     let mut busy = use_signal(|| false);
+    let mut dirty = use_signal(|| false);
+    let mut discard_open = use_signal(|| false);
 
     // 編集のために現在の値を読み込む。再試行でも同じ処理を呼ぶ。
     let reload_services = services.clone();
@@ -97,6 +103,8 @@ pub fn ProductForm(
                 Err(failure) => load_error.set(Some(failure)),
             }
             loading.set(false);
+            // 読み込みで入った値は変更に数えない (0054)。
+            dirty.set(false);
         });
     });
     use_effect(move || reload.call(()));
@@ -110,6 +118,7 @@ pub fn ProductForm(
         if !current.contains(&value) {
             current.push(value);
             tags.set(current);
+            dirty.set(true);
         }
         tag_input.set(String::new());
     });
@@ -161,10 +170,19 @@ pub fn ProductForm(
         });
     });
 
-    let close = EventHandler::new(move |_| match on_close {
+    // 変更があるときは、閉じる前に破棄の確認を出す (0054)。
+    let close_now = EventHandler::new(move |_| match on_close {
         Some(handler) => handler.call(()),
         None => navigator.go_back(),
     });
+    let request_close = EventHandler::new(move |_| {
+        if dirty() {
+            discard_open.set(true);
+        } else {
+            close_now.call(());
+        }
+    });
+    let confirm_discard = EventHandler::new(move |_| close_now.call(()));
     let retry = EventHandler::new(move |_| reload.call(()));
     let retry_save = EventHandler::new(move |_| save.call(()));
     let failure = save_error();
@@ -211,7 +229,8 @@ pub fn ProductForm(
         }
         Button {
             label: t(Key::SaveButton).to_string(),
-            variant: ButtonVariant::Text,
+            variant: ButtonVariant::Primary,
+            size: ButtonSize::Sm,
             disabled: busy(),
             onclick: move |_| save.call(()),
         }
@@ -221,9 +240,10 @@ pub fn ProductForm(
         div { class: "screen",
             ScreenAppBar {
                 title: t(if id.is_some() { Key::ProductEditTitle } else { Key::ProductNewTitle }).to_string(),
+                menu: false,
                 leading_icon: Some("close".to_string()),
                 leading_label: Some(t(Key::CancelButton).to_string()),
-                on_leading: move |_| close.call(()),
+                on_leading: move |_| request_close.call(()),
                 actions,
             }
             div { class: "body",
@@ -246,7 +266,10 @@ pub fn ProductForm(
                             TextField {
                                 value: name(),
                                 disabled: busy(),
-                                oninput: move |event: FormEvent| name.set(event.value()),
+                                oninput: move |event: FormEvent| {
+                                    name.set(event.value());
+                                    dirty.set(true);
+                                },
                             }
                         }
                         SuggestionField {
@@ -255,6 +278,7 @@ pub fn ProductForm(
                             label: t(Key::Producer).to_string(),
                             value: producer,
                             disabled: busy(),
+                            on_change: move |_| dirty.set(true),
                         }
                         div { class: "grid2",
                             SuggestionField {
@@ -263,6 +287,7 @@ pub fn ProductForm(
                                 label: t(Key::Origin).to_string(),
                                 value: origin,
                                 disabled: busy(),
+                                on_change: move |_| dirty.set(true),
                             }
                             SuggestionField {
                                 api: RecordsApi::new(services.api.clone()),
@@ -270,6 +295,7 @@ pub fn ProductForm(
                                 label: t(Key::Region).to_string(),
                                 value: region,
                                 disabled: busy(),
+                                on_change: move |_| dirty.set(true),
                             }
                         }
                         div { class: "grid2",
@@ -279,6 +305,7 @@ pub fn ProductForm(
                                 label: t(Key::Process).to_string(),
                                 value: process,
                                 disabled: busy(),
+                                on_change: move |_| dirty.set(true),
                             }
                             SuggestionField {
                                 api: RecordsApi::new(services.api.clone()),
@@ -286,6 +313,7 @@ pub fn ProductForm(
                                 label: t(Key::Variety).to_string(),
                                 value: variety,
                                 disabled: busy(),
+                                on_change: move |_| dirty.set(true),
                             }
                         }
                         Field { label: t(Key::FlavorNotes).to_string(), disabled: busy(),
@@ -299,6 +327,7 @@ pub fn ProductForm(
                                             tags.set(
                                                 tags().into_iter().filter(|tag| tag != &removed).collect(),
                                             );
+                                            dirty.set(true);
                                         })),
                                     }
                                 }
@@ -308,12 +337,15 @@ pub fn ProductForm(
                                     value: tag_input(),
                                     placeholder: Some(t(Key::TagInputHint).to_string()),
                                     disabled: busy(),
-                                    oninput: move |event: FormEvent| tag_input.set(event.value()),
+                                    oninput: move |event: FormEvent| {
+                                        tag_input.set(event.value());
+                                        dirty.set(true);
+                                    },
                                 }
                                 Button {
                                     label: t(Key::AddButton).to_string(),
                                     variant: ButtonVariant::Secondary,
-                                    size: crate::ui::ButtonSize::Sm,
+                                    size: ButtonSize::Sm,
                                     disabled: busy(),
                                     onclick: move |_| add_tag.call(()),
                                 }
@@ -325,6 +357,9 @@ pub fn ProductForm(
                     }
                 }
             }
+        }
+        if discard_open() {
+            DiscardConfirm { open: discard_open, on_discard: confirm_discard }
         }
         if let Some(message) = notice() {
             {clear_notice_after(notice)}

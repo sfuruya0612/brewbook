@@ -240,10 +240,10 @@ fn the_component_css_covers_the_classes_of_the_bundle() {
     );
 }
 
-/// AppBar が印とアプリ名とその下の画面名を出し、`wordmark` prop と `dioxus_router` を
-/// 持たないことを検査する (0047)。
+/// AppBar が印 (最上位の画面) を訳語の名前で出し、`wordmark` prop と `dioxus_router` を
+/// 持たないことを検査する (0047、0054)。
 #[test]
-fn the_app_bar_has_the_mark_and_the_app_name_without_the_router() {
+fn the_app_bar_has_the_mark_from_the_translations_without_the_router() {
     let source = read(crate_dir().join("src/ui/app_bar.rs"));
 
     assert!(
@@ -252,7 +252,7 @@ fn the_app_bar_has_the_mark_and_the_app_name_without_the_router() {
     );
     assert!(
         source.contains("Key::AppTitle"),
-        "the AppBar must show the app name from the translations"
+        "the AppBar must name the mark from the translations"
     );
     assert!(
         !source.contains("wordmark"),

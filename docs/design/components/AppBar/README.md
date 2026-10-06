@@ -1,11 +1,10 @@
 # AppBar
 
-画面の帯。高さ 56 px、地は `paper`、下端に `line` の罫線を引き、影は付けない。先頭からハンバーガーボタン、先頭の操作、アプリの印とアプリ名、その下の画面名、末尾の操作の順に置く。
+高さ 56 px の帯。地は `paper`、下端に `line` の罫線を引き、影は付けない。画面の種類で 3 つの形を使い分ける。
 
-- ハンバーガーボタンは記録、統計、設定の全ての画面と全ての幅で出す (0047)。押すとメニューの面がハンバーガーの下に左寄せで開く。メニューは抽出、購入、商品、店、統計、設定の 6 項目と、区切りの下にログアウトを置く。項目を押すと対応する経路へ移って閉じ、現在の経路と同じ項目を押したときは遷移せずメニューだけ閉じる。
-- 認証前の画面 (登録) はハンバーガーを出さない。印とアプリ名と画面名だけを出す。
-- アプリの印は `mark.svg` の 32 px。アプリ名は `appTitle` の「brewbook」を IBM Plex Serif の 18 px で組む。アプリ名を押すとホームへ戻る (ホームでは何もしない)。
-- 画面名は ARB の `*Title` をアプリ名の下に `label` (13 px、`ink-muted`) で出す。ホームは「抽出」(`brewsLabel`)。
-- 先頭の操作は 1 つ: 一覧と詳細は戻る (`arrow_back_ios_new`)、フォームは閉じる (`close`)。
-- 末尾の操作は最大 2 つ。詳細は編集のアイコン、フォームは「保存」の文字ボタン (`crema-ink`)。
-- Dioxus では `frontend/src/ui/app_bar.rs` の `AppBar` で `.appbar` の帯を組み、下端の罫線は `border-bottom: 1px solid var(--line)` で引く (影は付けない)。経路の操作は `menu` と `on_home` の prop で受け取り、`frontend/src/screens/app_nav.rs` の `ScreenAppBar` が `AppNav` と組む。ハンバーガーは `.nav`、印とアプリ名は `.app-name`、画面名は `.ttl`、先頭の操作は `.lead`、末尾の操作は `.iconbtn` と `.textbtn`。メニューの面は `.menu.left` で左寄せにする。
+- 最上位の画面 (抽出、購入、商品、店、統計、設定): 左からハンバーガーメニュー (`Icons.menu_outlined`)、印 (`mark.svg`、高さ 26 px)、画面名 (`title`)。ハンバーガーはドロワーを開く。ホームの画面名は「抽出」で、ワードマークはドロワーの頭に置く。
+- 詳細 (抽出の詳細、購入の詳細): 左に戻る (`Icons.arrow_back_ios_new_outlined`)、画面名、右端にアーカイブと編集のアイコン。一覧の上に積む画面なのでメニューと印は出さない。
+- フォーム (記録と編集): 左に閉じる (`Icons.close_outlined`)、画面名、右端に「キャンセル」(文字ボタン) と「保存」(`roast` の塗り、高さ 36 px) をこの順で。保存が一番右。入力途中に他の画面へ移れないよう、メニューと印は出さない。閉じるとキャンセルは同じ動作 (変更があれば破棄の確認)。
+- 右端の操作は最大 2 つ。画面名は 1 行で、収まらないときは末尾を省略する。
+- ドロワー: 幅 280 px、`paper-raised` の地、`shadow-float`。頭に印とワードマーク、項目は抽出、購入、商品、店、統計、設定の順、罫線の下にログアウト。選択中は `roast-soft` の地に `ink`、他は `ink-muted`。幅 840 px 以上では常設 (240 px、`paper` の地、右端に `line`) にし、ハンバーガーで畳める。
+- Flutter では `AppBar` に `elevation: 0`、`scrolledUnderElevation: 0`、`bottom` に 1 px の `Divider`、`centerTitle: false`。ドロワーは `Scaffold.drawer` に `NavigationDrawer`、フォームの画面では `drawer` を渡さない。

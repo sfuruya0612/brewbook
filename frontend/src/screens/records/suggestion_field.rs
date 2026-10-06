@@ -28,6 +28,10 @@ pub fn SuggestionField(
     #[props(default)]
     hint: Option<String>,
 
+    /// 値が変わったときの動き (フォームの破棄の確認に使う。0054)。
+    #[props(default)]
+    on_change: EventHandler<()>,
+
     /// 無効か。
     #[props(default = false)]
     disabled: bool,
@@ -38,6 +42,7 @@ pub fn SuggestionField(
         let text = event.value();
         let sequence = state.write().begin(&text);
         value.set(text.clone());
+        on_change.call(());
         let api = api.clone();
         spawn(async move {
             // 候補は入力の補助であり、引けなくても入力は続けられる (FR-13)。
@@ -67,6 +72,7 @@ pub fn SuggestionField(
                                 div {
                                     onclick: move |_| {
                                         value.set(state.write().select(&option));
+                                        on_change.call(());
                                     },
                                     if !prefix.is_empty() {
                                         b { "{prefix}" }

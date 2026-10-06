@@ -120,7 +120,7 @@ pub fn HomeScreen() -> Element {
 
     let list = rsx! {
         div { class: "screen",
-            ScreenAppBar { title: t(Key::BrewsLabel).to_string() }
+            ScreenAppBar { title: t(Key::BrewsLabel).to_string(), brand: true }
             RecordListView::<crate::records::Brew> {
                 load,
                 row,

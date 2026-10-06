@@ -26,7 +26,7 @@ use dioxus_router::Navigator;
 use crate::i18n::{t, Key};
 use crate::records::{record_error_key, record_error_retry, RecordError};
 use crate::router::Route;
-use crate::ui::{Banner, RailItem};
+use crate::ui::{Banner, ConfirmDialog, RailItem};
 
 pub use list_view::{RecordListView, RecordLoader, SortChoice};
 pub use picker::RecordPickerSheet;
@@ -81,6 +81,30 @@ pub fn retryable_banner(error: &RecordError, on_retry: EventHandler<()>) -> Elem
         record_error_retry(error).then_some(EventHandler::new(move |_| on_retry.call(())));
     rsx! {
         Banner { message: t(record_error_key(error)).to_string(), on_retry: handler }
+    }
+}
+
+/// 保存せずに閉じる確認 (0054)。フォームに変更があるときだけ出す。
+#[component]
+pub fn DiscardConfirm(
+    /// 開いているか。確認の後は false にする。
+    open: Signal<bool>,
+    /// 破棄して閉じるときの動き。
+    on_discard: EventHandler<()>,
+) -> Element {
+    let mut open = open;
+    rsx! {
+        ConfirmDialog {
+            title: t(Key::DiscardConfirmTitle).to_string(),
+            message: t(Key::DiscardConfirmMessage).to_string(),
+            cancel_label: t(Key::CancelButton).to_string(),
+            confirm_label: t(Key::DiscardConfirmButton).to_string(),
+            on_cancel: move |_| open.set(false),
+            on_confirm: move |_| {
+                open.set(false);
+                on_discard.call(());
+            },
+        }
     }
 }
 

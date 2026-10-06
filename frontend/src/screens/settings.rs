@@ -351,7 +351,7 @@ pub fn SettingsScreen() -> Element {
         WidePage {
             rail: rsx! { NavigationRail { items: rail_items(navigator, 5) } },
             div { class: "screen",
-                ScreenAppBar { title: t(Key::SettingsTitle).to_string() }
+                ScreenAppBar { title: t(Key::SettingsTitle).to_string(), brand: true }
                 div { class: "body",
                     div { class: "section",
                         h2 { "{t(Key::PasskeysTitle)}" }

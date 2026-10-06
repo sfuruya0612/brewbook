@@ -235,4 +235,8 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "お気に入りから削除",                                        // favoriteRemoveLabel
     "登録日",                                                    // sortCreatedAt
     "更新日",                                                    // sortUpdatedAt
+    "例: ハンドドリップ",                                        // methodHint
+    "保存せずに閉じますか？",                                    // discardConfirmTitle
+    "入力した変更は破棄されます。",                              // discardConfirmMessage
+    "破棄する",                                                  // discardConfirmButton
 ];

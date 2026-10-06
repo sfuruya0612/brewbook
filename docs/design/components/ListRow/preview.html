@@ -1,4 +1,4 @@
-<!-- @dsCard group="部品" width=760 height=270 subtitle="一覧の行: 抽出、購入 (写真付き)、選択中" -->
+<!-- @dsCard group="部品" width=760 height=270 subtitle="一覧の行: 抽出、購入 (写真付き)、アーカイブ済み、選択中" -->
 <!doctype html>
 <html lang="ja">
 <head>
@@ -33,7 +33,7 @@ a { color: var(--link); }
 .stage.tight { gap: 16px; }
 .phone { width: 390px; flex: none; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 20px; overflow: hidden; position: relative; }
 .phone .screen { min-height: 700px; display: flex; flex-direction: column; }
-.wide { width: 1024px; flex: none; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 12px; overflow: hidden; position: relative; }
+.wide { width: 1280px; flex: none; background: var(--paper); border: 1px solid var(--line-strong); border-radius: 12px; overflow: hidden; position: relative; }
 .stage-note { font-size: 12px; line-height: 16px; color: var(--ink-muted); margin-top: 8px; }
 
 /* AppBar */
@@ -73,21 +73,18 @@ a { color: var(--link); }
 .row .sub .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .row .side { flex: none; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .row .val { font-family: var(--font-mono); font-size: 15px; line-height: 22px; font-variant-numeric: tabular-nums; }
+.row.archived .name, .row.archived .sub { color: var(--ink-muted); }
 .row.selected { background: var(--roast-soft); }
-/* 行の右端の星 (0051)。押すとお気に入りを付け外しする (FR-21)。 */
-.row .fav { flex: none; display: flex; align-items: center; }
-.row .fav .iconbtn { width: 36px; height: 36px; }
-.row .fav svg { width: 22px; height: 22px; fill: none; stroke: var(--ink-muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.row .fav.on svg { fill: var(--crema-ink); stroke: var(--crema-ink); }
 .thumb { width: 44px; height: 44px; border-radius: var(--radius-sm); background: var(--paper-sunken); flex: none; display: flex; align-items: center; justify-content: center; color: var(--ink-faint); overflow: hidden; }
 .thumb svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.badge { display: inline-flex; align-items: center; height: 20px; padding: 0 var(--space-2); border-radius: var(--radius-sm); background: var(--paper-sunken); color: var(--ink-muted); font-size: 12px; line-height: 16px; font-weight: 500; }
+.toolbar { display: flex; align-items: center; justify-content: space-between; padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink-muted); font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; }
+.switch { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--ink-muted); }
+.switch .track { width: 36px; height: 20px; border-radius: var(--radius-full); border: 1px solid var(--line-strong); position: relative; background: transparent; }
+.switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--line-strong); }
+.switch.on .track { background: var(--roast); border-color: var(--roast); }
+.switch.on .track::after { left: 19px; background: var(--on-roast); }
 .empty { padding: var(--space-12) var(--space-6); text-align: center; color: var(--ink-muted); }
-
-/* 一覧のツールバー (0051)。並び順の選択と昇順/降順の切り替えとお気に入りのみの切り替え。 */
-.list-toolbar { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); background: var(--paper); flex: none; }
-.list-toolbar .sort-select { height: 36px; padding: 0 var(--space-2); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--paper-sunken); color: var(--ink); font-family: var(--font-sans); font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; }
-.list-toolbar .iconbtn { width: 36px; height: 36px; }
-.list-toolbar .chip { height: 32px; }
 
 /* 評価 */
 .rating { display: inline-flex; gap: 4px; align-items: center; }
@@ -116,10 +113,10 @@ a { color: var(--link); }
 .chain .link { width: 2px; height: 12px; background: var(--line-strong); margin-left: 27px; }
 
 /* 入力欄 */
-.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field { display: flex; flex-direction: column; gap: 6px; }
 .field .lbl { font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; color: var(--ink-muted); }
 .field .lbl .req { color: var(--ink-muted); font-weight: 400; margin-left: var(--space-1); }
-.field .box { display: flex; align-items: center; gap: var(--space-2); height: 48px; padding: 0 var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--paper-sunken); font-size: 15px; line-height: 22px; min-width: 0; }
+.field .box { display: flex; align-items: center; gap: var(--space-2); height: 48px; padding: 0 var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--paper-sunken); font-size: 15px; line-height: 22px; }
 .field .box.area { height: auto; min-height: 88px; align-items: flex-start; padding: var(--space-3); }
 .field .box.area .in { white-space: normal; overflow: visible; }
 .field .box .in { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -132,12 +129,12 @@ a { color: var(--link); }
 .field .help { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
 .field.error .help { color: var(--signal); }
 .field.disabled .box { border-color: var(--line); color: var(--ink-faint); }
-.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-3); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3) var(--space-3); }
 .suggest { border: 1px solid var(--line-strong); border-top: 0; border-radius: 0 0 var(--radius-sm) var(--radius-sm); background: var(--paper-raised); box-shadow: var(--shadow-float); overflow: hidden; }
 .suggest div { padding: 10px var(--space-3); font-size: 15px; line-height: 22px; border-bottom: 1px solid var(--line); }
 .suggest div:last-child { border-bottom: 0; }
 .suggest b { color: var(--crema-ink); font-weight: 600; }
-.form { padding: var(--space-4) var(--space-4) var(--space-8); display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+.form { padding: var(--space-4) var(--space-4) var(--space-8); display: flex; flex-direction: column; gap: var(--space-5); }
 .sec { font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; color: var(--ink-muted); padding-top: var(--space-2); }
 .picker { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--paper-sunken); }
 .picker .main { flex: 1; min-width: 0; }
@@ -206,6 +203,28 @@ a { color: var(--link); }
 .pk .m { font-size: 12px; line-height: 16px; color: var(--ink-muted); font-family: var(--font-mono); }
 .pk .m span { font-family: var(--font-sans); }
 
+
+/* ヘッダーの印 (最上位の画面だけ) とフォームの操作群 */
+.appbar .brandmark { width: 22px; height: 26px; margin: 0 var(--space-3) 0 var(--space-1); flex: none; }
+.appbar .brandmark svg { width: 100%; height: 100%; display: block; }
+.appbar .acts { display: flex; align-items: center; gap: var(--space-1); }
+.appbar .acts .btn.sm { height: 36px; padding: 0 var(--space-4); }
+.appbar .acts .btn.text { padding: 0 var(--space-3); height: 36px; }
+
+/* ナビゲーションドロワー */
+.drawer-scrim { position: absolute; inset: 0; background: #2b1d1366; z-index: 2; }
+.drawer { position: absolute; top: 0; bottom: 0; left: 0; z-index: 3; width: 280px; background: var(--paper-raised); box-shadow: var(--shadow-float); display: flex; flex-direction: column; padding: var(--space-3) var(--space-3) var(--space-4); }
+.drawer.standard { position: static; width: 240px; flex: none; box-shadow: none; border-right: 1px solid var(--line); background: var(--paper); }
+.drawer .head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-3) var(--space-4); }
+.drawer .head .mk { width: 28px; height: 33px; }
+.drawer .head .mk svg { width: 100%; height: 100%; display: block; }
+.drawer .head .wm { font-family: var(--font-serif); font-size: 22px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em; }
+.drawer .item { display: flex; align-items: center; gap: var(--space-3); height: 48px; padding: 0 var(--space-4); border-radius: var(--radius-full); color: var(--ink-muted); font-size: 15px; line-height: 22px; font-weight: 500; }
+.drawer .item svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.drawer .item.on { background: var(--roast-soft); color: var(--ink); }
+.drawer .sep { height: 1px; background: var(--line); margin: var(--space-2) var(--space-3); }
+.drawer .foot { margin-top: auto; }
+
 /* 広い画面 */
 .rail { width: 88px; flex: none; border-right: 1px solid var(--line); padding: var(--space-3) 0; display: flex; flex-direction: column; align-items: center; gap: var(--space-1); background: var(--paper); }
 .rail .item { width: 72px; padding: var(--space-2) 0; border-radius: var(--radius-md); display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--ink-muted); font-size: 12px; line-height: 16px; font-weight: 500; }
@@ -220,9 +239,10 @@ a { color: var(--link); }
 <body>
 
 <div style="padding:24px"><div class="list" style="border:1px solid var(--line);border-radius:var(--radius-md);overflow:hidden;background:var(--paper)">
-  <div class="row"><div class="main"><div class="name">Ethiopia Guji Natural</div><div class="sub"><span class="v">2026-09-26 08:12</span> / Kaido Coffee Roasters</div></div><div class="side"><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i></span></div><span class="fav"><span class="iconbtn"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.9z"/></svg></span></span></div>
-  <div class="row"><div class="thumb"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div><div class="main"><div class="name">Colombia Huila Washed</div><div class="sub"><span class="v">2026-09-07</span> / 喫茶ひかり</div></div><div class="side"><span class="val">250 g</span><span class="t-caption muted">2,200 JPY</span></div><span class="fav on"><span class="iconbtn"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.9z"/></svg></span></span></div>
-  <div class="row selected" style="border-bottom:0"><div class="main"><div class="name">Kenya Kirinyaga AA</div><div class="sub"><span class="v">2026-09-24 19:05</span></div></div><div class="side"><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></span></div><span class="fav"><span class="iconbtn"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.9z"/></svg></span></span></div>
+  <div class="row"><div class="main"><div class="name">Ethiopia Guji Natural</div><div class="sub"><span class="v">2026-09-26 08:12</span> / Kaido Coffee Roasters</div></div><div class="side"><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i></span></div></div>
+  <div class="row"><div class="thumb"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div><div class="main"><div class="name">Colombia Huila Washed</div><div class="sub"><span class="v">2026-09-07</span> / 喫茶ひかり</div></div><div class="side"><span class="val">250 g</span><span class="t-caption muted">2,200 JPY</span></div></div>
+  <div class="row archived"><div class="main"><div class="name">Guatemala Antigua SHB</div><div class="sub"><span class="v">2026-09-21 09:30</span> / 喫茶ひかり</div></div><div class="side"><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i></span><span class="badge">アーカイブ済み</span></div></div>
+  <div class="row selected" style="border-bottom:0"><div class="main"><div class="name">Kenya Kirinyaga AA</div><div class="sub"><span class="v">2026-09-24 19:05</span></div></div><div class="side"><span class="rating"><i class="on"></i><i class="on"></i><i class="on"></i><i class=""></i><i class=""></i></span></div></div>
 </div></div>
 </body>
 </html>

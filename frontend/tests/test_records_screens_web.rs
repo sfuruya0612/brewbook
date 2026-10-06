@@ -9,11 +9,12 @@
 
 mod support;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use brew_book_frontend::api::ApiClient;
 use brew_book_frontend::auth::{AuthServices, SessionStatus};
+use brew_book_frontend::i18n::{set_language, Language};
 use brew_book_frontend::records::values::LocalDateTime;
 use brew_book_frontend::records::{PhotoUploader, RecordServices, RecordsApi};
 use brew_book_frontend::screens::records::brew_form::BrewForm;
@@ -40,6 +41,9 @@ thread_local! {
 
     /// 描くフォームの経路。
     static FORMS_PATH: RefCell<String> = const { RefCell::new(String::new()) };
+
+    /// フォームを閉じたか (破棄の確認の検査に使う)。
+    static FORM_CLOSED: Cell<bool> = const { Cell::new(false) };
 }
 
 /// フォームの依存を組む。API は thread_local の偽の送信の実装を使う。
@@ -77,6 +81,8 @@ enum TestRoute {
     PurchaseEdit { id: String },
     #[route("/brews/new", BrewNewRoute)]
     BrewNew {},
+    #[route("/brews/new-close", BrewNewCloseRoute)]
+    BrewNewClose {},
     #[route("/brews/:id/edit", BrewEditRoute)]
     BrewEdit { id: String },
 }
@@ -99,6 +105,19 @@ fn PurchaseEditRoute(id: String) -> Element {
 fn BrewNewRoute() -> Element {
     rsx! {
         BrewForm { id: None }
+    }
+}
+
+/// 閉じる動きを受け取るフォーム (破棄の確認の検査用)。
+#[component]
+fn BrewNewCloseRoute() -> Element {
+    rsx! {
+        BrewForm {
+            id: None,
+            on_close: Some(EventHandler::new(|_| {
+                FORM_CLOSED.with(|cell| cell.set(true));
+            })),
+        }
     }
 }
 
@@ -165,6 +184,32 @@ fn has_no_placeholder(element: &web_sys::Element) -> bool {
         .get_attribute("placeholder")
         .unwrap_or_default()
         .is_empty()
+}
+
+/// ブラウザのタスクを数回進める。
+async fn settle() {
+    for _ in 0..10 {
+        tick().await;
+    }
+}
+
+/// 要素を押す。
+fn click(element: &web_sys::Element) {
+    element.unchecked_ref::<web_sys::HtmlElement>().click();
+}
+
+/// 入力欄の値を変えて input を送る。
+fn type_value(element: &web_sys::Element, value: &str) {
+    element
+        .unchecked_ref::<web_sys::HtmlInputElement>()
+        .set_value(value);
+    let init = web_sys::EventInit::new();
+    init.set_bubbles(true);
+    let event = web_sys::Event::new_with_event_init_dict("input", &init)
+        .expect("the input event must be created");
+    element
+        .dispatch_event(&event)
+        .expect("the input event must dispatch");
 }
 
 /// 購入の応答 (購入日 `2026-10-01`、焙煎日 `2026-09-20`)。
@@ -264,6 +309,7 @@ async fn the_purchase_edit_form_draws_the_dates_with_the_native_picker() {
 async fn the_brew_new_form_draws_the_date_and_time_with_the_native_pickers() {
     install_styles();
     set_theme("paper");
+    set_language(Language::English);
     let root = mount_form("/brews/new", Rc::new(FakeTransport::new(vec![]))).await;
 
     assert_eq!(count(&root, "input[type='date']"), 1);
@@ -273,12 +319,31 @@ async fn the_brew_new_form_draws_the_date_and_time_with_the_native_pickers() {
     let time = select(&root, "input[type='time']");
     assert_eq!(input_value(&date), "2026-09-25");
     assert_eq!(input_value(&time), "12:30");
+    // 抽出方法には例をプレースホルダーで出す (0054)。
+    assert_eq!(count(&root, "input[placeholder='e.g. Pour over']"), 1);
     // 形式の案内は help に出し、placeholder と icon は使わない (0049 の原本の更新による)。
     assert_eq!(count(&root, ".form .field .help"), 2);
     assert!(has_no_placeholder(&date));
     assert!(has_no_placeholder(&time));
     assert_eq!(count(&root, "input[type='date'] ~ .icon"), 0);
     assert_eq!(count(&root, "input[type='time'] ~ .icon"), 0);
+    // 日付と時刻の枠と案内の縦の位置が揃う (0054 の修正)。
+    let boxes = elements(&root, ".form .grid2 .field .box");
+    assert_eq!(boxes.len(), 6);
+    let date_box = boxes[0].get_bounding_client_rect();
+    let time_box = boxes[1].get_bounding_client_rect();
+    assert!(
+        (date_box.top() - time_box.top()).abs() < 1.0,
+        "the date and time boxes must align: date={date_box:?} time={time_box:?}"
+    );
+    let helps = elements(&root, ".form .field .help");
+    assert_eq!(helps.len(), 2);
+    assert!(
+        (helps[0].get_bounding_client_rect().top() - helps[1].get_bounding_client_rect().top())
+            .abs()
+            < 1.0,
+        "the date and time help texts must align"
+    );
 }
 
 /// 抽出の編集のフォームが、読み込んだ抽出日時を date input と time input で描く
@@ -306,4 +371,56 @@ async fn the_brew_edit_form_draws_the_date_and_time_with_the_native_pickers() {
     assert!(has_no_placeholder(&time));
     assert_eq!(count(&root, "input[type='date'] ~ .icon"), 0);
     assert_eq!(count(&root, "input[type='time'] ~ .icon"), 0);
+}
+
+/// フォームに変更があるときは、閉じる前に破棄の確認を出す (0054)。
+#[wasm_bindgen_test]
+async fn the_brew_form_confirms_before_discarding_the_changes() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    FORM_CLOSED.with(|cell| cell.set(false));
+    let root = mount_form("/brews/new-close", Rc::new(FakeTransport::new(vec![]))).await;
+
+    // 変更が無いときは確認を出さずに閉じる。
+    click(&select(&root, "button[aria-label='Cancel']"));
+    settle().await;
+    assert_eq!(count(&root, ".dialog"), 0);
+    assert!(
+        FORM_CLOSED.with(|cell| cell.get()),
+        "the form without changes must close"
+    );
+
+    // 値を変えると、閉じる前に確認を出す。
+    FORM_CLOSED.with(|cell| cell.set(false));
+    let dose = &elements(&root, ".form input.in")[2];
+    type_value(dose, "15");
+    settle().await;
+    click(&select(&root, "button[aria-label='Cancel']"));
+    settle().await;
+    assert_eq!(count(&root, ".dialog"), 1);
+    let dialog = select(&root, ".dialog").text_content().unwrap_or_default();
+    assert!(dialog.contains("Close without saving?"), "{dialog}");
+    assert!(
+        !FORM_CLOSED.with(|cell| cell.get()),
+        "the form must not close before the confirmation"
+    );
+
+    // キャンセルすると閉じない。
+    click(&select(&root, ".dialog .acts .btn.text"));
+    settle().await;
+    assert_eq!(count(&root, ".dialog"), 0);
+    assert_eq!(count(&root, ".screen"), 1);
+    assert!(!FORM_CLOSED.with(|cell| cell.get()));
+
+    // 破棄すると閉じる。
+    click(&select(&root, "button[aria-label='Cancel']"));
+    settle().await;
+    click(&select(&root, ".dialog .acts .btn.primary"));
+    settle().await;
+    assert_eq!(count(&root, ".dialog"), 0);
+    assert!(
+        FORM_CLOSED.with(|cell| cell.get()),
+        "the discard must close the form"
+    );
 }

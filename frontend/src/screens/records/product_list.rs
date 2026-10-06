@@ -126,7 +126,7 @@ pub fn ProductListScreen() -> Element {
 
     let list = rsx! {
         div { class: "screen",
-            ScreenAppBar { title: t(Key::ProductsTitle).to_string() }
+            ScreenAppBar { title: t(Key::ProductsTitle).to_string(), brand: true }
             RecordListView::<crate::records::Product> {
                 load,
                 row,

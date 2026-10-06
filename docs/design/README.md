@@ -1,4 +1,4 @@
-brewbook は、自宅で淹れたコーヒーを記録する Web アプリ (Rust と Dioxus。ADR-0017) のための視覚言語である。
+brewbook は、自宅で淹れたコーヒーを記録する Web アプリ (Flutter Web、後に iOS) のための視覚言語である。
 方向は「記録帳らしい落ち着き」。クラフト紙の地に濃いコーヒー色の文字と罫線を引き、数値がよく読める静かな帳簿にする。装飾は足さず、記録そのものを主役にする。
 
 ## コンセプト
@@ -21,7 +21,7 @@ brewbook は、自宅で淹れたコーヒーを記録する Web アプリ (Rust
 
 ## 色
 
-- 地は `paper` (画面)、`paper-raised` (行、カード、シート、ダイアログ)、`paper-sunken` (入力欄、写真の枠) の 3 段。段の差だけで面を分け、枠線や影で持ち上げない。
+- 地は `paper` (画面)、`paper-raised` (行、カード、シート、ダイアログ)、`paper-sunken` (入力欄、写真の枠、バッジ) の 3 段。段の差だけで面を分け、枠線や影で持ち上げない。
 - 文字は `ink` (本文と数値)、`ink-muted` (補足、項目名、単位)、`ink-faint` (プレースホルダーと無効化した操作だけ) の 3 段。`ink-faint` で情報を運ばない。
 - `roast` は主要な操作の塗り、選択中のチップ、抽出回数と購入金額の棒に使う。塗りの上の文字は必ず `on-roast`。白を直に書かない。
 - `roast-soft` は参照先をたどるタイル (購入、商品、店) と選択中の行の地。上の文字は `ink` と `ink-muted`。
@@ -38,56 +38,56 @@ brewbook は、自宅で淹れたコーヒーを記録する Web アプリ (Rust
 - 数値と日付は IBM Plex Mono (`mono`) の `value` と `value-large`。`font-variant-numeric: tabular-nums` を必ず指定する。
 - brewbook の名前だけを IBM Plex Serif (`serif`) の `wordmark` で組む。見出しや本文に serif を使わない。
 - 段階は `title` (画面の題) > `heading` (見出し、行の 1 行目) > `body` > `label` (項目名、チップ、ボタン) > `caption` (行の 2 行目、単位、注記)。
-- 3 つの族は Google Fonts の CSS を `<link>` で読み込む (フォントファイルは持たない。ADR-0014)。IBM Plex が使えない環境では `sans` のフォールバック (Hiragino Sans、Noto Sans JP) で組む。
+- 3 つの族は Google Fonts から読み込む (フォントファイルは持たない)。Flutter では `google_fonts` を使うか、必要なサブセットをアセットに同梱する。依存の追加は ADR に理由を記す (ADR-0001 の規約)。IBM Plex が使えない環境では `sans` のフォールバック (Hiragino Sans、Noto Sans JP) で組む。
 
 ## 余白、角丸、レイアウト
 
 - 4 px を基準にした 8 段。画面の左右は `space-4`、入力欄の間は `space-5`、セクションの間は `space-6`、統計のグラフの間は `space-8`。
-- 角は `radius-sm` (入力欄、写真)、`radius-md` (ボタン、カード、タイル、ダイアログ)、`radius-lg` (ボトムシート、拡張 FAB)。チップと評価の印だけ `radius-full`。
+- 角は `radius-sm` (入力欄、バッジ、写真)、`radius-md` (ボタン、カード、タイル、ダイアログ)、`radius-lg` (ボトムシート、拡張 FAB)。チップと評価の印だけ `radius-full`。
 - 幅 840 px 未満は 1 列。AppBar は 56 px、一覧の行は 64 px 以上、入力欄とボタンは 48 px。
-- 幅 840 px 以上はナビゲーションレール (88 px。抽出、購入、商品、店、統計、設定) と、一覧 (400 px) と詳細の 2 段組にする (`WideLayout`)。詳細の内容は最大 720 px に収める。
+- 画面の移動はドロワー (抽出、購入、商品、店、統計、設定、ログアウト) で行う。幅 840 px 未満では AppBar のハンバーガーで開き、840 px 以上では常設 (240 px) にして、一覧 (400 px) と詳細の 2 段組を右に置く (`WideLayout`)。詳細の内容は最大 720 px に収める。
+- AppBar は 3 つの形: 最上位の画面は「ハンバーガー、印、画面名」、詳細は「戻る、画面名、操作」、フォームは「閉じる、画面名、キャンセル、保存」。フォームにはメニューと印を出さない (`AppBar`)。
 
 ## 部品と画面
 
-- 部品は `AppBar`、`Button`、`Field`、`Chip`、`Rating`、`ListRow`、`Ledger`、`ReferenceTile`、`Feedback`、`Charts` の 10 種。それぞれのガイドラインが、Dioxus のどの部品と Tailwind のどのクラスで作るかを示す。
+- 部品は `AppBar`、`Button`、`Field`、`Chip`、`Rating`、`ListRow`、`Ledger`、`ReferenceTile`、`Feedback`、`Charts` の 10 種。それぞれのガイドラインが、Flutter のどのウィジェットで作るかを示す。
 - 画面は `Auth`、`Home`、`BrewForm`、`Detail`、`Lists`、`RecordForms`、`Stats`、`Settings`、`WideLayout`。ルーターに登録する画面 (ログイン、登録、ホーム、抽出の詳細と入力、購入の一覧と詳細と入力、商品の一覧と入力、店の一覧と入力、統計、設定) を全て覆う。
-- 一覧はどの記録も同じ `ListRow` で並べる。1 行目は名前、2 行目は日付 (等幅) と参照先、右端は数値か評価。
+- 一覧はどの記録も同じ `ListRow` で並べる。1 行目は名前、2 行目は日付 (等幅) と参照先、右端は数値か評価。アーカイブ済みは文字を `ink-muted` に落として「アーカイブ済み」のバッジを付ける。
 - 詳細は `Ledger` (項目名と値の表) と `ReferenceTile` (購入から商品、店へたどる連鎖) の 2 つで組む。
-- グラフは SVG を組み立てて描き (座標は `frontend/src/records/chart.rs`)、色は `chart-count` (件数と金額) と `chart-grams` (グラム) の 2 つだけ。通貨はグラフを分けて表し、色で分けない。
+- グラフは fl_chart で描き、色は `chart-count` (件数と金額) と `chart-grams` (グラム) の 2 つだけ。通貨はグラフを分けて表し、色で分けない。
 - `components/bundle.css` は上の部品の CSS の参照 (クラス名と寸法)。プレビューはこれと同じものを埋め込んでいる。
 
 ## アイコン
 
-- アプリアイコンは `assets/AppIcon/`。クラフト紙の地 (`#e6d5b8`) に `roast` の印: ドリッパーの一滴が記録の行に落ちる (brew と book)。`icon.svg` は角丸で透過、`icon-maskable.svg` は全面塗りで印を中央 80% に収める。`Icon-192.png` と `Icon-512.png` は `frontend/public/icons/` の同名ファイルを、`favicon-32.png` は `frontend/public/favicon.png` を置き換える用。`manifest.json` の `background_color` と `theme_color` は `#f4ede2` にする。
-- 印とワードマークは `assets/Marks/`。`mark.svg` はログイン画面と記録が無いときの表示に、`wordmark.svg` は Plex Serif が読み込めない場所 (メール、README) に使う。ダークでは `mark-night.svg` と `wordmark-night.svg`。
-- 画面内のアイコンは Material Icons Outlined の Web フォントを 24 px、`ink` か `ink-muted` で使う。塗りつぶしの版と混ぜない。プレビューの線画 (1.8 px の線、丸い端) は同じ調子の代用で、実装では Material Icons を使う。
-- 記録の種類を表す印: 抽出は `format_list_bulleted`、購入は `shopping_bag`、商品は `spa`、店は `storefront`、統計は `bar_chart`、設定は `settings` (Material Icons のリガチャの基底名。実装は `frontend/src/ui/icon.rs`)。
+- アプリアイコンは `assets/AppIcon/`。クラフト紙の地 (`#e6d5b8`) に `roast` の印: ドリッパーの一滴が記録の行に落ちる (brew と book)。`icon.svg` は角丸で透過、`icon-maskable.svg` は全面塗りで印を中央 80% に収める。`Icon-192.png` と `Icon-512.png` は `frontend/web/icons/` の同名ファイルを、`favicon-32.png` は `frontend/web/favicon.png` を置き換える用。`apple-touch-icon-180.png` は iOS 用。`manifest.json` の `background_color` と `theme_color` は `#f4ede2` にする。
+- 印とワードマークは `assets/Marks/`。`mark.svg` は AppBar の左、ドロワーの頭、ログイン画面、記録が無いときの表示に、`wordmark.svg` は Plex Serif が読み込めない場所 (メール、README) に使う。ダークでは `mark-night.svg` と `wordmark-night.svg`。
+- 画面内のアイコンは Material Icons の outlined (Flutter の `Icons.*_outlined`) を 24 px、`ink` か `ink-muted` で使う。塗りつぶしの版と混ぜない。プレビューの線画 (1.8 px の線、丸い端) は同じ調子の代用で、実装では Material Icons を使う。
+- ハンバーガーは `Icons.menu_outlined`。記録の種類を表す印: 抽出は `Icons.format_list_bulleted_outlined`、購入は `Icons.shopping_bag_outlined`、商品は `Icons.spa_outlined`、店は `Icons.storefront_outlined`、統計は `Icons.bar_chart_outlined`、設定は `Icons.settings_outlined`。
 
 ## 状態
 
 - 読み込み中は「読み込み中」の文字だけ。スケルトンやスピナーを足さない。
 - 記録が無いときは `mark.svg` を `ink-faint` の濃さで置き、「記録がありません」と、次にすることを 1 文 (`caption`、`ink-muted`)。
 - 通信エラーは `Feedback` のバナー (`signal-soft` の地、`signal` の文字、「再試行」)。フォームの検証エラーは項目の枠を `signal` にして、下に `caption` で理由を書く。
-- 保存はスナックバー (`ink` の地に `paper` の文字)。取り消せる操作には `crema` の「元に戻す」を付けてよい。
+- 保存、アーカイブ、アーカイブ解除はスナックバー (`ink` の地に `paper` の文字)。取り消せる操作には `crema` の「元に戻す」を付けてよい。
 - 取り消せない操作 (アカウント削除) は確認ダイアログを経る。確認のボタンだけを `signal` の塗りにし、キャンセルは文字ボタン (FR-15)。
 
-## Dioxus と Tailwind への落とし込み
+## Flutter への落とし込み
 
-| Dioxus / Tailwind | トークン |
+| Flutter | トークン |
 | --- | --- |
-| 部品のクラス (`.appbar`、`.btn`、`.field` など。`frontend/src/ui/design.css` と `docs/design/components/bundle.css`) | 原本のクラスと `tokens.css` の変数 |
-| `bg-paper` / `bg-paper-raised` / `bg-paper-sunken` | `paper` / `paper-raised` / `paper-sunken` |
-| `text-ink` / `text-ink-muted` / `text-ink-faint` | `ink` / `ink-muted` / `ink-faint` |
-| `bg-roast` / `text-on-roast` / `bg-roast-soft` | `roast` / `on-roast` / `roast-soft` |
-| `bg-crema` / `text-crema-ink` / `bg-crema-soft` | `crema` / `crema-ink` / `crema-soft` |
-| `bg-signal` / `bg-signal-soft` / `text-on-signal` | `signal` / `signal-soft` / `on-signal` |
-| `border-line` / `border-line-strong` | `line` / `line-strong` |
-| `.t-title` / `.t-heading` / `.t-body` / `.t-label` / `.t-caption` | `title` / `heading` / `body` / `label` / `caption` |
-| `.btn.primary` / `.btn.secondary` / `.btn.text` | `Button` の primary / secondary / text |
-| `.field` と `.field .box` | `Field` |
-| `.list` と `.row` | `ListRow` |
-| `.fab` | `Button` の FAB |
-| `.rail` と `.wide-layout` | `WideLayout` |
+| `ColorScheme.surface` / `surfaceContainer` / `surfaceContainerLowest` | `paper` / `paper-raised` / `paper-sunken` |
+| `ColorScheme.onSurface` / `onSurfaceVariant` | `ink` / `ink-muted` |
+| `ColorScheme.primary` / `onPrimary` / `primaryContainer` | `roast` / `on-roast` / `roast-soft` |
+| `ColorScheme.secondary` / `secondaryContainer` | `crema-ink` / `crema-soft` |
+| `ColorScheme.error` / `errorContainer` / `onError` | `signal` / `signal-soft` / `on-signal` |
+| `ColorScheme.outline` / `outlineVariant` | `line-strong` / `line` |
+| `TextTheme.titleLarge` / `titleMedium` / `bodyLarge` / `labelMedium` / `bodySmall` | `title` / `heading` / `body` / `label` / `caption` |
+| `FilledButton` / `OutlinedButton` / `TextButton` | `Button` の primary / secondary / text |
+| `InputDecorationTheme` (filled、`radius-sm`、枠 `line-strong`) | `Field` |
+| `ListTile` (`minTileHeight` 64) | `ListRow` |
+| `FloatingActionButton.extended` (`radius-lg`) | `Button` の FAB |
+| `NavigationDrawer` (`Scaffold.drawer`、840 px 以上は常設) | `AppBar` のドロワー、`WideLayout` |
 
-- ユーティリティの値は `frontend/tailwind.css` の `@theme inline` で `tokens.css` の変数に結び付ける (`bg-paper`、`text-ink`、`p-4` など)。Paper と Night の切り替えは `tokens.css` の `[data-theme]` が行う。
-- 区切りは `line` の 1 px の罫線で引き、`paper-raised` の面と組み合わせる。影は浮くもの (`shadow-float`) だけに使う。
+- `ThemeData` は `useMaterial3: true`、`brightness` ごとに上の対応で `ColorScheme` を組む。`elevation` は FAB、メニュー、ダイアログ以外を 0 にする。
+- `Divider` の色は `line`、太さ 1。`Card` は使わず、`paper-raised` の `Container` と `Divider` で組む。

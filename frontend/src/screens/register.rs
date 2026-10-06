@@ -89,7 +89,7 @@ pub fn RegisterScreen(token: Option<String>) -> Element {
     };
 
     rsx! {
-        AppBar { title: t(Key::RegisterTitle).to_string() }
+        AppBar { title: t(Key::RegisterTitle).to_string(), brand: true }
         if let Some(key) = token_error_key {
             div { class: "form",
                 Banner { message: t(key).to_string() }

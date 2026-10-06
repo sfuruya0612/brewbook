@@ -394,7 +394,7 @@ async fn logout_from_settings(browser: &E2eBrowser) -> Result<(), String> {
 ///
 /// メニューはハンバーガーの下に開き、項目を押すと対応する経路へ移って閉じる。現在の経路と
 /// 同じ項目を押したときは遷移せず、メニューだけ閉じる (履歴が増えないことで確かめる)。
-/// アプリ名を押すとホームへ戻り、ホームでは何もしない。
+/// 印を押すとホームへ戻り、ホームでは何もしない。
 async fn nav_menu(browser: &E2eBrowser) -> Result<(), String> {
     // 6 つの行き先を順に開く。
     for (label, route) in [
@@ -432,31 +432,50 @@ async fn nav_menu(browser: &E2eBrowser) -> Result<(), String> {
     }
     browser.wait_route("/purchases").await?;
 
-    // アプリ名を押すとホームへ戻る。ホームでは何もしない (履歴が増えない)。
-    browser.click_selector(".appbar .app-name").await?;
+    // 印を押すとホームへ戻る。ホームでは何もしない (履歴が増えない)。
+    browser.click_selector(".appbar .brandmark").await?;
     browser.wait_route("/").await?;
     let before = browser
         .eval_string("return String(window.history.length);")
         .await?;
-    browser.click_selector(".appbar .app-name").await?;
+    browser.click_selector(".appbar .brandmark").await?;
     let after = browser
         .eval_string("return String(window.history.length);")
         .await?;
     if before != after {
         return Err(format!(
-            "the app name on the home must not navigate but the history length changed from {before:?} to {after:?}"
+            "the mark on the home must not navigate but the history length changed from {before:?} to {after:?}"
         ));
     }
     browser.wait_route("/").await?;
 
-    // レールを持たないフォームの画面でも、ヘッダーのメニューから移れる (0047)。
-    browser.goto("/products/new").await?;
+    // フォームの画面にはメニューと印を出さない (0054)。閉じると一覧へ戻る。
+    browser.goto("/products").await?;
+    browser.wait_route("/products").await?;
+    browser.click_text("Add a product").await?;
     browser.wait_route("/products/new").await?;
-    browser.click_selector("button[aria-label='Menu']").await?;
-    browser.wait_selector(".menu").await?;
-    browser.click_menu_item("Shops").await?;
-    browser.wait_route("/shops").await?;
-    browser.wait_menu_closed().await?;
+    let has_menu = browser
+        .eval_string(
+            "return String(document.querySelector(\"button[aria-label='Menu']\") !== null);",
+        )
+        .await?;
+    if has_menu.as_deref() != Some("false") {
+        return Err(format!(
+            "the form must not show the menu but it was {has_menu:?}"
+        ));
+    }
+    let has_mark = browser
+        .eval_string("return String(document.querySelector(\".appbar .brandmark\") !== null);")
+        .await?;
+    if has_mark.as_deref() != Some("false") {
+        return Err(format!(
+            "the form must not show the mark but it was {has_mark:?}"
+        ));
+    }
+    browser
+        .click_selector("button[aria-label='Cancel']")
+        .await?;
+    browser.wait_route("/products").await?;
     Ok(())
 }
 

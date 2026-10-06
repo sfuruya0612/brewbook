@@ -225,14 +225,18 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "day",                                                                // statsPeriodDay
     "month",                                                              // statsPeriodMonth
     "Brew conditions and rating",                                         // statsScatterSection
-    "Purchase amount",       // statsPurchaseAmountLabel
-    "Purchase weight",       // statsPurchaseWeightLabel
-    "Sort",                  // sortLabel
-    "Ascending",             // sortAscending
-    "Descending",            // sortDescending
-    "Favorites only",        // favoritesOnlyLabel
-    "Add to favorites",      // favoriteAddLabel
-    "Remove from favorites", // favoriteRemoveLabel
-    "Created",               // sortCreatedAt
-    "Updated",               // sortUpdatedAt
+    "Purchase amount",                            // statsPurchaseAmountLabel
+    "Purchase weight",                            // statsPurchaseWeightLabel
+    "Sort",                                       // sortLabel
+    "Ascending",                                  // sortAscending
+    "Descending",                                 // sortDescending
+    "Favorites only",                             // favoritesOnlyLabel
+    "Add to favorites",                           // favoriteAddLabel
+    "Remove from favorites",                      // favoriteRemoveLabel
+    "Created",                                    // sortCreatedAt
+    "Updated",                                    // sortUpdatedAt
+    "e.g. Pour over",                             // methodHint
+    "Close without saving?",                      // discardConfirmTitle
+    "The changes you entered will be discarded.", // discardConfirmMessage
+    "Discard",                                    // discardConfirmButton
 ];
