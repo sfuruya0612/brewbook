@@ -24,13 +24,12 @@ mod support;
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 use support::e2e::{decode_standard_base64, E2eBrowser, E2E_MARKER};
 use support::seed::{self, Seed};
-use support::{free_port, DevServer};
+use support::DevServer;
 
 /// 下ごしらえに使う時刻 (ISO 8601 UTC の固定長)。
 const CREATED: &str = "2026-09-01T00:00:00.000Z";
@@ -98,13 +97,9 @@ fn wrangler_web_routes_registration_login_and_brew_save_ok() {
     .expect("wrangler dev must start");
 
     // ブラウザを起動する chromedriver。空きポートで待ち受ける。
-    let driver_port = free_port().expect("a free port for chromedriver must be found");
-    let mut chromedriver = start_chromedriver(driver_port);
-    if let Err(error) = wait_for_chromedriver(driver_port) {
-        let _ = chromedriver.kill();
-        let _ = chromedriver.wait();
-        panic!("{error}");
-    }
+    let chromedriver = support::browser::start_chromedriver("frontend:test-same-origin")
+        .expect("chromedriver must start");
+    let driver_port = chromedriver.port();
 
     let fixture = Fixture {
         token,
@@ -117,8 +112,8 @@ fn wrangler_web_routes_registration_login_and_brew_save_ok() {
     let result = run_e2e(&server, driver_port, &work_dir, &fixture);
 
     // 後始末。dev サーバーは DevServer の Drop が止める (workerd の子プロセスも止める)。
-    let _ = chromedriver.kill();
-    let _ = chromedriver.wait();
+    // chromedriver は ChromeDriver の Drop がプロセスグループごと止める (0019)。
+    drop(chromedriver);
 
     if let Err(error) = result {
         panic!(
@@ -1293,35 +1288,4 @@ fn check_export(path: &Path) -> Result<(), String> {
 fn output_tail(lines: &[String]) -> String {
     let start = lines.len().saturating_sub(LOG_TAIL_LINES);
     lines[start..].join("\n")
-}
-
-/// chromedriver を起動する。見つからなければ、mise のタスクから実行するよう促す。
-fn start_chromedriver(port: u16) -> Child {
-    Command::new("chromedriver")
-        .arg(format!("--port={port}"))
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap_or_else(|error| {
-            panic!("chromedriver must start (run this test with `mise run frontend:test-same-origin`): {error}")
-        })
-}
-
-/// chromedriver が待ち受けを始めるまで待つ。
-///
-/// 起動の直後は接続できないため、WebDriver のセッションを開く前に `/status` を確認する。
-fn wait_for_chromedriver(port: u16) -> Result<(), String> {
-    let url = format!("http://127.0.0.1:{port}/status");
-    let deadline = Instant::now() + Duration::from_secs(30);
-    loop {
-        if let Ok(response) = reqwest::blocking::get(&url) {
-            if response.status().is_success() {
-                return Ok(());
-            }
-        }
-        if Instant::now() > deadline {
-            return Err(format!("chromedriver must listen on port {port}"));
-        }
-        std::thread::sleep(Duration::from_millis(100));
-    }
 }

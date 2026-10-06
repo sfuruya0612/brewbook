@@ -25,7 +25,7 @@ iOS の配布形態と Apple Developer Program への加入は未確定のまま
 - ビルド成果物は Cloudflare Workers の Static Assets として Backend と同じ Worker から配信する (ADR-0005)。
   Web のレンダラは CanvasKit で、初回のロードのサイズは問題があれば skwasm へ変更するとしていた (ADR-0007 の結果)。
 - テストは 5 種 (E2E、PBT、Fuzzing、形式手法、単体) のうち Fuzzing の実行以外を CI で実行し、Fuzzing は CI では対象の型検査だけを行う (ADR-0013)。
-  パスキーを伴う E2E は Chrome DevTools Protocol の仮想認証器を使い、chromedriver を `mise.toml` で固定している。
+  パスキーを伴う E2E は ChromeDriver の WebAuthn の拡張コマンドで仮想認証器を付け、chromedriver を `mise.toml` で固定している。
 - ローカルの開発は「ビルドしてから `wrangler dev`」で、Frontend の開発サーバーは別オリジンになるため使わない (ADR-0005)。
 
 ## 決定

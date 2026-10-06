@@ -2,6 +2,7 @@
 
 Created: 2026-10-06
 Model: DeepSeek V4.1 Flash
+Completed: 2026-10-06
 
 ## 背景
 
@@ -122,3 +123,47 @@ cold ビルドの実測は次のとおりである。2026-10-05 の手元の実�
 - 0005 (`headless_chrome` を追加した issue) と 0044 (`thirtyfour` と E2E のハーネスを追加した issue) の統合である。どちらも closed のため、履歴は書き換えない。
 - 0046 と 0052 (ChromeDriver の並列実行の失敗) に影響し得る。統合の後に失敗の再現が変わった場合は issue に記録する。
 - 0037 (Frontend のツールチェーンと CI のキャッシュ)。CI のキャッシュの改善 (10 GB の上限を超えないように削る) と、`backend:test` と `backend:test-integration` のビルドロックの待ちの見直しは、この issue の範囲外の別 issue とする。
+
+## 実装中の記録
+
+- 所有者の指示 (2026-10-06) により、cold ビルドの所要時間の変更前後の計測は行わない。変更前後のパッケージ数 (`cargo metadata` の依存グラフで、ワークスペースのメンバーを起点に到達できるパッケージ数) は次のとおりである。
+  - Backend: 320 (2026-10-06 の変更前) → 251 (2026-10-06 の変更後)
+  - Frontend: 366 (同日の変更前) → 337 (同日の変更後)
+- 所有者の指示 (2026-10-06) により、`mise run check` は「既定の並列度で 3 回連続」ではなく、`mise.local.toml` の設定 (`jobs = 2`、`CARGO_BUILD_JOBS = "4"`) のまま 1 回だけ実行する (CI の既定の並列度ではない)。
+- `dioxus` の feature は A を満たせず (`manganis` は外れたが `dioxus-devtools` が残る)、B も満たせない (`dioxus-devtools` は `dioxus-web` 0.7.10 の非 optional の依存で、feature では外せない)。C に当たるが、外せる `dioxus-logger` と `manganis` (asset) は外しており、残る `dioxus-devtools` は feature では外せない (依存の構成の問題) ため、分ける対象が無い。Frontend の削減は 29 パッケージである。
+- `document` feature は、`frontend/tests/` の複数の Web テスト (test_settings_web、test_stats_web、test_records_lists_web、test_records_screens_web) が `dioxus::history` を使うため残した (方針の `["web", "minimal"]` からの乖離)。
+- `web-sys` は `dioxus-web` が host のビルドでも要求するため target の限定を外し、外した `devtools` と `mounted` が有効にしていた `Location` と `DomRect` を明示した。
+- `reqwest` 0.12.28 の既定の feature を外した結果、`native-tls`、`hyper-tls`、`openssl-sys`、`system-configuration` は `cargo tree -e features` から消えた (ホストと `--target x86_64-unknown-linux-gnu` で確認)。残るのは `core-foundation` と `security-framework` (reqwest 0.13.5 の rustls 経路の `rustls-platform-verifier` と `rustls-native-certs` 経由) である。
+- `tokio-macros` は、`hyper-util` (reqwest 0.12.28 と 0.13.5 の `client` feature) が `tokio` の `macros` を有効にするため残る。`#[tokio::main]` と `#[tokio::test]` は引き続き未使用である。
+- 2026-10-06 に、実装の最初に WebAuthn 拡張の往復を確認した。`GET .../credentials` が `privateKey` を返し、`DELETE .../credentials/{id}` の後に `POST .../credential` へ `signCount` を変えて入れ直すと、次のアサーションの署名カウンタがその値から始まることを、`wrangler_auth_login_complete_regressed_sign_count_409` の通過で確認した。
+- 検証の方法: `TestBrowser` の 7 テストは `mise run check` の `backend:test-integration` で通過した。レビューの反映で足した 2 テスト (`evaluate_json` の Err と値の欠落、chromedriver のプロセスグループの停止) は `cargo test -p brew_book --test wrangler_passkey_flow` の単独実行で通過した (9 passed)。Chrome の起動オプションと script timeout 60 秒はコードの読み取りで確認した。chromedriver 不在時のメッセージは、PATH から chromedriver を外してテストバイナリを実行し、`chromedriver must start (run this test with `mise run backend:test-integration`): No such file or directory` で失敗することを確認した。
+- CI の Linux のコンテナでの通過は、push 後でないと確認できない (未検証)。CI は mise の chromedriver 154.0.8037.57 と Chrome for Testing の同じ版を入れるため、前提は整っている。
+- `E2eBrowser::open` は script timeout を設定していない (0052 の範囲)。この issue では `TestBrowser` に 60 秒を明示し、E2E 側の扱いは 0052 に委ねる。
+
+## 解決方法
+
+パスキーの結合テストのブラウザ操作を ChromeDriver の WebAuthn の拡張コマンドに移行し、テストとビルドでコンパイルされる依存を削減した。
+
+- `backend/brew_book/tests/support/browser.rs` (旧 `support/cdp.rs`) に `TestBrowser` を thirtyfour と chromedriver で実装し直した。`shared_chromedriver` はテストバイナリごとに 1 つの chromedriver を Weak で共有し、`ChromeDriver` の Drop がプロセスグループへ SIGTERM と SIGKILL を送る (0019 と同じ)。`start_chromedriver` は案内するタスク名を引数に取る。仮想認証器は `add_virtual_authenticator` が ChromeDriver の WebAuthn の拡張コマンドで付け、`set_sign_count` は `GET .../credentials`、`DELETE .../credentials/{id}`、`POST .../credential` で `signCount` を入れ直す。`evaluate_json` は `execute_async` のコールバックで `{ ok, value }` または `{ ok: false, error }` を返し、例外と `undefined` は Rust の Err にする。script timeout は 60 秒を明示する。chromedriver への HTTP 呼び出しには timeout を設定する。
+- `backend/brew_book/tests/support/mod.rs` の `pub mod cdp` を `pub mod browser` に、`support/e2e.rs` の `E2eBrowser::add_virtual_authenticator` を共有の補助への委譲に変えた。`wrangler_same_origin_e2e.rs` のローカルの chromedriver の起動と待ち受けを削除した。`wrangler_passkey_flow.rs` の import と、`wrangler_auth_api.rs`、`src/test_page.rs` のコメントを直し、`evaluate_json` の Err の経路と chromedriver のプロセスグループの停止の 2 テストを足した。
+- `backend/brew_book/Cargo.toml` から `headless_chrome` を外し、`reqwest` の既定の feature を外し (`default-features = false, features = ["blocking", "json"]`)、`tokio` から `macros` を外した。`backend/brew_book_admin/Cargo.toml` の `reqwest` も既定の feature を外した (`features = ["blocking"]`)。`backend/pbt` と `frontend/pbt` の `proptest` は `default-features = false, features = ["std"]` にした。`frontend/Cargo.toml` の `dioxus` は `default-features = false, features = ["web", "minimal", "document"]` にし、`web-sys` を target の限定から外して `Location` と `DomRect` を足した。
+- `mise.toml` の chromedriver の利用者のコメントと `backend:test-integration` の説明、`docs/adr/0004` (改訂の注記)、`docs/adr/0013`、`docs/adr/0017`、`docs/prd/brewbook.md` を現状に合わせた。
+
+完了条件の検証:
+
+- `headless_chrome` と `auto_generate_cdp` は `cargo tree` から消えた。`cargo metadata` の依存グラフの到達数は Backend 320 → 251。
+- 実装の最初に `set_sign_count` の往復を確認し、`wrangler_auth_login_complete_regressed_sign_count_409` の通過 (7 テスト) で `GET .../credentials` が `privateKey` を返すことと、入れ直した `signCount` から次のアサーションが始まることを確認した (2026-10-06)。
+- `TestBrowser` の 7 テストは `mise run check` の `backend:test-integration` で通過した。レビューの反映で足した 2 テスト (`evaluate_json` の Err と値の欠落、chromedriver のプロセスグループの停止) は `cargo test -p brew_book --test wrangler_passkey_flow` の単独実行で通過した (9 passed)。Chrome の起動オプションと script timeout 60 秒はコードの読み取りで確認した。chromedriver 不在時のメッセージは、PATH から chromedriver を外した実行で `mise run backend:test-integration` を案内することを確認した。
+- `reqwest` 0.12.28 の既定の feature を外し、`native-tls`、`hyper-tls`、`openssl-sys`、`system-configuration` は `cargo tree -e features` から消えた (ホストと `--target x86_64-unknown-linux-gnu` で確認)。残るのは `core-foundation` と `security-framework` (reqwest 0.13.5 の rustls 経路の `rustls-platform-verifier` と `rustls-native-certs` 経由) である。
+- Frontend は `dioxus-logger` と `manganis` が消えた (366 → 337)。`dioxus-devtools` は `dioxus-web` 0.7.10 の非 optional の依存で feature では外せないため、A も B も満たせず C に当たる。外せる `dioxus-logger` と `manganis` は外しており、残る `dioxus-devtools` は feature では外せない (依存の構成の問題) ため、分ける対象が無い (「## 実装中の記録」)。
+- `proptest` の `fork` と `timeout` は backend と frontend の両方で外れ、`rusty-fork`、`wait-timeout`、`tempfile`、`bit-set`、`bit-vec` は現れない。`tokio-macros` は `hyper-util` が `tokio` の `macros` を有効にするため残る。
+- 文書とコメントを更新した。
+- `mise run check` を `mise.local.toml` の設定 (jobs = 2) で 1 回実行して通過した (所有者の指示。CI の既定の並列度ではない)。レビューの反映で足したテストは単独で確認した。
+- CI の Linux のコンテナでの通過は push 後でないと確認できない (未検証)。CI は mise の chromedriver 154.0.8037.57 と Chrome for Testing の同じ版を入れるため、前提は整っている。
+
+方針からの乖離:
+
+- cold ビルドの所要時間の変更前後の計測は所有者の指示で行っていない (パッケージ数のみ記録)。
+- `dioxus` の A (devtools も外す) は `dioxus-web` の非 optional の依存のため不可で、C の理由を記録した。
+- `document` feature は `frontend/tests/` の複数の Web テストが `dioxus::history` を使うため残した。`web-sys` は `dioxus-web` が host のビルドでも要求するため target の限定を外し、外した `devtools` と `mounted` が有効にしていた `Location` と `DomRect` を明示した。
+- `evaluate_json` は、方針の `done(JSON.stringify({ ok: true, value }))` ではなくオブジェクトを直接コールバックに渡す (`execute_async` の戻り値がそのまま JSON になるため)。`undefined` は JS 側で明示的にエラーにして、旧実装と同じく Err にする。

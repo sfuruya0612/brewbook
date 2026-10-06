@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
-pub mod cdp;
+pub mod browser;
 pub mod e2e;
 pub mod http;
 pub mod seed;

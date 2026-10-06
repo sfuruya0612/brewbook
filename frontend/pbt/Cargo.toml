@@ -11,6 +11,8 @@ brew_book_frontend = { path = ".." }
 # wasm のテスト (frontend:test-web) のビルドに含めない。テストのファイルは
 # `#![cfg(not(target_arch = "wasm32"))]` で wasm では空になる。
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-proptest = "1"
+# `fork` と `timeout` は使わない (`ProptestConfig` を使わず、`timeout` の既定は 0) ため、
+# 既定の feature を外す (0053)。
+proptest = { version = "1", default-features = false, features = ["std"] }
 # 要求と応答の JSON の値を作るため (brew_book_frontend の依存に含まれるクレート)。
 serde_json = "1"

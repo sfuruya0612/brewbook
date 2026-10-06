@@ -18,5 +18,7 @@ worker = { version = "0.8.6", features = ["d1"] }
 # 利用者向けの Worker の結合テストと同じ組に限る (ADR-0001)。
 # libc はハーネスが `wrangler` をプロセスグループごと停止するために使う (0019)。
 libc = "0.2"
-reqwest = { version = "0.12", features = ["blocking"] }
+# 接続先は `http://127.0.0.1` だけなので TLS を使わない。既定の feature (`native-tls` と
+# `system-proxy`) を外して依存のビルドを減らす (0053)。
+reqwest = { version = "0.12", default-features = false, features = ["blocking"] }
 serde_json = "1"

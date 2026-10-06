@@ -1,4 +1,4 @@
-//! パスキーを伴う結合テスト。CDP の仮想認証器 (Chrome DevTools Protocol) を使う (ADR-0004)。
+//! パスキーを伴う結合テスト。ChromeDriver の WebAuthn の拡張コマンドで仮想認証器を付ける (ADR-0004)。
 //!
 //! テストページ (`/api/__test_page`、`TEST_PAGE` の var で有効) の `window.brewBookTest` を呼び、
 //! 登録、ログイン、パスキーの追加、名前の変更、削除を一連で検査する。
@@ -24,7 +24,7 @@ use std::time::Duration;
 use brew_book_core::auth;
 use brew_book_core::base64url;
 use serde_json::Value;
-use support::cdp::{js_string, TestBrowser};
+use support::browser::{js_string, TestBrowser};
 use support::seed::{user_id, Seed};
 use support::ServerLease;
 
@@ -617,5 +617,39 @@ fn wrangler_auth_session_expired_401() {
         status_of(&after),
         401,
         "the expired session must be rejected: {after}"
+    );
+}
+
+// ハーネスの堅牢性 (0053)。`evaluate_json` の Err の経路を確かめる。
+
+#[test]
+fn wrangler_evaluate_json_returns_err_for_a_thrown_error_and_a_missing_value() {
+    let lease = main_server();
+    let browser = TestBrowser::open(&page_url(&lease)).expect("Chrome must open the test page");
+    // 式が例外を投げたときは Rust の Err になる。
+    let error = browser
+        .evaluate_json("(() => { throw new Error('e2e-boom'); })()")
+        .expect_err("a thrown error must become Err");
+    assert!(
+        error.contains("e2e-boom"),
+        "the error must carry the thrown message: {error}"
+    );
+    // 値が無いときも Rust の Err になる。
+    browser
+        .evaluate_json("undefined")
+        .expect_err("a missing value must become Err");
+}
+
+// ハーネスの堅牢性 (0053)。chromedriver の停止を DevServer と同じプロセスグループで確かめる (0019)。
+
+#[test]
+fn wrangler_chromedriver_stop_leaves_no_process_in_its_process_group() {
+    let driver = support::browser::start_chromedriver("backend:test-integration")
+        .expect("chromedriver must start");
+    let process_group = driver.process_group_id();
+    drop(driver);
+    assert!(
+        !support::process_group_exists(process_group),
+        "the chromedriver process group must be gone after the stop"
     );
 }

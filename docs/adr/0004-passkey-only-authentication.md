@@ -3,6 +3,7 @@
 Created: 2026-09-21
 Model: Claude Fable 5.1
 Status: Accepted
+改訂: 2026-10-06 (0053。パスキーを伴う統合テストのクライアントを headless_chrome から ChromeDriver の WebAuthn の拡張コマンドに変えた)
 
 ## 背景
 
@@ -86,4 +87,4 @@ wasm で使える構成があるかは検証していない。
   iOS ネイティブは対象にしない (ADR-0017)。
 - Relying Party ID を後から変えると、登録済みのパスキーは全て無効になる。
   後で独自ドメインに移す場合は、全利用者が登録用トークンで再登録する (ADR-0005)。
-- パスキーを伴う統合テストは、Chrome DevTools Protocol の仮想認証器で行う。
+- パスキーを伴う統合テストは、ChromeDriver の WebAuthn の拡張コマンドで仮想認証器を付けて行う (0053 で headless_chrome から移行した)。

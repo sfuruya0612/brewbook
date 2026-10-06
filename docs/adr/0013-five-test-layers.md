@@ -37,7 +37,7 @@ Frontend のテストは、Frontend を Dioxus の Web だけにする決定 (AD
   対象は WebAuthn のチャレンジ (1 回だけ消費される。FR-1、FR-2)、登録用トークン (1 回だけ使用される。FR-1)、セッション (ログアウトと期限切れの後は通さない。FR-4)、パスキー (最後の 1 つは削除できない。FR-3) の状態遷移とする。
   仕様は `formal/` に置き、CI (`mise run check`) で実行する。
 - **E2E**: 実際の Worker とブラウザを組み合わせ、主要なユースケースを最初から最後まで検証する。
-  認証を伴う経路は ChromeDriver の WebAuthn の拡張コマンド (`WebAuthn.addVirtualAuthenticator`) で仮想認証器を付ける (0044。`flutter drive` をやめたため)。
+  認証を伴う経路は ChromeDriver の WebAuthn の拡張コマンド (W3C WebAuthn Level 3 の WebDriver 拡張) で仮想認証器を付ける (0044。`flutter drive` をやめたため)。
   現状の経路 (登録、ログイン、抽出の保存) を維持し、経路を増やす必要が生じたときに同じ方式で足す。
 
 道具は次のように選ぶ。

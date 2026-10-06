@@ -795,7 +795,7 @@ API は次の 4 つとする。
   - Frontend も PBT を持ち、値の変換、統計の期間、API の入力と応答の対応を検証する (ADR-0013)。
     Frontend のテストも Rust のテスト規約に従い、native の `cargo test` で実行する (ADR-0017)。
   - Fuzzing の実行は nightly を要するため手元で行い、CI では対象の型検査を行う (ADR-0013)。
-  - パスキーを伴う E2E テストは、仮想認証器で行う (現在は Chrome DevTools Protocol、移行後は ChromeDriver の WebAuthn の拡張コマンド。ADR-0013 を移行の issue 0044 で改訂する)。
+  - パスキーを伴う E2E テストは、仮想認証器で行う (ChromeDriver の WebAuthn の拡張コマンド。ADR-0004 を issue 0053 で改訂した)。
   - 有効期限などの時間に依存する検証は、設定値で短縮できるようにしてテストする。
   - Frontend は native の `cargo test` (単体と PBT)、`wasm-bindgen-test` (ブラウザの API に依存する検証)、E2E (実 Worker と仮想認証器) を持つ (ADR-0017)。
   - 全ての自動テストは CI で実行し、全て通過するまでマージしない (所有者の共通規約)。

@@ -13,21 +13,19 @@ e2e = []
 
 [dependencies]
 # Web だけを対象にする (ADR-0017)。版は Cargo.lock で固定する。
-dioxus = { version = "0.7.10", features = ["web"] }
+# 既定の feature (`devtools`、`logger` と、`lib` が引き込む `asset`、`warnings`、`cli-config`) は
+# 使わない (`dx serve` を使わず、`asset!` も使わない) ため外す。`document` は
+# `frontend/tests/` の複数の Web テスト (test_settings_web、test_stats_web、
+# test_records_lists_web、test_records_screens_web) が `dioxus::history` を使うため残す (0053)。
+dioxus = { version = "0.7.10", default-features = false, features = ["web", "minimal", "document"] }
 # 経路の台帳とルーター (0038)。状態管理のクレートは追加しない (ADR-0007 の「依存を最小にする」)。
 dioxus-router = "0.7.10"
 # API の要求と応答の JSON を扱う (0038)。Backend と PBT が使うのと同じクレート。
 serde_json = "1"
 
-# ブラウザの API を使う実装 (HTTP、時計、写真)。Web だけを対象にするため (ADR-0017)、
-# 依存も wasm のビルドだけに置く。
-# HTTP は gloo-net と web-sys の fetch を比較し、依存の少ない web-sys を選んだ (0038)。
-# web-sys、js-sys、wasm-bindgen-futures は dioxus の web のビルドが既に使うクレートで、
-# 追加のクレートを増やさない。
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys = "0.3"
-wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
+# ブラウザの API を使う実装 (HTTP、時計、写真) が使う。HTTP は gloo-net と web-sys の fetch を
+# 比較し、依存の少ない web-sys を選んだ (0038)。`dioxus-web` 0.7.10 は host のビルドでも
+# `web-sys` の `Location` などを要求するため、feature の統合のために target を分けずに置く (0053)。
 web-sys = { version = "0.3", features = [
   # HTTP (fetch)。
   "Headers",
@@ -40,6 +38,8 @@ web-sys = { version = "0.3", features = [
   "Document",
   "Element",
   "Navigator",
+  # dioxus-web の history が使う (`devtools` を外したため明示する。0053)。
+  "Location",
   # パスキー (WebAuthn。FR-1、FR-2)。web-sys の型でオプションの辞書を組み立てる (0040)。
   "AttestationConveyancePreference",
   "AuthenticatorAssertionResponse",
@@ -78,12 +78,21 @@ web-sys = { version = "0.3", features = [
   # リンク (HTMLAnchorElement) を押す。Flutter の BrowserFileDownload と同じ経路 (0043)。
   "BlobPropertyBag",
   "HtmlAnchorElement",
-  # デザインシステムの計算済みスタイルのテスト (0039)。
+  # デザインシステムの計算済みスタイルのテスト (0039) と、`mounted` を外したため明示する
+  # `get_bounding_client_rect` (DomRect) (0053)。
   "CssStyleDeclaration",
+  "DomRect",
   "NodeList",
   # 幅 840 px 以上の 2 段組の切り替え (0041)。
   "MediaQueryList",
 ] }
+
+# js-sys、wasm-bindgen、wasm-bindgen-futures は dioxus の web のビルドが既に使うクレートで、
+# 追加のクレートを増やさない。Web だけを対象にするため (ADR-0017)、wasm のビルドだけに置く。
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
 
 [dev-dependencies]
 # ブラウザで動かすテスト (frontend:test-web) に使う (ADR-0017)。

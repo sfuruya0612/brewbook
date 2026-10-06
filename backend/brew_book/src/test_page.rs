@@ -1,4 +1,4 @@
-//! CDP の結合テストが使うページ (0005 のテスト、ADR-0004)。
+//! 仮想認証器を使う結合テストが使うページ (0005 のテスト、ADR-0004)。
 //!
 //! PRD の API ではないため経路の台帳 (0001) に載せない。`TEST_PAGE` の var が `true` のときだけ
 //! 応答し、それ以外は台帳に無い経路と同じ 404 になる。結合テストは
@@ -8,7 +8,7 @@
 //! `index.html` を返す (ADR-0005)。Worker が処理するページは `d1_check` と同じく `/api/` の下に置く。
 //!
 //! ページは、同じオリジンの API を呼び、`navigator.credentials` でパスキーを作る・使うための
-//! 最小限の関数を持つ。仮想認証器はテストが Chrome DevTools Protocol で付ける。
+//! 最小限の関数を持つ。仮想認証器はテストが ChromeDriver の WebAuthn の拡張コマンドで付ける。
 
 use worker::{Env, Method, Request, Response, Result};
 

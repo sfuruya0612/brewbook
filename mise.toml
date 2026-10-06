@@ -10,7 +10,8 @@ rust = { version = "1.98.1", profile = "minimal", components = ["clippy", "rustf
 wrangler = { version = "4.135.0", allow_builds = ["esbuild", "sharp", "workerd"] }
 ripgrep = "15.2.0"
 # Frontend のブラウザテスト (frontend:test-web、wasm-bindgen-test) と、実バックエンドの
-# E2E (frontend:test-same-origin) が使う。版は CI の Chrome for Testing に揃える
+# E2E (frontend:test-same-origin) と、パスキーの結合テスト (backend:test-integration) が使う。
+# 版は CI の Chrome for Testing に揃える
 # (ブラウザ本体はリポジトリのツールチェーンに含められないため、CI はワークフローで同じ版を入れる)。
 chromedriver = "154.0.8037.57"
 # Dioxus CLI (dx)。Frontend のビルドに使う (ADR-0017)。mise registry に dioxus の項目が無いため、
@@ -108,7 +109,7 @@ dir = "backend"
 run = "cargo test --workspace -- --skip wrangler_"
 
 [tasks."backend:test-integration"]
-description = "wrangler dev を起動する結合テストを実行する"
+description = "wrangler dev と chromedriver を起動する結合テストを実行する"
 dir = "backend"
 # 配信する成果物のディレクトリを E2E のビルドと共有する (Dioxus のビルドは 1 つの出力に集約
 # されるため。0045)。frontend:build-e2e が出力を消してから作るので、先に済ませておき、実行中の

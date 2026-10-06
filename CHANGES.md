@@ -97,6 +97,8 @@
   - @sfuruya0612
 - [UPDATE] 配信を Dioxus のビルドに差し替え、Flutter 一式を削除する
   - @sfuruya0612
+- [UPDATE] パスキーの結合テストを ChromeDriver に移行し、テストとビルドの依存を削減する
+  - @sfuruya0612
 - [ADD] Flutter の値の変換と統計の期間と入力の形に PBT を追加する
   - @sfuruya0612
 - [ADD] Fuzzing の対象を入力の文字列パーサに広げる

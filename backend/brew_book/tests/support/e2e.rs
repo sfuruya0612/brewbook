@@ -117,60 +117,9 @@ impl E2eBrowser {
     /// `frontend/test_driver/same_origin_test.dart`。0045 で削除) を写す。Backend は
     /// `userVerification: required` を要求するため、既定値に依存しない。
     pub async fn add_virtual_authenticator(&self) -> Result<(), String> {
-        let options = json!({
-            "protocol": "ctap2",
-            "transport": "internal",
-            "hasResidentKey": true,
-            "hasUserVerification": true,
-            "isUserVerified": true,
-            "automaticPresenceSimulation": true,
-        });
-        // WebDriver の WebAuthn の拡張コマンドは、CDP の `WebAuthn.addVirtualAuthenticator` と
-        // 違い、認証器の設定を本文に直接置く (W3C WebAuthn の WebDriver の拡張)。
-        let body = self
-            .web_authn_command(reqwest::Method::POST, "webauthn/authenticator", options)
-            .await?;
-        if body.get("value").and_then(Value::as_str).is_none() {
-            return Err(format!(
-                "the virtual authenticator must be added but the response was {body}"
-            ));
-        }
-        Ok(())
-    }
-
-    /// ChromeDriver の WebAuthn の拡張コマンドを 1 つ送る。
-    async fn web_authn_command(
-        &self,
-        method: reqwest::Method,
-        endpoint: &str,
-        body: Value,
-    ) -> Result<Value, String> {
-        let url = format!(
-            "{}/session/{}/{}",
-            self.server_url.trim_end_matches('/'),
-            self.driver.session_id(),
-            endpoint
-        );
-        let response = reqwest::Client::new()
-            .request(method, &url)
-            .json(&body)
-            .send()
+        super::browser::add_virtual_authenticator(&self.driver, &self.server_url)
             .await
-            .map_err(|error| format!("the WebAuthn command {endpoint} must be sent: {error}"))?;
-        let status = response.status();
-        let text = response
-            .text()
-            .await
-            .map_err(|error| format!("the response of {endpoint} must be read: {error}"))?;
-        let value: Value = serde_json::from_str(&text).map_err(|error| {
-            format!("the response of {endpoint} must be JSON but was {text}: {error}")
-        })?;
-        if !status.is_success() {
-            return Err(format!(
-                "the WebAuthn command {endpoint} failed with {status}: {value}"
-            ));
-        }
-        Ok(value)
+            .map(|_| ())
     }
 
     /// ページの式を評価し、文字列の結果を返す (文字列でなければ None)。
