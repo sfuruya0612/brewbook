@@ -123,3 +123,5 @@
   - @sfuruya0612
 - [FIX] 想定規模のアカウント削除テストの下ごしらえが miniflare の接続断で失敗しないようにする
   - @sfuruya0612
+- [FIX] frontend:test-web の ChromeDriver と Chrome の起動を待つ上限を広げ、並列実行の負荷による失敗を防ぐ
+  - @sfuruya0612

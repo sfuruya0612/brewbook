@@ -308,6 +308,17 @@ if ! command -v chromedriver > /dev/null 2>&1; then
 fi
 export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner
 export CHROMEDRIVER="$(command -v chromedriver)"
+# wasm-bindgen-test-runner が chromedriver の起動 (ポートの bind) を待つ上限の既定は 5 秒で、
+# 並列実行の負荷で超えると、ランナーが chromedriver を SIGKILL して
+# `driver failed to bind port during startup` で失敗する (0046)。10 秒ごとの起動の再試行が
+# 働くように、上限を 60 秒にする (最大 6 回の起動の試行)。
+export WASM_BINDGEN_TEST_DRIVER_TIMEOUT=60
+# ランナーが Chrome のセッションの作成 (Chrome の起動) を待つ上限は
+# `max(60 秒, WASM_BINDGEN_TEST_TIMEOUT)` である。並列実行の負荷 (メモリの圧迫を含む) で
+# 60 秒を超えると `webdriver POST /session timed out` で失敗するため (0046)、上限を
+# ページロードと同じ 300 秒に揃える。テスト自体の待ちも同じ値になるが、正常時は出力の
+# `test result: ` を検知した時点で終わるため影響しない。
+export WASM_BINDGEN_TEST_TIMEOUT=300
 # テストのファイルを列挙せず、wasm の全テストを実行する (0038 以降に増えたテストを取りこぼさない)。
 cargo test --manifest-path frontend/Cargo.toml --workspace --target wasm32-unknown-unknown
 """
