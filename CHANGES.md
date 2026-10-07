@@ -125,3 +125,5 @@
   - @sfuruya0612
 - [FIX] frontend:test-web の ChromeDriver と Chrome の起動を待つ上限を広げ、並列実行の負荷による失敗を防ぐ
   - @sfuruya0612
+- [FIX] frontend:test-same-origin の E2E で WebDriver の script timeout を 60 秒にし、並列実行の負荷による fonts.ready のタイムアウトを防ぐ
+  - @sfuruya0612

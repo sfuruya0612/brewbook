@@ -96,6 +96,26 @@ impl E2eBrowser {
             .set_window_rect(0, 0, 390, 844)
             .await
             .map_err(|error| format!("the window must be sized: {error}"))?;
+        // 非同期のスクリプトの上限を明示する。既定は chromedriver の 30 秒で、`document.fonts.ready`
+        // が 30 秒を超えると `wait_fonts` が script timeout で失敗する (0052)。フォントは
+        // `frontend/index.html` で Google Fonts から読むため、読み込みの停滞は並列実行の負荷でも
+        // 外部のネットワークでも起こり得る。`TestBrowser` と同じ 60 秒にする。
+        driver
+            .set_script_timeout(super::browser::SCRIPT_TIMEOUT)
+            .await
+            .map_err(|error| format!("the script timeout must be set: {error}"))?;
+        // 設定がセッションに反映されたことを読み戻して確かめる (0052 のレビューの指摘)。
+        let timeouts = driver
+            .get_timeouts()
+            .await
+            .map_err(|error| format!("the timeouts must be read: {error}"))?;
+        if timeouts.script() != Some(super::browser::SCRIPT_TIMEOUT) {
+            return Err(format!(
+                "the script timeout must be {} seconds but was {:?}",
+                super::browser::SCRIPT_TIMEOUT.as_secs(),
+                timeouts.script()
+            ));
+        }
         Ok(Self {
             driver,
             server_url: server_url.to_string(),
