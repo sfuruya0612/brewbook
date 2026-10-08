@@ -772,10 +772,10 @@ API は次の 4 つとする。
 - 店の地図と住所の補完 (FR-22) に Google Maps Platform を使う (ADR-0019)。
   店名と住所を Google に送る。写真を Cloudflare の外に出さない扱い (FR-19) は変えない。
   検索の入力 (店名) と応答 (候補) はログに出さない。
-- Google の API キーは Workers の Secret に置き、リポジトリに含めない。
-  地図のキーはブラウザに出るため、HTTP リファラの制限でローカル、staging、production の
-  オリジンだけに制限する。住所の補完のキーはブラウザに出さず、API の制限で Places API (New)
-  だけを許可する。
+- Google の API キーは地図と住所の補完で同じ 1 つとし、Workers の Secret に置き、リポジトリに含めない (ADR-0019)。
+  キーは iframe の URL に載ってブラウザに出るため、HTTP リファラの制限でローカル、staging、
+  production のオリジンだけに制限し、API の制限で Maps Embed API と Places API (New) だけを許可する。
+  住所の補完の Worker の呼び出しは、アプリのオリジンの `Referer` を付けて同じリファラの制限を通す。
 - R2 の API トークンなどの秘密情報は Workers の Secret に置き、リポジトリに含めない。
 - Frontend と Backend は同一オリジンで配信し、Backend は CORS を許可しない (ADR-0005)。
   例外として、R2 の S3 互換エンドポイントは別オリジンになるため、R2 バケットの CORS 設定でアプリのオリジンからの PUT だけを許可する (ADR-0003)。

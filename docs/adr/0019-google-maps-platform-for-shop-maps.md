@@ -40,9 +40,11 @@ Google Maps Platform は無料枠でも Google Cloud プロジェクトの課金
   `places.displayName` と `places.formattedAddress` のフィールドマスクで 1 回呼び、
   名前と住所の候補を最大 5 件返す (Text Search Pro の SKU)。
 - 検索の API キー (`GOOGLE_PLACES_API_KEY`) は Worker の Secret に置き、ブラウザに出さない。
+  (2026-10-08 に地図と同じ 1 つのキーに変更した。追記を参照)
 - 地図の API キー (`GOOGLE_MAPS_EMBED_API_KEY`) は iframe の URL に載るためブラウザに出る。
   HTTP リファラの制限 (ローカル、staging、production のオリジンだけ) で保護する。
   キーは `GET /api/maps/config` (認証が必要) で配り、未設定のときは null を返して画面は地図を出さない。
+  (2026-10-08 に検索と同じ 1 つのキーに変更した。追記を参照)
 - キーの実値はリポジトリに含めず、ローカルは `.dev.vars` (git 管理外)、staging と production は
   `wrangler secret put` で設定する (R2 の資格情報と同じ扱い。ADR-0003、ADR-0015)。
 - 課金は無料枠の範囲で運用する。
@@ -88,3 +90,22 @@ Google Maps Platform は無料枠でも Google Cloud プロジェクトの課金
   店名の一致は Google の順位付けに従い、候補に無い住所も手入力できる。
 - Google の応答はサーバー側で検証し、名前か住所が欠けた場所は候補から除く。
   応答が JSON として読めないときは 500 を返す。
+
+## 追記 (2026-10-08 の所有者の決定)
+
+所有者が、キーは地図と住所の補完で同じ 1 つを使うと決めた。
+Google はアプリごとにキーを分けることを推奨するが、設定を単純にすることを優先する。
+次のように変更する。
+
+- Secret は `GOOGLE_MAPS_API_KEY` の 1 つにし、地図と住所の補完の両方で使う。
+- Google Cloud のキーの制限は、アプリケーションの制限を「ウェブサイト」(ローカル、staging、
+  production のオリジン) にし、API の制限を Maps Embed API と Places API (New) の 2 つにする。
+- 住所の補完の Worker の呼び出しは、`Referer` ヘッダにアプリのオリジン (`ORIGIN` の値の末尾に
+  `/` を付けた値) を付けて、ブラウザと同じリファラの制限を通す。
+  workerd は `Referer` を設定でき、付けたヘッダが送信先に届くことを、手元の Worker と
+  ローカルの HTTP サーバーで確認した (2026-10-08)。
+- これにより、キーが 1 つでもリファラの制限を保てる。
+  キーを知っていても、他のサイト (リファラが違う) や、`Referer` を付けないサーバーからは使えない。
+- もし Google が Worker の呼び出しをリファラの不一致で拒否した場合は、アプリケーションの制限を
+  外す。API の制限、Places API の割り当て、予算アラートが保護になる。
+  staging へのデプロイで住所の補完を確認して判定し、結果を issue 0055 に記録する。

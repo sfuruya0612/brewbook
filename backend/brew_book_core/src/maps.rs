@@ -98,6 +98,16 @@ pub fn search_request_body(query: &str, lang: &str) -> String {
     .to_string()
 }
 
+/// Google のリファラ制限に合わせて、Worker の呼び出しに付ける `Referer` を作る (FR-22)。
+///
+/// オリジンの末尾に `/` を付ける。Google のリファラのパターンはパスを含む完全な URL
+/// (`https://host/*`) で指定するため、`https://host/` の形にする。
+/// キーは地図と住所の補完で同じ 1 つを使い、アプリケーションの制限 (リファラ) を
+/// ブラウザと Worker の両方で通す (ADR-0019)。
+pub fn referer_header(origin: &str) -> String {
+    format!("{}/", origin.trim_end_matches('/'))
+}
+
 /// Google の応答の解析の誤り。応答は 500 にする。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParseError {

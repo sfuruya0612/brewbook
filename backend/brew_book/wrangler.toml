@@ -133,5 +133,5 @@ AI_SUGGEST_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
 # S3 互換エンドポイント (R2_ENDPOINT) と API トークン (R2_ACCESS_KEY_ID、
 # R2_SECRET_ACCESS_KEY) は環境ごとに違うため、開発では `.dev.vars` (git 管理外)、
 # 各環境ではデプロイ時に Secret として設定し、リポジトリに実値を含めない (PRD のセキュリティ)。
-# Google Maps Platform のキー (GOOGLE_MAPS_EMBED_API_KEY、GOOGLE_PLACES_API_KEY) も同じ扱いにする
+# Google Maps Platform のキー (GOOGLE_MAPS_API_KEY) も同じ扱いにする
 # (ADR-0019。作り方と設定の手順は README の「Google Maps Platform」)。

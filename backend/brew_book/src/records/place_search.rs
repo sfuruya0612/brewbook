@@ -4,19 +4,20 @@
 //! パラメータで受け取る。Places API (New) の Text Search を 1 回呼び、名前と住所の候補を
 //! 最大 5 件返す。
 //!
-//! API キーは Secret の `GOOGLE_PLACES_API_KEY` から読み、無いときは 500 を返す。
+//! API キーは Secret の `GOOGLE_MAPS_API_KEY` (地図と同じ 1 つ) から読み、無いときは 500 を返す。
+//! キーにはアプリのオリジンのリファラの制限が付いているため、呼び出しに `Referer` ヘッダ
+//! (`ORIGIN` の値) を付けて制限を通す (ADR-0019)。
 //! 呼び出しの失敗は理由を区別せず 500 を返す。店名と応答はログに出さない (FR-19 と同じ扱い)。
 //! 入力の検証と応答の解析は `brew_book_core::maps` が持ち、ここは経路の処理だけを行う。
 
 use brew_book_core::maps::{self, SearchResponse};
 use worker::{console_error, Env, Fetch, Headers, Method, Request, RequestInit, Response, Result};
 
+use super::maps::API_KEY_SECRET;
 use super::{internal_error, invalid_input};
 use crate::auth::{self, session::Session};
 use crate::respond;
 
-/// API キーの Secret の名前 (ADR-0019)。
-pub const API_KEY_SECRET: &str = "GOOGLE_PLACES_API_KEY";
 /// Text Search (New) の経路 (ADR-0019)。
 const SEARCH_URL: &str = "https://places.googleapis.com/v1/places:searchText";
 /// 応答で返すフィールド。`displayName` と `formattedAddress` は Text Search Pro の SKU (ADR-0019)。
@@ -85,6 +86,8 @@ pub async fn search(req: &Request, env: &Env, _session: &Session) -> Result<Resp
         }
         key => key,
     };
+    // キーのリファラの制限を、ブラウザと同じように Worker の呼び出しでも通す (ADR-0019)。
+    let origin = auth::var_or(env, auth::ORIGIN_VAR, auth::DEFAULT_ORIGIN)?;
     let body = maps::search_request_body(&query, lang);
     let mut init = RequestInit::new();
     init.with_method(Method::Post)
@@ -93,6 +96,7 @@ pub async fn search(req: &Request, env: &Env, _session: &Session) -> Result<Resp
     headers.set("Content-Type", "application/json")?;
     headers.set("X-Goog-Api-Key", &api_key)?;
     headers.set("X-Goog-FieldMask", FIELD_MASK)?;
+    headers.set("Referer", &maps::referer_header(&origin))?;
     init.with_headers(headers);
     let request = Request::new_with_init(SEARCH_URL, &init)?;
     let mut response = match Fetch::Request(request).send().await {

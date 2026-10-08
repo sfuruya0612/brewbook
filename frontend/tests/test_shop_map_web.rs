@@ -254,7 +254,9 @@ async fn the_shop_form_searches_the_address_from_the_name() {
             response(&json!({"embed_api_key": "test-key"})),
             response(&json!({
                 "candidates": [
-                    {"name": "丸山珈琲", "address": "長野県北佐久郡軽井沢町"},
+                    {"name": "丸山珈琲 軽井沢本店", "address": "長野県北佐久郡軽井沢町軽井沢1154-10"},
+                    {"name": "丸山珈琲 中目黒店", "address": "東京都目黒区上目黒2-44-1"},
+                    {"name": "丸山珈琲 京都店", "address": "京都府京都市中京区河原町通三条下ル"},
                 ]
             })),
         ],
@@ -280,28 +282,35 @@ async fn the_shop_form_searches_the_address_from_the_name() {
         "/api/place-search?q=%E4%B8%B8%E5%B1%B1%E7%8F%88%E7%90%B2&lang=ja"
     );
 
-    // 候補は名前と住所の 2 行で出す。
-    assert_eq!(count(&root, ".candidates button"), 1);
+    // 候補は複数出る (最大 5 件。FR-22)。名前と住所の 2 行で出す。
+    assert_eq!(count(&root, ".candidates button"), 3);
+    let names = elements(&root, ".candidates .n");
     assert_eq!(
-        select(&root, ".candidates .n").text_content().as_deref(),
-        Some("丸山珈琲")
+        names[0].text_content().as_deref(),
+        Some("丸山珈琲 軽井沢本店")
     );
     assert_eq!(
-        select(&root, ".candidates .s").text_content().as_deref(),
-        Some("長野県北佐久郡軽井沢町")
+        names[1].text_content().as_deref(),
+        Some("丸山珈琲 中目黒店")
+    );
+    assert_eq!(names[2].text_content().as_deref(), Some("丸山珈琲 京都店"));
+    let addresses = elements(&root, ".candidates .s");
+    assert_eq!(
+        addresses[1].text_content().as_deref(),
+        Some("東京都目黒区上目黒2-44-1")
     );
 
-    // 候補を選ぶと住所の欄に入り、店名は変わらない。候補は閉じ、地図が出る。
-    click(&select(&root, ".candidates button"));
+    // 2 番目の候補を選ぶと住所の欄に入り、店名は変わらない。候補は閉じ、地図が出る。
+    click(&elements(&root, ".candidates button")[1]);
     settle().await;
     let (name_input, address_input) = fields(&root);
-    assert_eq!(input_value(&address_input), "長野県北佐久郡軽井沢町");
+    assert_eq!(input_value(&address_input), "東京都目黒区上目黒2-44-1");
     assert_eq!(input_value(&name_input), "丸山珈琲");
     assert_eq!(count(&root, ".candidates button"), 0);
     let src = select(&root, ".map iframe")
         .get_attribute("src")
         .unwrap_or_default();
-    assert!(src.contains("q=%E9%95%B7%E9%87%8E%E7%9C%8C"), "{src}");
+    assert!(src.contains("q=%E6%9D%B1%E4%BA%AC%E9%83%BD"), "{src}");
 }
 
 #[wasm_bindgen_test]

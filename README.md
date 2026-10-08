@@ -47,7 +47,7 @@ Frontend は Rust (Dioxus) の Web アプリ、Backend は Rust の Cloudflare W
   必要な名前は `R2_ENDPOINT`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_BUCKET` (`brewbook-photos-staging`) である。
   本番の資格情報はローカルに置かない (ADR-0015)。`.dev.vars` の値は `wrangler.toml` の `[vars]` を上書きする。
 - 店の地図と住所の補完 (FR-22) をローカルで試すときは、同じ `.dev.vars` に
-  `GOOGLE_MAPS_EMBED_API_KEY` と `GOOGLE_PLACES_API_KEY` を置く。キーは下の「Google Maps Platform」で作る。
+  `GOOGLE_MAPS_API_KEY` を置く。キーは下の「Google Maps Platform」で作る。
   キーが無いときは住所の補完が失敗の案内になり、地図は出ない (フォームの他の操作はできる)。
 - 管理者画面をローカルで確認する: `mise run dev-admin`
   管理者画面は `http://localhost:8788/` で配信する。ローカルの D1 は `mise run dev` の利用者向けと共有する (ADR-0002)。
@@ -98,27 +98,26 @@ Text Search で行う (FR-22、ADR-0019)。初回だけ次の設定を行う。
 2. API を有効にする。
    - Maps Embed API (地図の埋め込み。無料で無制限)
    - Places API (New) (住所の補完。Text Search Pro は月 5,000 回まで無料。2026-09-14 更新の料金ページで確認)
-3. API キーを 2 つ作る (アプリごとに分ける。Google のセキュリティのガイダンスの推奨)。
-   - 地図用 (`GOOGLE_MAPS_EMBED_API_KEY`): アプリケーションの制限を「ウェブサイト」にし、
-     `http://localhost:8787/*`、`https://brewbook-staging.<サブドメイン>.workers.dev/*`、
-     `https://brewbook.<サブドメイン>.workers.dev/*` を許可する。API の制限は Maps Embed API だけにする。
-     このキーは iframe の URL に載ってブラウザに出るため、リファラの制限が保護になる。
-   - 住所の補完用 (`GOOGLE_PLACES_API_KEY`): アプリケーションの制限は付けない (Worker の送信元の
-     IP は不定のため)。API の制限は Places API (New) だけにする。このキーはブラウザに出さず、
-     Worker の Secret に置く。
+3. API キーを 1 つ作る (地図と住所の補完で同じキーを使う。2026-10-08 の所有者の決定。ADR-0019)。
+   - アプリケーションの制限を「ウェブサイト」にし、`http://localhost:8787/*`、
+     `https://brewbook-staging.<サブドメイン>.workers.dev/*`、
+     `https://brewbook.<サブドメイン>.workers.dev/*` を許可する。
+   - API の制限は Maps Embed API と Places API (New) の 2 つにする。
+   - キーは iframe の URL に載ってブラウザに出るため、リファラの制限が保護になる。
+     住所の補完は Worker がアプリのオリジンの `Referer` を付けて呼ぶため、同じ制限で通る (ADR-0019)。
+     もし Google が Worker の呼び出しをリファラの不一致で拒否する場合は、アプリケーションの制限を
+     外す (API の制限、割り当て、予算アラートが保護になる)。
 4. 想定外の課金を防ぐ。
    - お支払いの予算とアラートを設定する (例: 予算 $1 で 50% と 100% にアラート)。
    - Places API (New) の割り当て (クォータ) を設定する (例: 1 日 100 回)。
 5. キーを環境ごとに設定する。
-   - ローカル: `backend/brew_book/.dev.vars` (git 管理外) に両方のキーを置く (上の「ローカル開発」)。
+   - ローカル: `backend/brew_book/.dev.vars` (git 管理外) にキーを置く (上の「ローカル開発」)。
    - staging と production: `wrangler secret put` で設定する。
 
    ```sh
    cd backend/brew_book
-   wrangler secret put GOOGLE_MAPS_EMBED_API_KEY --env staging
-   wrangler secret put GOOGLE_PLACES_API_KEY --env staging
-   wrangler secret put GOOGLE_MAPS_EMBED_API_KEY --env production
-   wrangler secret put GOOGLE_PLACES_API_KEY --env production
+   wrangler secret put GOOGLE_MAPS_API_KEY --env staging
+   wrangler secret put GOOGLE_MAPS_API_KEY --env production
    ```
 
    値はリポジトリに含めない (PRD のセキュリティ)。

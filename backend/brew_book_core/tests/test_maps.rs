@@ -5,7 +5,7 @@
 //! 解析の結果が検証の条件を満たすことは PBT (`prop_maps.rs`) が担う。
 
 use brew_book_core::maps::{
-    parse_search_response, search_request_body, validate_search_input, Candidate,
+    parse_search_response, referer_header, search_request_body, validate_search_input, Candidate,
     MapsConfigResponse, ParseError, SearchInputError, SearchResponse, MAX_CANDIDATES,
     MAX_QUERY_CHARS, SUPPORTED_LANGUAGES,
 };
@@ -202,6 +202,24 @@ fn the_search_request_body_fixes_the_query_and_the_language() {
         })
     );
     assert_eq!(MAX_CANDIDATES, 5);
+}
+
+#[test]
+fn the_referer_header_is_the_origin_with_a_slash() {
+    // キーは 1 つで、リファラの制限をブラウザと Worker の両方で通す (ADR-0019)。
+    assert_eq!(
+        referer_header("https://brewbook.example.workers.dev"),
+        "https://brewbook.example.workers.dev/"
+    );
+    // 末尾の `/` は重ねない。
+    assert_eq!(
+        referer_header("https://brewbook.example.workers.dev/"),
+        "https://brewbook.example.workers.dev/"
+    );
+    assert_eq!(
+        referer_header("http://localhost:8787"),
+        "http://localhost:8787/"
+    );
 }
 
 #[test]
