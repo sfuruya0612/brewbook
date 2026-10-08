@@ -3,7 +3,7 @@
 //! 店のフォームを実際に描き、次を検査する。
 //!
 //! - 住所があるときは地図 (Maps Embed API の iframe) を出し、住所が無いときとキーの無いときは出さない。
-//! - 店名から住所を検索でき、候補を選ぶと住所の欄に入り、店名は変わらない。
+//! - 店名から住所を検索でき、候補を選ぶと店名と住所の欄が候補の値になる。
 //! - 検索は「住所を検索」の操作でだけ行い、入力のたびには呼ばない。
 //! - 候補が無いときの案内と、失敗の再試行の案内を出す。
 //!
@@ -300,12 +300,13 @@ async fn the_shop_form_searches_the_address_from_the_name() {
         Some("東京都目黒区上目黒2-44-1")
     );
 
-    // 2 番目の候補を選ぶと住所の欄に入り、店名は変わらない。候補は閉じ、地図が出る。
+    // 2 番目の候補を選ぶと店名と住所の両方が候補の値になる (店名は場所の正式な名前)。
+    // 候補は閉じ、地図が出る。
     click(&elements(&root, ".candidates button")[1]);
     settle().await;
     let (name_input, address_input) = fields(&root);
     assert_eq!(input_value(&address_input), "東京都目黒区上目黒2-44-1");
-    assert_eq!(input_value(&name_input), "丸山珈琲");
+    assert_eq!(input_value(&name_input), "丸山珈琲 中目黒店");
     assert_eq!(count(&root, ".candidates button"), 0);
     let src = select(&root, ".map iframe")
         .get_attribute("src")

@@ -1,7 +1,8 @@
 //! 店の登録と編集の画面 (FR-6)。
 //!
 //! 店名は必須、住所は任意。編集では現在の値を読み込んでから上書きする。
-//! 店名から住所の候補を検索でき、住所があるときは地図を出す (FR-22、ADR-0019)。
+//! 店名から住所の候補を検索でき、候補を選ぶと店名と住所が入り、住所があるときは地図を出す
+//! (FR-22、ADR-0019)。
 
 use dioxus::prelude::*;
 use dioxus_router::navigator;
@@ -247,17 +248,19 @@ pub fn ShopForm(
             onclick: move |_| save.call(()),
         }
     };
-    // 住所の検索の候補 (FR-22)。選ぶと住所の欄に入り、店名の欄は変えない。
+    // 住所の検索の候補 (FR-22)。選ぶと店名と住所の両方が候補の値になる (店名は場所の正式な名前)。
     let candidate_list = rsx! {
         div { class: "candidates",
             for candidate in candidates() {
                 {
+                    let candidate_name = candidate.name.clone();
                     let candidate_address = candidate.address.clone();
                     rsx! {
                         button {
                             r#type: "button",
                             disabled: busy(),
                             onclick: move |_| {
+                                name.set(candidate_name.clone());
                                 address.set(candidate_address.clone());
                                 map_address.set(candidate_address.clone());
                                 candidates.set(Vec::new());
