@@ -81,6 +81,9 @@ pub fn TextField(
     /// 入力が変わったときの動き。
     #[props(default)]
     oninput: EventHandler<FormEvent>,
+    /// 値が確定したときの動き (入力欄から離れたときなど)。住所の地図の更新に使う (FR-22)。
+    #[props(default)]
+    onchange: EventHandler<FormEvent>,
     /// 値を等幅で組むか (数値と日付は true)。
     #[props(default = false)]
     mono: bool,
@@ -112,6 +115,7 @@ pub fn TextField(
     };
     let placeholder = placeholder.unwrap_or_default();
     let on_input = move |event: FormEvent| oninput.call(event);
+    let on_change = move |event: FormEvent| onchange.call(event);
     let unit = unit.map(|unit| rsx! { span { class: "unit", "{unit}" } });
     let icon = icon.map(|name| rsx! { Icon { name, muted: true } });
     rsx! {
@@ -123,6 +127,7 @@ pub fn TextField(
                     placeholder: "{placeholder}",
                     disabled,
                     oninput: on_input,
+                    onchange: on_change,
                 }
             } else {
                 input {
@@ -132,6 +137,7 @@ pub fn TextField(
                     placeholder: "{placeholder}",
                     disabled,
                     oninput: on_input,
+                    onchange: on_change,
                 }
             }
             {unit}

@@ -13,6 +13,7 @@ pub mod display;
 pub mod forms;
 pub mod inputs;
 pub mod list;
+pub mod maps;
 pub mod models;
 pub mod photo;
 pub mod stats;
@@ -42,9 +43,10 @@ pub use forms::{
 };
 pub use inputs::{BrewInput, ProductInput, PurchaseInput, ShopInput};
 pub use list::{PageRequest, RecordList, LOAD_MORE_THRESHOLD};
+pub use maps::map_embed_url;
 pub use models::{
-    Brew, PhotoUploadTarget, Product, ProductSuggestion, Purchase, PurchaseSuggestion, RecordPage,
-    Shop,
+    Brew, PhotoUploadTarget, PlaceCandidate, Product, ProductSuggestion, Purchase,
+    PurchaseSuggestion, RecordPage, Shop,
 };
 #[cfg(target_arch = "wasm32")]
 pub use photo::{create_image_converter, create_photo_picker};

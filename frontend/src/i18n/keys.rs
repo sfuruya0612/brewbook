@@ -2,11 +2,11 @@
 //!
 //! 移行前の Flutter 版の ARB (`frontend/lib/l10n/app_ja.arb` と `app_en.arb`。0045 で削除) の
 //! 221 キーから作る (0051 で並び替えとお気に入りの 8 キー、0054 で抽出方法の例と破棄の確認の
-//! 4 キーを足した)。表 ([`super::ja`] と [`super::en`]) はこの添字で引く。キーの順序は ARB と
-//! 同じにしていた。
+//! 4 キー、0055 で住所の検索と地図の 4 キーを足した)。表 ([`super::ja`] と [`super::en`]) は
+//! この添字で引く。キーの順序は ARB と同じにしていた。
 
 /// キーの数。
-pub const KEY_COUNT: usize = 233;
+pub const KEY_COUNT: usize = 237;
 
 /// 翻訳のキー (FR-16)。
 ///
@@ -479,6 +479,14 @@ pub enum Key {
     DiscardConfirmMessage,
     /// `discardConfirmButton`。
     DiscardConfirmButton,
+    /// `searchAddressButton`。
+    SearchAddressButton,
+    /// `searchingLabel`。
+    SearchingLabel,
+    /// `addressSearchEmpty`。
+    AddressSearchEmpty,
+    /// `mapTitle`。
+    MapTitle,
 }
 
 impl Key {
@@ -717,6 +725,10 @@ impl Key {
         Key::DiscardConfirmTitle,
         Key::DiscardConfirmMessage,
         Key::DiscardConfirmButton,
+        Key::SearchAddressButton,
+        Key::SearchingLabel,
+        Key::AddressSearchEmpty,
+        Key::MapTitle,
     ];
 
     /// 表の添字。

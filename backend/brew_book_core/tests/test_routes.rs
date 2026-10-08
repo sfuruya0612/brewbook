@@ -151,8 +151,9 @@ fn test_requirements_follow_the_auth_and_input_flags() {
 }
 
 #[test]
-fn the_ledger_marks_the_photo_suggestion_route_as_a_staging_check() {
-    // 写真からの推測の正常系は Workers AI の推論を要するため、CI の照合の対象外にする (FR-19)。
+fn the_ledger_marks_the_staging_routes() {
+    // 正常系を CI で実行できない経路を確かめる。
+    // 写真からの推測は Workers AI の推論 (FR-19)、住所の補完は Google の呼び出し (FR-22) を要する。
     let route = ROUTES
         .iter()
         .find(|route| route.name == "purchase_suggestions")
@@ -162,9 +163,20 @@ fn the_ledger_marks_the_photo_suggestion_route_as_a_staging_check() {
     assert_eq!(route.method, Method::Post);
     assert!(route.auth_required);
     assert!(route.has_input);
+
+    let route = ROUTES
+        .iter()
+        .find(|route| route.name == "place_search")
+        .expect("the ledger must have the place search route");
+    assert_eq!(route.ok_test, OkTest::Staging);
+    assert_eq!(route.pattern, "/api/place-search");
+    assert_eq!(route.method, Method::Get);
+    assert!(route.auth_required);
+    assert!(route.has_input);
+
     // それ以外の経路は CI で正常系を実行する。
     for route in ROUTES {
-        if route.name != "purchase_suggestions" {
+        if route.name != "purchase_suggestions" && route.name != "place_search" {
             assert_eq!(
                 route.ok_test,
                 OkTest::Ci,

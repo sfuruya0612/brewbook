@@ -275,6 +275,27 @@ impl PurchaseSuggestion {
     }
 }
 
+/// 住所の検索の候補 (FR-22)。
+///
+/// Google Places API (New) の Text Search が返す場所の名前と住所である。
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct PlaceCandidate {
+    /// 場所の名前。
+    pub name: String,
+    /// 住所。
+    pub address: String,
+}
+
+impl PlaceCandidate {
+    /// JSON のオブジェクトから組み立てる。
+    pub fn from_json(json: &Map<String, Value>) -> Result<Self, RecordError> {
+        Ok(Self {
+            name: string_field(json, "name")?,
+            address: string_field(json, "address")?,
+        })
+    }
+}
+
 /// 一覧の 1 ページ (カーソル方式。ADR-0002)。
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RecordPage<T> {

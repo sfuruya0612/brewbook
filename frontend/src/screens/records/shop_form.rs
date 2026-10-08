@@ -1,14 +1,15 @@
 //! 店の登録と編集の画面 (FR-6)。
 //!
 //! 店名は必須、住所は任意。編集では現在の値を読み込んでから上書きする。
+//! 店名から住所の候補を検索でき、住所があるときは地図を出す (FR-22、ADR-0019)。
 
 use dioxus::prelude::*;
 use dioxus_router::navigator;
 
-use crate::i18n::{t, Key};
+use crate::i18n::{current_language, t, Key};
 use crate::records::{
-    record_error_key, save_target, validate_shop_form, RecordError, RecordServices, RecordsApi,
-    SaveTarget,
+    map_embed_url, record_error_key, save_target, validate_shop_form, PlaceCandidate, RecordError,
+    RecordServices, RecordsApi, SaveTarget,
 };
 use crate::screens::ScreenAppBar;
 use crate::ui::{Button, ButtonSize, ButtonVariant, Field, IconButton, TextField};
@@ -65,6 +66,14 @@ pub fn ShopForm(
     let mut busy = use_signal(|| false);
     let mut dirty = use_signal(|| false);
     let mut discard_open = use_signal(|| false);
+    // 住所の検索の状態 (FR-22)。
+    let mut candidates = use_signal(Vec::<PlaceCandidate>::new);
+    let mut searching = use_signal(|| false);
+    let mut search_done = use_signal(|| false);
+    let mut search_error = use_signal(|| None::<RecordError>);
+    // 地図の状態 (FR-22)。キーは未設定のとき None のままにし、地図を出さない。
+    let mut map_key = use_signal(|| None::<String>);
+    let mut map_address = use_signal(String::new);
 
     // 編集のために現在の値を読み込む。再試行でも同じ処理を呼ぶ。
     let reload_services = services.clone();
@@ -81,6 +90,7 @@ pub fn ShopForm(
                 Ok(shop) => {
                     name.set(shop.name.clone());
                     address.set(shop.address.clone().unwrap_or_default());
+                    map_address.set(shop.address.clone().unwrap_or_default());
                     favorited_at.set(shop.favorited_at.clone());
                 }
                 Err(failure) => load_error.set(Some(failure)),
@@ -91,6 +101,46 @@ pub fn ShopForm(
         });
     });
     use_effect(move || reload.call(()));
+
+    // 地図の API キーを引く (FR-22)。引けなくてもフォームは動かす (地図を出さないだけ)。
+    let config_services = services.clone();
+    use_effect(move || {
+        let api = RecordsApi::new(config_services.api.clone());
+        spawn(async move {
+            if let Ok(key) = api.maps_config().await {
+                map_key.set(key);
+            }
+        });
+    });
+
+    // 店名から住所の候補を検索する (FR-22)。検索は操作でだけ行い、入力のたびには呼ばない。
+    let search_services = services.clone();
+    let search = EventHandler::new(move |_| {
+        if searching() || busy() {
+            return;
+        }
+        let query = name().trim().to_string();
+        if query.is_empty() {
+            return;
+        }
+        search_error.set(None);
+        candidates.set(Vec::new());
+        search_done.set(false);
+        searching.set(true);
+        let api = RecordsApi::new(search_services.api.clone());
+        let lang = current_language().code();
+        spawn(async move {
+            match api.place_search(&query, lang).await {
+                Ok(found) => {
+                    candidates.set(found);
+                    search_done.set(true);
+                }
+                Err(failure) => search_error.set(Some(failure)),
+            }
+            searching.set(false);
+        });
+    });
+    let retry_search = EventHandler::new(move |_| search.call(()));
 
     let save_services = services.clone();
     let save_id = id.clone();
@@ -147,6 +197,7 @@ pub fn ShopForm(
     let retry = EventHandler::new(move |_| reload.call(()));
     let retry_save = EventHandler::new(move |_| save.call(()));
     let failure = save_error();
+    let search_failure = search_error();
     let load_failure = load_error();
     // 星は編集の画面 (id があるとき) にだけ置く (新規の登録では ID が無い。FR-21)。
     let favorite_services = services.clone();
@@ -196,6 +247,31 @@ pub fn ShopForm(
             onclick: move |_| save.call(()),
         }
     };
+    // 住所の検索の候補 (FR-22)。選ぶと住所の欄に入り、店名の欄は変えない。
+    let candidate_list = rsx! {
+        div { class: "candidates",
+            for candidate in candidates() {
+                {
+                    let candidate_address = candidate.address.clone();
+                    rsx! {
+                        button {
+                            r#type: "button",
+                            disabled: busy(),
+                            onclick: move |_| {
+                                address.set(candidate_address.clone());
+                                map_address.set(candidate_address.clone());
+                                candidates.set(Vec::new());
+                                search_done.set(false);
+                                dirty.set(true);
+                            },
+                            span { class: "n", "{candidate.name}" }
+                            span { class: "s", "{candidate.address}" }
+                        }
+                    }
+                }
+            }
+        }
+    };
 
     rsx! {
         div { class: "screen",
@@ -230,6 +306,26 @@ pub fn ShopForm(
                                 },
                             }
                         }
+                        div { class: "field-actions",
+                            Button {
+                                label: t(Key::SearchAddressButton).to_string(),
+                                variant: ButtonVariant::Secondary,
+                                size: ButtonSize::Sm,
+                                icon: Some("search".to_string()),
+                                disabled: busy() || searching() || name().trim().is_empty(),
+                                onclick: move |_| search.call(()),
+                            }
+                        }
+                        if searching() {
+                            div { class: "t-caption muted", "{t(Key::SearchingLabel)}" }
+                        } else if !candidates().is_empty() {
+                            {candidate_list}
+                        } else if search_done() {
+                            div { class: "t-caption muted", "{t(Key::AddressSearchEmpty)}" }
+                        }
+                        if let Some(failure) = search_failure {
+                            {retryable_banner(&failure, retry_search)}
+                        }
                         Field {
                             label: t(Key::AddressLabel).to_string(),
                             disabled: busy(),
@@ -240,6 +336,24 @@ pub fn ShopForm(
                                     address.set(event.value());
                                     dirty.set(true);
                                 },
+                                // 入力の確定 (入力欄から離れたとき) に地図を更新する (FR-22)。
+                                onchange: move |event: FormEvent| {
+                                    map_address.set(event.value());
+                                },
+                            }
+                        }
+                        if let Some(key) = map_key() {
+                            if !map_address().trim().is_empty() {
+                                div { class: "map",
+                                    iframe {
+                                        title: t(Key::MapTitle),
+                                        src: map_embed_url(&key, &map_address(), current_language()),
+                                        // `loading` は Dioxus の iframe の属性に無いため、
+                                        // カスタム属性として渡す (遅延読み込み)。
+                                        "loading": "lazy",
+                                        referrerpolicy: "strict-origin-when-cross-origin",
+                                    }
+                                }
                             }
                         }
                         if let Some(failure) = failure {

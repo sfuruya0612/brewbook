@@ -449,6 +449,26 @@ pub const ROUTES: &[Route] = &[
         has_input: false,
         ok_test: OkTest::Ci,
     },
+    Route {
+        // 店名から住所の候補を引く (FR-22、ADR-0019)。正常系は Google の呼び出しを要するため
+        // CI では実行せず、staging へのデプロイで確認する (FR-19 と同じ扱い)。
+        name: "place_search",
+        method: Method::Get,
+        pattern: "/api/place-search",
+        auth_required: true,
+        // 店名 (`q`) と言語 (`lang`) のクエリパラメータを読む。
+        has_input: true,
+        ok_test: OkTest::Staging,
+    },
+    Route {
+        // 地図の埋め込みの API キーを配る (FR-22、ADR-0019)。入力を持たない。
+        name: "maps_config",
+        method: Method::Get,
+        pattern: "/api/maps/config",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
 ];
 
 /// 経路が一致しなかったリクエストのログに使う経路名。

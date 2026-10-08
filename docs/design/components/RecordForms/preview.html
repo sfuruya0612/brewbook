@@ -1,4 +1,4 @@
-<!-- @dsCard group="画面" width=860 height=900 subtitle="購入の記録と商品の登録" -->
+<!-- @dsCard group="画面" width=1290 height=900 subtitle="購入の記録、商品の登録、店の登録 (地図と住所の補完)" -->
 <!doctype html>
 <html lang="ja">
 <head>
@@ -143,6 +143,16 @@ a { color: var(--link); }
 .picker .s { font-size: 12px; line-height: 16px; color: var(--ink-muted); }
 .picker svg { width: 20px; height: 20px; fill: none; stroke: var(--ink-muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
+/* 店の住所の候補の一覧と地図 (0055、FR-22) */
+.candidates { border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--paper-raised); box-shadow: var(--shadow-float); overflow: hidden; }
+.candidates button { display: block; width: 100%; padding: var(--space-3); border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; color: var(--ink); cursor: pointer; }
+.candidates button:last-child { border-bottom: 0; }
+.candidates .n { display: block; font-size: 15px; line-height: 22px; font-weight: 600; }
+.candidates .s { display: block; font-size: 12px; line-height: 16px; color: var(--ink-muted); }
+.field-actions { display: flex; align-items: center; gap: var(--space-2); }
+.map { height: 220px; border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; background: var(--paper-sunken); }
+.map iframe { display: block; width: 100%; height: 100%; border: 0; }
+
 /* チップ */
 .chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 var(--space-3); border-radius: var(--radius-full); border: 1px solid var(--line-strong); color: var(--ink); font-size: 13px; line-height: 18px; font-weight: 500; letter-spacing: 0.02em; background: transparent; }
@@ -270,6 +280,18 @@ a { color: var(--link); }
   <div class="field"><div class="lbl">フレーバーノート</div>
     <div class="chips"><span class="chip tag">ピーチ <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="chip tag">ジャスミン <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="chip tag">黒糖 <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="chip add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>タグを入力</span></div>
   </div>
+</div>
+</div></div><div class="phone"><div class="screen">
+<div class="appbar"><span class="lead"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="ttl">店を登録</span><span class="acts"><span class="btn text">キャンセル</span><span class="btn primary sm">保存</span></span></div>
+<div class="form">
+  <div class="field "><div class="lbl">店名<span class="req">必須</span></div><div class="box"><span class="in">丸山珈琲</span></div></div>
+  <div class="field-actions"><span class="btn secondary sm"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></svg>住所を検索</span></div>
+  <div class="candidates">
+    <button><span class="n">丸山珈琲 軽井沢本店</span><span class="s">長野県北佐久郡軽井沢町軽井沢1154-10</span></button>
+    <button><span class="n">丸山珈琲 中目黒店</span><span class="s">東京都目黒区上目黒2-44-1</span></button>
+  </div>
+  <div class="field "><div class="lbl">住所</div><div class="box"><span class="in">長野県北佐久郡軽井沢町軽井沢1154-10</span></div></div>
+  <div class="map"><div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ink-faint)"><svg viewBox="0 0 24 24" style="width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round"><path d="M12 21s7-6 7-11a7 7 0 1 0-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></div></div>
 </div>
 </div></div></div>
 </body>

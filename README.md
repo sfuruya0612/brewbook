@@ -46,6 +46,9 @@ Frontend は Rust (Dioxus) の Web アプリ、Backend は Rust の Cloudflare W
 - 写真のアップロードを使うときは、ステージングの R2 の値を `backend/brew_book/.dev.vars` (git 管理外) に置く。
   必要な名前は `R2_ENDPOINT`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_BUCKET` (`brewbook-photos-staging`) である。
   本番の資格情報はローカルに置かない (ADR-0015)。`.dev.vars` の値は `wrangler.toml` の `[vars]` を上書きする。
+- 店の地図と住所の補完 (FR-22) をローカルで試すときは、同じ `.dev.vars` に
+  `GOOGLE_MAPS_EMBED_API_KEY` と `GOOGLE_PLACES_API_KEY` を置く。キーは下の「Google Maps Platform」で作る。
+  キーが無いときは住所の補完が失敗の案内になり、地図は出ない (フォームの他の操作はできる)。
 - 管理者画面をローカルで確認する: `mise run dev-admin`
   管理者画面は `http://localhost:8788/` で配信する。ローカルの D1 は `mise run dev` の利用者向けと共有する (ADR-0002)。
   登録用リンクが指す利用者向けのオリジンは `mise run dev` の `http://localhost:8787` になる。
@@ -85,6 +88,43 @@ CI では実行せず、対象の型検査だけを行う。
     作り直すときだけ実行する。`backend/brew_book/wrangler.toml` の `[env.production]` と
     `backend/brew_book_admin/wrangler.toml` の `[env.production]` の `database_id` が本番の値である。
 
+## Google Maps Platform (店の地図と住所の補完)
+
+店のフォームは、住所の地図を Maps Embed API で表示し、店名からの住所の補完を Places API (New) の
+Text Search で行う (FR-22、ADR-0019)。初回だけ次の設定を行う。
+
+1. Google Cloud プロジェクトを作り、課金を有効にする。Google Maps Platform は無料枠でも課金の
+   有効化が要る。
+2. API を有効にする。
+   - Maps Embed API (地図の埋め込み。無料で無制限)
+   - Places API (New) (住所の補完。Text Search Pro は月 5,000 回まで無料。2026-09-14 更新の料金ページで確認)
+3. API キーを 2 つ作る (アプリごとに分ける。Google のセキュリティのガイダンスの推奨)。
+   - 地図用 (`GOOGLE_MAPS_EMBED_API_KEY`): アプリケーションの制限を「ウェブサイト」にし、
+     `http://localhost:8787/*`、`https://brewbook-staging.<サブドメイン>.workers.dev/*`、
+     `https://brewbook.<サブドメイン>.workers.dev/*` を許可する。API の制限は Maps Embed API だけにする。
+     このキーは iframe の URL に載ってブラウザに出るため、リファラの制限が保護になる。
+   - 住所の補完用 (`GOOGLE_PLACES_API_KEY`): アプリケーションの制限は付けない (Worker の送信元の
+     IP は不定のため)。API の制限は Places API (New) だけにする。このキーはブラウザに出さず、
+     Worker の Secret に置く。
+4. 想定外の課金を防ぐ。
+   - お支払いの予算とアラートを設定する (例: 予算 $1 で 50% と 100% にアラート)。
+   - Places API (New) の割り当て (クォータ) を設定する (例: 1 日 100 回)。
+5. キーを環境ごとに設定する。
+   - ローカル: `backend/brew_book/.dev.vars` (git 管理外) に両方のキーを置く (上の「ローカル開発」)。
+   - staging と production: `wrangler secret put` で設定する。
+
+   ```sh
+   cd backend/brew_book
+   wrangler secret put GOOGLE_MAPS_EMBED_API_KEY --env staging
+   wrangler secret put GOOGLE_PLACES_API_KEY --env staging
+   wrangler secret put GOOGLE_MAPS_EMBED_API_KEY --env production
+   wrangler secret put GOOGLE_PLACES_API_KEY --env production
+   ```
+
+   値はリポジトリに含めない (PRD のセキュリティ)。
+6. デプロイの後に、店のフォームで住所の地図が出ることと、店名から住所の候補が出ることを確認する。
+   住所の補完の正常系は Google の呼び出しを要するため CI では実行しない (FR-22)。
+
 ## デプロイとデプロイ後の確認
 
 画面と API は環境ごとに 1 つの Worker が workers.dev で配信する (ADR-0005)。
@@ -115,6 +155,7 @@ CI では実行せず、対象の型検査だけを行う。
      `cd backend/brew_book && wrangler secret put R2_ENDPOINT --env staging` のように、
      `R2_ENDPOINT`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY` を環境ごとに設定する。
      値はリポジトリに含めない (PRD のセキュリティ)。
+   - Google Maps Platform のキーを Secret に置く (上の「Google Maps Platform」)。
    - R2 の CORS とライフサイクルを適用する: `mise run r2-setup-staging`
      オリジンやライフサイクルを変えたときは、毎回このタスクを実行する。
    - 管理者 Worker に Cloudflare Access の保護を設定する (下の「管理者画面と Cloudflare Access」)。
@@ -125,11 +166,13 @@ CI では実行せず、対象の型検査だけを行う。
    - `https://brewbook-staging.<サブドメイン>.workers.dev/` を開くと画面が表示される。
    - 登録用リンクからパスキーを登録し、ログインして抽出を保存できる。
    - 購入の画面から写真をアップロードできる (ブラウザから R2 へ直接 PUT する)。
+   - 店のフォームで、住所の地図が表示され、店名から住所の候補が出る (FR-22)。
    - 管理者画面が Cloudflare Access で保護されていることを確認する (下の「管理者画面と Cloudflare Access」)。
 
 ### production のデプロイ
 
-production の初回の設定 (D1、R2、Secrets、Access) は済んでいる。以降のリリースは次の順で行う。
+production の初回の設定 (D1、R2、Secrets、Access) は済んでいる
+(Google Maps Platform のキーは初回に設定する。上の「Google Maps Platform」)。以降のリリースは次の順で行う。
 
 1. スキーマ変更を含むリリースでは、デプロイの前に本番の D1 へマイグレーションを適用する:
    `mise run db-migrate-production`
@@ -141,6 +184,7 @@ production の初回の設定 (D1、R2、Secrets、Access) は済んでいる。
    - 画面のルーティングのパス (`/register` など) を直接開くと `index.html` が 200 で返り、画面が表示される。
    - 登録用リンクからパスキーを登録し、ログインして抽出を保存できる。
    - 購入の画面から写真をアップロードできる (ブラウザから R2 へ直接 PUT する)。
+   - 店のフォームで、住所の地図が表示され、店名から住所の候補が出る (FR-22)。
    - 管理者画面が Cloudflare Access で保護されていることを確認する (下の「管理者画面と Cloudflare Access」)。
    - 応答時間の p95 を集計し、成功指標を満たしていることを確認する (下の「応答時間の p95 の集計」)。
 

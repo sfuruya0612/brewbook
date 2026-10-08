@@ -82,6 +82,8 @@
   - @sfuruya0612
 - [UPDATE] 抽出方法の入力に例を追加する
   - @sfuruya0612
+- [ADD] 店のフォームに Google Maps の地図を表示し、店名から住所を補完する
+  - @sfuruya0612
 
 ### misc
 

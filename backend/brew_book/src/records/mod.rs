@@ -6,7 +6,9 @@
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 
 pub mod brews;
+pub mod maps;
 pub mod photos;
+pub mod place_search;
 pub mod products;
 pub mod purchase_suggestions;
 pub mod purchases;

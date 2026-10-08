@@ -119,7 +119,7 @@ dir = "backend"
 # wasm のリリースビルドが重複し、build/.tmp の競合で失敗もする (0020)。先に backend:build で
 # 1 回だけビルドし、ハーネスには環境変数でそのビルドを再利用させる。
 depends = ["frontend:build-e2e", "backend:build"]
-run = "export BREWBOOK_SKIP_WORKER_BUILD=1 && cargo test -p brew_book --test dev_server --test d1_binding --test wrangler_auth_api --test wrangler_passkey_flow --test wrangler_records_api --test wrangler_purchases_brews_api --test wrangler_suggestions_api --test wrangler_purchase_suggestions_api --test wrangler_photos_api --test wrangler_stats_api --test wrangler_export_api --test wrangler_account_api --test wrangler_records_scale --test wrangler_stats_scale --test wrangler_same_origin_api --test wrangler_display_name && cargo test -p brew_book_admin --test wrangler_admin_api"
+run = "export BREWBOOK_SKIP_WORKER_BUILD=1 && cargo test -p brew_book --test dev_server --test d1_binding --test wrangler_auth_api --test wrangler_passkey_flow --test wrangler_records_api --test wrangler_purchases_brews_api --test wrangler_suggestions_api --test wrangler_purchase_suggestions_api --test wrangler_maps_api --test wrangler_photos_api --test wrangler_stats_api --test wrangler_export_api --test wrangler_account_api --test wrangler_records_scale --test wrangler_stats_scale --test wrangler_same_origin_api --test wrangler_display_name && cargo test -p brew_book_admin --test wrangler_admin_api"
 
 [tasks.dev]
 description = "ローカル開発の画面と API を同じオリジンから配信する"

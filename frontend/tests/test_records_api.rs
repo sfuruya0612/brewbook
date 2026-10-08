@@ -471,10 +471,63 @@ fn the_suggestions_query_is_encoded_and_the_values_are_read() {
 }
 
 #[test]
+fn the_place_search_query_is_encoded_and_the_candidates_are_read() {
+    let (api, transport) = with_response(json!({
+        "candidates": [
+            {"name": "丸山珈琲", "address": "長野県北佐久郡軽井沢町"},
+            {"name": "丸山珈琲 中目黒", "address": "東京都目黒区"},
+        ]
+    }));
+    let candidates =
+        block_on(api.place_search("丸山 珈琲", "ja")).expect("the candidates must be read");
+    assert_eq!(candidates.len(), 2);
+    assert_eq!(candidates[0].name, "丸山珈琲");
+    assert_eq!(candidates[0].address, "長野県北佐久郡軽井沢町");
+    assert_eq!(
+        transport.last_request().path,
+        "/api/place-search?q=%E4%B8%B8%E5%B1%B1%20%E7%8F%88%E7%90%B2&lang=ja"
+    );
+
+    // 候補の無い応答は空の配列として読む (FR-22)。
+    let (api, _) = with_response(json!({"candidates": []}));
+    assert!(block_on(api.place_search("店", "en"))
+        .expect("the candidates must be read")
+        .is_empty());
+}
+
+#[test]
+fn the_maps_config_reads_the_key_or_null() {
+    let (api, transport) = with_response(json!({"embed_api_key": "test-key"}));
+    let key = block_on(api.maps_config()).expect("the config must be read");
+    assert_eq!(key.as_deref(), Some("test-key"));
+    assert_eq!(transport.last_request().path, "/api/maps/config");
+
+    // キーの未設定は null になり、画面は地図を出さない (FR-22)。
+    let (api, _) = with_response(json!({"embed_api_key": null}));
+    assert_eq!(
+        block_on(api.maps_config()).expect("the config must be read"),
+        None
+    );
+}
+
+#[test]
 fn a_broken_response_is_a_format_error() {
     let (api, _) = with_response(json!({"shops": "not an array"}));
     let error = block_on(api.shops(&ListOptions::default(), None))
         .expect_err("the response must be rejected");
+    assert!(matches!(error, RecordError::Format(_)), "{error:?}");
+
+    // 住所の検索と地図の設定の応答の形の違反も形式の誤りにする (FR-22)。
+    let (api, _) = with_response(json!({"candidates": "not an array"}));
+    let error = block_on(api.place_search("店", "ja")).expect_err("the response must be rejected");
+    assert!(matches!(error, RecordError::Format(_)), "{error:?}");
+
+    let (api, _) = with_response(json!({"candidates": [{"name": "店"}]}));
+    let error = block_on(api.place_search("店", "ja")).expect_err("the response must be rejected");
+    assert!(matches!(error, RecordError::Format(_)), "{error:?}");
+
+    let (api, _) = with_response(json!({"embed_api_key": 1}));
+    let error = block_on(api.maps_config()).expect_err("the response must be rejected");
     assert!(matches!(error, RecordError::Format(_)), "{error:?}");
 }
 

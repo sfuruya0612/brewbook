@@ -239,4 +239,8 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "保存せずに閉じますか？",                                    // discardConfirmTitle
     "入力した変更は破棄されます。",                              // discardConfirmMessage
     "破棄する",                                                  // discardConfirmButton
+    "住所を検索",                                                // searchAddressButton
+    "検索中",                                                    // searchingLabel
+    "住所の候補が見つかりません。手入力で続けられます。",        // addressSearchEmpty
+    "地図",                                                      // mapTitle
 ];

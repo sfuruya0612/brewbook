@@ -239,4 +239,8 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "Close without saving?",                      // discardConfirmTitle
     "The changes you entered will be discarded.", // discardConfirmMessage
     "Discard",                                    // discardConfirmButton
+    "Search address",                             // searchAddressButton
+    "Searching",                                  // searchingLabel
+    "No address candidates were found. You can enter the address manually.", // addressSearchEmpty
+    "Map",                                        // mapTitle
 ];

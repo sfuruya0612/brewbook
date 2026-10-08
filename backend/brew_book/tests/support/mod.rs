@@ -74,9 +74,11 @@ pub struct SuiteEntry {
 /// 0007 が購入と抽出の 10 経路、0008 がサジェストの 1 経路、0009 が購入の写真の 4 経路、
 /// 0010 が統計と評価の推移の 4 経路、0011 がエクスポートの 1 経路、
 /// 0012 がアカウント削除の 1 経路、0034 が写真からの推測の 1 経路、
-/// 0051 がお気に入りの 8 経路を追加する。
+/// 0051 がお気に入りの 8 経路、0055 が住所の補完と地図の設定の 2 経路を追加する。
 /// 写真からの推測の正常系は Workers AI の推論を要するため CI では実行せず、staging への
 /// デプロイで実写真を送って確認する (PRD の成功指標の測定方法。FR-19)。
+/// 住所の補完の正常系も Google の呼び出しを要するため CI では実行せず、staging への
+/// デプロイで実在の店名で確認する (FR-22)。
 pub const SUITE: &[SuiteEntry] = &[
     SuiteEntry {
         route: "auth_register_begin",
@@ -265,6 +267,15 @@ pub const SUITE: &[SuiteEntry] = &[
     },
     SuiteEntry {
         route: "account_delete",
+        kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
+    },
+    SuiteEntry {
+        // 正常系は CI で実行できない (Google の呼び出しを要する。FR-22)。
+        route: "place_search",
+        kinds: &[KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
+        route: "maps_config",
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401],
     },
 ];

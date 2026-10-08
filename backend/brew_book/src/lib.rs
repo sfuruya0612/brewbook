@@ -236,6 +236,8 @@ async fn authenticated_route(
         "brews_favorite_delete" => records::brews::favorite_delete(env, session, id).await,
         "suggestions_list" => records::suggestions::list(req, env, session, field).await,
         "purchase_suggestions" => records::purchase_suggestions::create(req, env, session).await,
+        "place_search" => records::place_search::search(req, env, session).await,
+        "maps_config" => records::maps::config(env, session).await,
         "stats_brews" => records::stats::brews(req, env, session).await,
         "stats_purchases" => records::stats::purchases(req, env, session).await,
         "stats_brew_ratings" => records::stats::brew_ratings(req, env, session).await,

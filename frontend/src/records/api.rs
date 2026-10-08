@@ -9,8 +9,8 @@ use serde_json::json;
 
 use super::inputs::{BrewInput, ProductInput, PurchaseInput, ShopInput};
 use super::models::{
-    items_field, next_cursor_field, Brew, PhotoUploadTarget, Product, Purchase, PurchaseSuggestion,
-    RecordPage, Shop,
+    items_field, next_cursor_field, optional_string, Brew, PhotoUploadTarget, PlaceCandidate,
+    Product, Purchase, PurchaseSuggestion, RecordPage, Shop,
 };
 use super::RecordError;
 
@@ -414,6 +414,32 @@ impl RecordsApi {
     /// 写真の取得の URL (FR-10)。写真は Backend が認証付きで返すため、この URL を表示に使う。
     pub fn photo_url(&self, purchase_id: &str) -> String {
         format!("{}/purchases/{purchase_id}/photo", self.api.base_path())
+    }
+
+    /// 店名から住所の候補を引く (FR-22)。
+    ///
+    /// 候補は Google Places API (New) の Text Search が返す場所の名前と住所で、最大 5 件である。
+    /// 候補に無い住所も入力できる。
+    pub async fn place_search(
+        &self,
+        query: &str,
+        lang: &str,
+    ) -> Result<Vec<PlaceCandidate>, RecordError> {
+        let json = self
+            .api
+            .get_json(&format!(
+                "/place-search?q={}&lang={}",
+                encode_query(query),
+                encode_query(lang)
+            ))
+            .await?;
+        items_field(&json, "candidates", PlaceCandidate::from_json)
+    }
+
+    /// 地図の埋め込みの API キーを引く (FR-22)。キーが未設定のときは None にする (地図を出さない)。
+    pub async fn maps_config(&self) -> Result<Option<String>, RecordError> {
+        let json = self.api.get_json("/maps/config").await?;
+        optional_string(&json, "embed_api_key")
     }
 }
 

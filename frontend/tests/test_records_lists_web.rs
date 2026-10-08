@@ -711,10 +711,13 @@ async fn the_edit_forms_have_the_star_and_the_new_forms_do_not() {
         Some("Remove from favorites")
     );
 
-    // 店の編集: 同じく星が出る。
+    // 店の編集: 同じく星が出る。地図の設定 (FR-22) の応答も返す。
     let (root, _) = mount_detail(
         "/shops/s1/edit",
-        vec![response(&shop_json("s1", "Shop", None))],
+        vec![
+            response(&shop_json("s1", "Shop", None)),
+            response(&json!({"embed_api_key": null})),
+        ],
     )
     .await;
     assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 1);
@@ -723,7 +726,11 @@ async fn the_edit_forms_have_the_star_and_the_new_forms_do_not() {
     let (root, _) = mount_detail("/products/new", vec![]).await;
     assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 0);
     assert_eq!(count(&root, ".appbar .acts > .btn"), 1);
-    let (root, _) = mount_detail("/shops/new", vec![]).await;
+    let (root, _) = mount_detail(
+        "/shops/new",
+        vec![response(&json!({"embed_api_key": null}))],
+    )
+    .await;
     assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 0);
     assert_eq!(count(&root, ".appbar .acts > .btn"), 1);
 }
