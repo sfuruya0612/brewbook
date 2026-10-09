@@ -33,7 +33,7 @@ Frontend は Rust (Dioxus) の Web アプリ、Backend は Rust の Cloudflare W
 | --- | --- | --- | --- | --- |
 | ローカル | miniflare (`wrangler dev`) | ローカル | ローカル | `mise run dev` |
 | staging | `brewbook-staging` / `brewbook-admin-staging` | `brewbook-staging` | `brewbook-photos-staging` | `mise run deploy-staging` |
-| production | `brewbook` / `brewbook-admin` | `brewbook` | `brewbook-photos` | `mise run deploy-production` |
+| production | `brewbook` / `brewbook-admin` | `brewbook` | `brewbook-photos` | main への push (Workers Builds)。手元は `mise run deploy-production` |
 
 ## ローカル開発
 
@@ -78,8 +78,9 @@ CI では実行せず、対象の型検査だけを行う。
 - マイグレーションの適用は環境で分ける。
   - ローカル: `mise run db-migrate`
   - staging: `mise run db-migrate-staging` (デプロイ手順の中でだけ実行する)
-  - production: `mise run db-migrate-production` (デプロイ手順の中でだけ実行する)
-  リモートへの適用は意識して実行するため、`mise run check` には含めない。
+  - production: 自動デプロイ (Workers Builds) がデプロイの直前に適用する。
+    手元からデプロイするときは `mise run db-migrate-production` をデプロイの前に実行する
+  リモートへの適用はデプロイの手順の中でだけ行い、`mise run check` には含めない。
 - データベースの作成は環境ごとに 1 回行い、返る ID を `wrangler.toml` に設定する。
   - staging: `mise run d1-create-staging` (`wrangler d1 create brewbook-staging`)
     出力の `database_id` を `backend/brew_book/wrangler.toml` の `[env.staging]` と
@@ -138,6 +139,98 @@ Text Search で行う (FR-22、ADR-0019)。初回だけ次の設定を行う。
 管理者だけのときは `mise run deploy-admin-staging` / `mise run deploy-admin-production` を使う。
 利用者向けのデプロイは Frontend (Dioxus) のビルドを先に実行する。
 デプロイのタスクは `mise run check` に含めない (0002 の規則)。
+production のデプロイは main への push を契機に Workers Builds が自動で行う
+(下の「main への push からの自動デプロイ」)。手元からのデプロイもこれまでどおり使える。
+
+### main への push からの自動デプロイ (Workers Builds)
+
+main への push を契機に、本番 (利用者向け `brewbook` と管理者 `brewbook-admin`) を
+Cloudflare Workers Builds (Cloudflare の GitHub 連携) で自動デプロイする (ADR-0021)。
+デプロイの直前に、利用者向けの Deploy command が本番の D1 へマイグレーションを適用する。
+初回だけ次の設定を行う。
+
+1. Workers Builds 用の API トークンを作る。Cloudflare ダッシュボードの My Profile の API Tokens で、
+   Account の Workers Scripts の Edit、D1 の Edit、Account Settings の Read を持つカスタムトークンを作る。
+   自動で発行されるトークンには D1 の権限が無く、マイグレーションの適用に失敗するためである
+   (Workers Builds はユーザーのトークンだけに対応する。2026-10-09 に Cloudflare のドキュメントで確認)。
+2. GitHub の連携を入れる。Workers & Pages で Worker を選び、Settings の Builds から Connect し、
+   GitHub のアカウントを接続して (Cloudflare Workers の GitHub App)、このリポジトリへのアクセスを許可する。
+3. 利用者向けの Worker (`brewbook`) を接続する。設定は次の通り。
+   - Git branch: `main`
+   - Root directory: `backend/brew_book`
+   - API token: 手順 1 のトークン
+
+   Build command:
+
+   ```sh
+   set -e
+   curl -fsSL https://mise.run | sh
+   export PATH="$HOME/.local/bin:$PATH"
+   mise install node rust cargo:worker-build wrangler github:DioxusLabs/dioxus
+   export MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false MISE_NOT_FOUND_AUTO_INSTALL=false
+   mise run frontend:build
+   ```
+
+   Deploy command:
+
+   ```sh
+   set -e
+   export PATH="$HOME/.local/bin:$PATH"
+   export MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false MISE_NOT_FOUND_AUTO_INSTALL=false
+   mise exec -- wrangler d1 migrations apply DB --env production --remote
+   mise exec -- wrangler deploy --env production
+   ```
+
+4. 管理者の Worker (`brewbook-admin`) を接続する。設定は次の通り。
+   - Git branch: `main`
+   - Root directory: `backend/brew_book_admin`
+   - API token: 手順 1 のトークン
+
+   Build command:
+
+   ```sh
+   set -e
+   curl -fsSL https://mise.run | sh
+   export PATH="$HOME/.local/bin:$PATH"
+   mise install node rust cargo:worker-build wrangler
+   ```
+
+   Deploy command:
+
+   ```sh
+   set -e
+   export PATH="$HOME/.local/bin:$PATH"
+   export MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false MISE_NOT_FOUND_AUTO_INSTALL=false
+   mise exec -- wrangler deploy --env production
+   ```
+
+5. Preview builds は使わない。Settings の Build の Branch control で Enable Preview Builds を外す。
+   main 以外のブランチへの push ではビルドを実行しない。
+6. (任意) 変更の無い Worker のビルドを省く。Settings の Build の Build watch paths に、
+   利用者向けは `backend/*, frontend/*, mise.toml`、管理者は `backend/*, mise.toml` を指定する。
+   指定しない場合は、main への push のたびに両方をビルドする (Free プランは同時ビルドが 1 つで直列になる)。
+
+設定の理由と制約は次の通り (ADR-0021)。
+
+- Cloudflare のビルド環境 (Ubuntu 24.04) には Rust と mise が入っていない。
+  Build command で mise を入れ、`mise.toml` の版でデプロイに要るツールだけを入れる (ADR-0009)。
+  Rust、worker-build、Node.js、wrangler、Dioxus CLI が要る。
+  Node.js は wrangler (npm のパッケージ) の install dependency で、`mise.toml` に無いと wrangler を入れられない
+  (2026-10-09 に mise 2026.10.4 で確認)。
+  `mise install` でツールを指定し、`MISE_AUTO_INSTALL` を無効にして、
+  k6、Java、chromedriver などデプロイに不要なツールが自動で入らないようにする。
+- Workers Builds は `wrangler.toml` の `[build]` (Custom Builds) を Build command として使わない
+  (2026-10-09 に Cloudflare のドキュメントで確認)。
+  `worker-build --release` は Deploy command の `wrangler deploy` が通常どおり実行するため、
+  Build command では実行しない (ビルドの二重実行を避ける)。
+- ビルドの上限は 20 分である。Workers Builds は Rust のビルドキャッシュを持たず、毎回コールドビルドになる。
+  初回のビルドの所要を確認し、上限を超える場合は GitHub Actions に切り替える (ADR-0021)。
+- マイグレーションの適用は利用者向けの Deploy command だけが行う。
+  管理者のデプロイはこれと並行するため、スキーマ変更を含むリリースでは、
+  管理者の新しいコードが古いスキーマで動く短い期間が生じ得る (管理者は所有者だけが使う)。
+- 失敗したビルドは Worker の Deployments の Build history で確認できる。
+- main を保護し、CI (`check`) を必須の status check にすることを推奨する。
+  Workers Builds は push と同時にデプロイするため、検証を通ったコミットだけを main に入れる。
 
 ### staging の初回の設定
 
@@ -170,12 +263,16 @@ Text Search で行う (FR-22、ADR-0019)。初回だけ次の設定を行う。
 
 ### production のデプロイ
 
-production の初回の設定 (D1、R2、Secrets、Access) は済んでいる
-(Google Maps Platform のキーは初回に設定する。上の「Google Maps Platform」)。以降のリリースは次の順で行う。
+production のデプロイは、main への push を契機に Workers Builds が自動で行う
+(上の「main への push からの自動デプロイ」)。
+初回の設定 (D1、R2、Secrets、Access) は済んでいる
+(Google Maps Platform のキーは初回に設定する。上の「Google Maps Platform」)。
+
+手元からデプロイする場合 (切り分けや緊急のリリース) は、次の順で行う。
 
 1. スキーマ変更を含むリリースでは、デプロイの前に本番の D1 へマイグレーションを適用する:
    `mise run db-migrate-production`
-   本番への適用は意識して実行するため、デプロイのタスクの `depends` には含めない。
+   デプロイのタスクの `depends` には含めない (自動デプロイでは、利用者向けの Deploy command が適用する)。
    R2 の CORS とライフサイクルを変えたときは `mise run r2-setup-production` も実行する。
 2. デプロイする: `mise run deploy-production` (利用者向けと管理者の Worker)
 3. デプロイ後の確認を行う。

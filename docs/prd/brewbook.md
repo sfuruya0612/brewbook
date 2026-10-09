@@ -833,6 +833,9 @@ API は次の 4 つとする。
 - Frontend のビルド成果物は Backend の Worker の Static Assets として、Backend と一緒に Cloudflare Workers にデプロイする (ADR-0005)。
   管理者 Worker は別にデプロイする (ADR-0008)。
   デプロイ手順はリポジトリの `mise.toml` のタスクで再現できる (ADR-0009)。
+- 本番 (利用者向けと管理者の Worker) のデプロイは、main への push を契機に Workers Builds が自動で行い、
+  利用者向けのデプロイの直前に本番の D1 へマイグレーションを適用する (ADR-0021)。
+  手元からのデプロイ (`mise run deploy-production`) も残す。
 - データベースのスキーマ変更は wrangler の D1 マイグレーションで管理し、マイグレーションファイルをリポジトリに含める。
 - ローカル開発では wrangler のローカル D1 (SQLite) とローカル R2 を使い、本番と同じスキーマとコードで動かす。
 - 紐づけ前の写真のオブジェクトは `pending/` プレフィックスに置き、R2 のライフサイクルルールで 1 日後に削除する (ADR-0003)。
@@ -933,6 +936,7 @@ API は次の 4 つとする。
 - ADR-0018: アーカイブ (論理削除) を廃止する (`docs/adr/0018-remove-archive.md`)
 - ADR-0019: 店の地図と住所の補完に Google Maps Platform を使う (`docs/adr/0019-google-maps-platform-for-shop-maps.md`)
 - ADR-0020: 記録の削除 (物理削除と連鎖削除) (`docs/adr/0020-record-deletion.md`)
+- ADR-0021: main への push を契機に Workers Builds で本番へ自動デプロイする (`docs/adr/0021-workers-builds-auto-deploy.md`)
 - workers-rs: https://github.com/cloudflare/workers-rs
 - Maps Embed API: https://developers.google.com/maps/documentation/embed
 - Places API (New) のテキスト検索: https://developers.google.com/maps/documentation/places/web-service/text-search

@@ -131,3 +131,7 @@
   - @sfuruya0612
 - [FIX] frontend:test-same-origin の E2E で WebDriver の script timeout を 60 秒にし、並列実行の負荷による fonts.ready のタイムアウトを防ぐ
   - @sfuruya0612
+- [ADD] main への push で本番へ自動デプロイし、デプロイの直前に D1 のマイグレーションを適用する Workers Builds の設定手順を追加する
+  - @sfuruya0612
+- [FIX] Workers Builds のビルドで wrangler をインストールできるように、mise.toml に node を追加する
+  - @sfuruya0612
