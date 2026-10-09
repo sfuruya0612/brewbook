@@ -84,6 +84,8 @@
   - @sfuruya0612
 - [ADD] 店のフォームに Google Maps の地図を表示し、店名から住所を補完する
   - @sfuruya0612
+- [ADD] 店、商品、購入、抽出の記録を削除できるようにする
+  - @sfuruya0612
 
 ### misc
 
