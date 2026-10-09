@@ -17,7 +17,7 @@ use worker::{console_error, Env, Request, Response, Result};
 
 use super::{
     apply_favorite, flavor_notes, flavor_notes_for, internal_error, invalid_input, merge_name,
-    not_found, query_error_response, read_input, replace_flavor_notes, ListParams,
+    not_found, photos, query_error_response, read_input, replace_flavor_notes, ListParams,
 };
 use crate::auth::session::Session;
 use crate::db;
@@ -395,6 +395,82 @@ async fn set_favorite(
         }
         None => Ok(internal_error()),
     }
+}
+
+/// 商品を削除する (0056)。認証が必要。
+///
+/// その商品の購入、購入に紐づく抽出、購入の写真 (R2)、商品の Flavor Notes の対応を
+/// まとめて削除する。タグの行 (flavor_tags) は消さない (ADR-0006)。
+/// 写真は D1 の前に消し、失敗した場合は記録が残ったまま再試行できる (アカウント削除と同じ順序)。
+pub async fn delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    let Some(id) = id else {
+        return Ok(not_found("the product does not exist"));
+    };
+    let d1 = db::database(env)?;
+    if find(&d1, &session.user_id, id).await?.is_none() {
+        return Ok(not_found("the product does not exist"));
+    }
+    // 消える購入の写真のキーをまとめて引いてから、R2 のオブジェクトを消す。
+    let rows: Vec<PhotoKeyRow> = db::prepared(
+        &d1,
+        &query::product_purchase_photo_keys(&session.user_id, id),
+    )?
+    .all()
+    .await?
+    .results()?;
+    let keys: Vec<String> = rows.into_iter().map(|row| row.photo_key).collect();
+    photos::delete_objects(env, &keys).await?;
+    // 外部キーの参照元から先に消す (ADR-0006)。1 つの batch で 1 トランザクションにする (ADR-0002)。
+    let statements = vec![
+        db::prepared(&d1, &query::product_brews_delete(&session.user_id, id))?,
+        db::prepared(&d1, &query::product_purchases_delete(&session.user_id, id))?,
+        db::prepared(
+            &d1,
+            &query::delete_product_flavor_tags(&session.user_id, id),
+        )?,
+        db::prepared(&d1, &query::product_delete(&session.user_id, id))?,
+    ];
+    db::execute_batch(&d1, statements).await?;
+    Ok(Response::empty()?.with_status(204))
+}
+
+/// 商品の削除で消える購入と抽出の件数を返す (0056)。認証が必要。
+pub async fn delete_impact(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    let Some(id) = id else {
+        return Ok(not_found("the product does not exist"));
+    };
+    let d1 = db::database(env)?;
+    if find(&d1, &session.user_id, id).await?.is_none() {
+        return Ok(not_found("the product does not exist"));
+    }
+    let row: Option<ProductDeleteImpactRow> =
+        db::prepared(&d1, &query::product_delete_impact(&session.user_id, id))?
+            .first(None)
+            .await?;
+    let (purchases, brews) = row.map(|row| (row.purchases, row.brews)).unwrap_or((0, 0));
+    respond::json(&ProductDeleteImpactResponse { purchases, brews })
+}
+
+/// 商品の削除の影響の応答 (0056)。
+#[derive(Debug, Serialize)]
+struct ProductDeleteImpactResponse {
+    /// 削除される購入の件数。
+    purchases: i64,
+    /// 削除される抽出の件数。
+    brews: i64,
+}
+
+/// 商品の削除の影響を数えるクエリの行 (0056)。
+#[derive(Debug, serde::Deserialize)]
+struct ProductDeleteImpactRow {
+    purchases: i64,
+    brews: i64,
+}
+
+/// 購入の写真のキーの行 (0056)。
+#[derive(Debug, serde::Deserialize)]
+struct PhotoKeyRow {
+    photo_key: String,
 }
 
 /// 商品を 1 件引く。

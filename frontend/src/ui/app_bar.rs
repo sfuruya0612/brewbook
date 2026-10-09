@@ -12,7 +12,7 @@ use dioxus::prelude::*;
 use crate::i18n::{t, Key};
 use crate::ui::{BrewbookMark, Icon};
 
-/// 画面の帯。先頭の操作は戻るか閉じるの 1 つ、末尾の操作は最大 2 つ。
+/// 画面の帯。先頭の操作は戻るか閉じるの 1 つ、末尾の操作は最大 3 つ (詳細の お気に入り、編集、削除)。
 #[component]
 pub fn AppBar(
     /// 画面の題 (ARB の `*Title` から取る)。
@@ -26,7 +26,7 @@ pub fn AppBar(
     /// 先頭の操作を押したときの動き。
     #[props(default)]
     on_leading: EventHandler<MouseEvent>,
-    /// 末尾の操作 (アイコンと文字ボタンで最大 2 つ)。
+    /// 末尾の操作 (アイコンと文字ボタンで最大 3 つ)。
     #[props(default)]
     actions: Option<Element>,
     /// ハンバーガーボタンとメニューの面 (最上位の画面だけ渡す。0047)。

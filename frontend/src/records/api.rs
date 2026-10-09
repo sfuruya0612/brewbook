@@ -9,8 +9,8 @@ use serde_json::json;
 
 use super::inputs::{BrewInput, ProductInput, PurchaseInput, ShopInput};
 use super::models::{
-    items_field, next_cursor_field, optional_string, Brew, PhotoUploadTarget, PlaceCandidate,
-    Product, Purchase, PurchaseSuggestion, RecordPage, Shop,
+    items_field, next_cursor_field, optional_string, Brew, DeleteImpact, PhotoUploadTarget,
+    PlaceCandidate, Product, Purchase, PurchaseSuggestion, RecordPage, Shop,
 };
 use super::RecordError;
 
@@ -161,6 +161,22 @@ impl RecordsApi {
         favorite_record(&self.api, "shops", id, favorite, Shop::from_json).await
     }
 
+    /// 店を削除する (0056)。
+    pub async fn delete_shop(&self, id: &str) -> Result<(), RecordError> {
+        self.api.delete_json(&format!("/shops/{id}")).await?;
+        Ok(())
+    }
+
+    /// 店の削除で店の指定が外れる購入の件数を引く (0056)。
+    pub async fn shop_delete_impact(&self, id: &str) -> Result<DeleteImpact, RecordError> {
+        DeleteImpact::from_json(
+            &self
+                .api
+                .get_json(&format!("/shops/{id}/delete-impact"))
+                .await?,
+        )
+    }
+
     /// 店を 1 件引く (FR-6)。
     pub async fn shop(&self, id: &str) -> Result<Shop, RecordError> {
         Shop::from_json(&self.api.get_json(&format!("/shops/{id}")).await?)
@@ -208,6 +224,22 @@ impl RecordsApi {
         favorite: bool,
     ) -> Result<Product, RecordError> {
         favorite_record(&self.api, "products", id, favorite, Product::from_json).await
+    }
+
+    /// 商品を削除する (0056)。
+    pub async fn delete_product(&self, id: &str) -> Result<(), RecordError> {
+        self.api.delete_json(&format!("/products/{id}")).await?;
+        Ok(())
+    }
+
+    /// 商品の削除で消える購入と抽出の件数を引く (0056)。
+    pub async fn product_delete_impact(&self, id: &str) -> Result<DeleteImpact, RecordError> {
+        DeleteImpact::from_json(
+            &self
+                .api
+                .get_json(&format!("/products/{id}/delete-impact"))
+                .await?,
+        )
     }
 
     /// 商品を 1 件引く (FR-7)。
@@ -259,6 +291,22 @@ impl RecordsApi {
         favorite_record(&self.api, "purchases", id, favorite, Purchase::from_json).await
     }
 
+    /// 購入を削除する (0056)。
+    pub async fn delete_purchase(&self, id: &str) -> Result<(), RecordError> {
+        self.api.delete_json(&format!("/purchases/{id}")).await?;
+        Ok(())
+    }
+
+    /// 購入の削除で消える抽出の件数を引く (0056)。
+    pub async fn purchase_delete_impact(&self, id: &str) -> Result<DeleteImpact, RecordError> {
+        DeleteImpact::from_json(
+            &self
+                .api
+                .get_json(&format!("/purchases/{id}/delete-impact"))
+                .await?,
+        )
+    }
+
     /// 購入を 1 件引く (FR-9)。
     pub async fn purchase(&self, id: &str) -> Result<Purchase, RecordError> {
         Purchase::from_json(&self.api.get_json(&format!("/purchases/{id}")).await?)
@@ -302,6 +350,12 @@ impl RecordsApi {
     /// 抽出のお気に入りを付け外しする (FR-21)。更新後の抽出を返す。
     pub async fn set_brew_favorite(&self, id: &str, favorite: bool) -> Result<Brew, RecordError> {
         favorite_record(&self.api, "brews", id, favorite, Brew::from_json).await
+    }
+
+    /// 抽出を削除する (0056)。
+    pub async fn delete_brew(&self, id: &str) -> Result<(), RecordError> {
+        self.api.delete_json(&format!("/brews/{id}")).await?;
+        Ok(())
     }
 
     /// 抽出を 1 件引く (FR-11)。

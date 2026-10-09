@@ -45,7 +45,7 @@ pub use inputs::{BrewInput, ProductInput, PurchaseInput, ShopInput};
 pub use list::{PageRequest, RecordList, LOAD_MORE_THRESHOLD};
 pub use maps::map_embed_url;
 pub use models::{
-    Brew, PhotoUploadTarget, PlaceCandidate, Product, ProductSuggestion, Purchase,
+    Brew, DeleteImpact, PhotoUploadTarget, PlaceCandidate, Product, ProductSuggestion, Purchase,
     PurchaseSuggestion, RecordPage, Shop,
 };
 #[cfg(target_arch = "wasm32")]
@@ -128,6 +128,17 @@ pub fn record_error_retry(error: &RecordError) -> bool {
         RecordError::Api(ApiCallError::Api(error)) => !error.is_unauthorized(),
         RecordError::Photo(_) | RecordError::Format(_) | RecordError::Validation(_) => false,
     }
+}
+
+/// 記録が既に無い失敗 (404) か (0056)。
+///
+/// 削除の API と削除の影響の 404 は、記録が既に無いため (他の端末での削除を含む) 成功と
+/// 同じ扱いにする。
+pub fn record_error_not_found(error: &RecordError) -> bool {
+    matches!(
+        error,
+        RecordError::Api(ApiCallError::Api(api_error)) if api_error.status == 404
+    )
 }
 
 /// 記録の画面が使う依存の束 (ADR-0007)。

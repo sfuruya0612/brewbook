@@ -330,6 +330,22 @@ fn click(element: &web_sys::Element) {
     element.unchecked_ref::<web_sys::HtmlElement>().click();
 }
 
+/// 入れ物の中の一致を順に返す (NodeList の添字アクセス)。
+fn elements(root: &web_sys::Element, selector: &str) -> Vec<web_sys::Element> {
+    let list = root
+        .query_selector_all(selector)
+        .expect("the selector must be valid");
+    let mut found = Vec::new();
+    for index in 0..list.length() {
+        let value = js_sys::Reflect::get(&list, &wasm_bindgen::JsValue::from_f64(f64::from(index)))
+            .expect("the index must be readable");
+        if let Ok(element) = value.dyn_into::<web_sys::Element>() {
+            found.push(element);
+        }
+    }
+    found
+}
+
 /// キーを押す (キーダウンだけを送る。実際のブラウザの既定の動作は合成のイベントでは起きない)。
 fn press_key(element: &web_sys::Element, key: &str) {
     let init = web_sys::KeyboardEventInit::new();
@@ -693,7 +709,7 @@ async fn the_edit_forms_have_the_star_and_the_new_forms_do_not() {
         ],
     )
     .await;
-    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 1);
+    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 2);
     let star = select(&root, ".appbar .acts > .iconbtn");
     assert_eq!(
         star.get_attribute("aria-label").as_deref(),
@@ -720,7 +736,7 @@ async fn the_edit_forms_have_the_star_and_the_new_forms_do_not() {
         ],
     )
     .await;
-    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 1);
+    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 2);
 
     // 新規の登録: 星は出ない (保存の文字ボタンだけ)。
     let (root, _) = mount_detail("/products/new", vec![]).await;
@@ -763,7 +779,7 @@ async fn the_detail_screens_have_the_star() {
         ],
     )
     .await;
-    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 2);
+    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 3);
     let star = select(&root, ".appbar .acts > .iconbtn");
     assert_eq!(
         star.get_attribute("aria-label").as_deref(),
@@ -788,11 +804,200 @@ async fn the_detail_screens_have_the_star() {
         vec![response(&purchase), response(&json!({"ratings": []}))],
     )
     .await;
-    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 2);
+    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 3);
     assert_eq!(
         select(&root, ".appbar .acts > .iconbtn")
             .get_attribute("aria-label")
             .as_deref(),
         Some("Add to favorites")
+    );
+}
+
+/// 削除は確認の後にだけ行われ、取り消しでは API を呼ばない (0056)。
+#[wasm_bindgen_test]
+async fn the_delete_confirmation_gates_the_request() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let product = product_json("p1", "Beans", None);
+    let purchase = purchase_json("b1", &product, None);
+    let (root, transport) = mount_detail(
+        "/brews/w1",
+        vec![
+            response(&brew_json("w1", &purchase, None)),
+            // 確認の後にだけ削除の API を呼ぶ。
+            FakeTransport::response(204, ""),
+            // 削除の通知で詳細が読み直される場合に備える (404)。
+            FakeTransport::response(
+                404,
+                &json!({"error": {"code": "not_found", "message": "x"}}).to_string(),
+            ),
+        ],
+    )
+    .await;
+    let icons = elements(&root, ".appbar .acts > .iconbtn");
+    assert_eq!(icons.len(), 3);
+
+    // 削除を押すと確認が出て、削除の API はまだ呼ばれない。
+    click(&icons[2]);
+    settle().await;
+    assert_eq!(count(&root, ".dialog"), 1);
+    assert_eq!(
+        transport.requests().len(),
+        1,
+        "the delete must wait for the confirmation"
+    );
+
+    // 取り消すとダイアログが閉じ、削除の API は呼ばれない。
+    click(&select(&root, ".dialog .btn.text"));
+    settle().await;
+    assert_eq!(count(&root, ".dialog"), 0);
+    assert_eq!(transport.requests().len(), 1);
+
+    // 確認すると削除の API を送る。
+    click(&elements(&root, ".appbar .acts > .iconbtn")[2]);
+    settle().await;
+    click(&select(&root, ".dialog .btn.danger"));
+    settle().await;
+    assert!(transport.requests().len() >= 2);
+    assert_eq!(transport.requests()[1].path, "/api/brews/w1");
+    assert_eq!(transport.requests()[1].method.as_str(), "DELETE");
+}
+
+/// 購入の削除の確認には、連鎖で消える抽出の件数が出る (0056)。
+#[wasm_bindgen_test]
+async fn the_purchase_delete_shows_the_brew_count_and_deletes_on_the_confirmation() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let product = product_json("p1", "Beans", None);
+    let purchase = purchase_json("b1", &product, None);
+    let (root, transport) = mount_detail(
+        "/purchases/b1",
+        vec![
+            response(&purchase),
+            response(&json!({"ratings": []})),
+            response(&json!({"brews": 2})),
+            FakeTransport::response(204, ""),
+            // 削除の通知で詳細が読み直される場合に備える (404)。
+            FakeTransport::response(
+                404,
+                &json!({"error": {"code": "not_found", "message": "x"}}).to_string(),
+            ),
+            FakeTransport::response(
+                404,
+                &json!({"error": {"code": "not_found", "message": "x"}}).to_string(),
+            ),
+        ],
+    )
+    .await;
+    let icons = elements(&root, ".appbar .acts > .iconbtn");
+    assert_eq!(icons.len(), 3);
+    click(&icons[2]);
+    settle().await;
+    // 削除の影響を引いてから、件数入りの確認を出す。
+    assert_eq!(transport.requests().len(), 3);
+    assert_eq!(
+        transport.requests()[2].path,
+        "/api/purchases/b1/delete-impact"
+    );
+    assert_eq!(count(&root, ".dialog"), 1);
+    let message = select(&root, ".dialog p")
+        .text_content()
+        .unwrap_or_default();
+    assert!(message.contains("2 brews"), "{message}");
+
+    click(&select(&root, ".dialog .btn.danger"));
+    settle().await;
+    assert!(transport.requests().len() >= 4);
+    assert_eq!(transport.requests()[3].path, "/api/purchases/b1");
+    assert_eq!(transport.requests()[3].method.as_str(), "DELETE");
+}
+
+/// 店の編集フォームの削除は、店の指定が外れる購入の件数を出して削除する (0056)。
+#[wasm_bindgen_test]
+async fn the_shop_form_delete_shows_the_affected_purchases() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let (root, transport) = mount_detail(
+        "/shops/s1/edit",
+        vec![
+            response(&shop_json("s1", "Shop", None)),
+            response(&json!({"embed_api_key": null})),
+            response(&json!({"purchases": 3})),
+            FakeTransport::response(204, ""),
+            // 削除の通知でフォームが読み直される場合に備える (404)。
+            FakeTransport::response(
+                404,
+                &json!({"error": {"code": "not_found", "message": "x"}}).to_string(),
+            ),
+        ],
+    )
+    .await;
+    // 星と削除の 2 つのアイコンと、保存の文字ボタン。
+    let icons = elements(&root, ".appbar .acts > .iconbtn");
+    assert_eq!(icons.len(), 2);
+    click(&icons[1]);
+    settle().await;
+    assert_eq!(transport.requests()[2].path, "/api/shops/s1/delete-impact");
+    assert_eq!(count(&root, ".dialog"), 1);
+    let message = select(&root, ".dialog p")
+        .text_content()
+        .unwrap_or_default();
+    assert!(message.contains("3 purchases"), "{message}");
+
+    click(&select(&root, ".dialog .btn.danger"));
+    settle().await;
+    assert!(transport.requests().len() >= 4);
+    assert_eq!(transport.requests()[3].path, "/api/shops/s1");
+    assert_eq!(transport.requests()[3].method.as_str(), "DELETE");
+}
+
+/// 2 段組では、削除の後に右の面が閉じて一覧が読み直される (0056)。
+#[wasm_bindgen_test]
+async fn the_wide_layout_closes_the_detail_pane_after_the_delete() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let product = product_json("p1", "Beans", None);
+    let purchase = purchase_json("b1", &product, None);
+    let list = json!({"brews": [brew_json("w1", &purchase, None)], "next_cursor": null});
+    let (root, transport) = mount_at(
+        "/",
+        vec![
+            response(&list),
+            response(&brew_json("w1", &purchase, None)),
+            FakeTransport::response(204, ""),
+            response(&list),
+            // 意図しない読み直しがあっても止まらないようにする (404)。
+            FakeTransport::response(
+                404,
+                &json!({"error": {"code": "not_found", "message": "x"}}).to_string(),
+            ),
+        ],
+    )
+    .await;
+    // 行を押すと右の面に詳細が出る (テストの窓は 1280 px)。
+    click(&select(&root, ".row"));
+    settle().await;
+    assert_eq!(count(&root, ".wide-detail .detail"), 1);
+
+    // 削除を確認すると、削除の API を送り、右の面を閉じて一覧を読み直す。
+    let icons = elements(&root, ".wide-detail .appbar .acts > .iconbtn");
+    assert_eq!(icons.len(), 3);
+    click(&icons[2]);
+    settle().await;
+    click(&select(&root, ".dialog .btn.danger"));
+    settle().await;
+    assert!(transport.requests().len() >= 4);
+    assert_eq!(transport.requests()[2].path, "/api/brews/w1");
+    assert_eq!(transport.requests()[2].method.as_str(), "DELETE");
+    assert_eq!(count(&root, ".wide-detail .detail"), 0);
+    assert_eq!(count(&root, ".snack"), 1);
+    // 一覧は先頭から読み直される。
+    assert_eq!(
+        transport.requests()[3].path,
+        "/api/brews?limit=50&sort=brewed_at&order=desc"
     );
 }

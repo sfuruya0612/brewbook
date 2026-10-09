@@ -19,7 +19,7 @@ use worker::{Env, Request, Response, Result};
 use super::products::ProductResponse;
 use super::shops::ShopResponse;
 use super::{
-    apply_favorite, attach_flavor_notes, invalid_input, not_found, query_error_response,
+    apply_favorite, attach_flavor_notes, invalid_input, not_found, photos, query_error_response,
     read_input, require_product, require_shop, ListParams,
 };
 use crate::auth::session::Session;
@@ -501,6 +501,51 @@ async fn set_favorite(
         return respond::json(&purchase);
     }
     respond_fetched(&d1, &session.user_id, id).await
+}
+
+/// 購入を削除する (0056)。認証が必要。
+///
+/// その購入の抽出と、購入の写真 (R2) も削除する。写真は D1 の前に消し、失敗した場合は
+/// 記録が残ったまま再試行できる (アカウント削除と同じ順序)。
+pub async fn delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    let Some(id) = id else {
+        return Ok(not_found("the purchase does not exist"));
+    };
+    let d1 = db::database(env)?;
+    let Some(purchase) = find(&d1, &session.user_id, id).await? else {
+        return Ok(not_found("the purchase does not exist"));
+    };
+    if let Some(key) = purchase.photo_key.as_deref() {
+        photos::delete_objects(env, &[key.to_owned()]).await?;
+    }
+    // 外部キーの参照元から先に消す (ADR-0006)。1 つの batch で 1 トランザクションにする (ADR-0002)。
+    let statements = vec![
+        db::prepared(&d1, &query::purchase_brews_delete(&session.user_id, id))?,
+        db::prepared(&d1, &query::purchase_delete(&session.user_id, id))?,
+    ];
+    db::execute_batch(&d1, statements).await?;
+    Ok(Response::empty()?.with_status(204))
+}
+
+/// 購入の削除で消える抽出の件数を返す (0056)。認証が必要。
+pub async fn delete_impact(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    let Some(id) = id else {
+        return Ok(not_found("the purchase does not exist"));
+    };
+    let d1 = db::database(env)?;
+    if find(&d1, &session.user_id, id).await?.is_none() {
+        return Ok(not_found("the purchase does not exist"));
+    }
+    let brews =
+        super::count_rows(&d1, &query::purchase_delete_impact(&session.user_id, id)).await?;
+    respond::json(&PurchaseDeleteImpactResponse { brews })
+}
+
+/// 購入の削除の影響の応答 (0056)。
+#[derive(Debug, Serialize)]
+struct PurchaseDeleteImpactResponse {
+    /// 削除される抽出の件数。
+    brews: i64,
 }
 
 /// 結合した行を応答の並びにする。

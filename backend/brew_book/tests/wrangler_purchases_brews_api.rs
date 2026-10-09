@@ -69,6 +69,16 @@ struct TestData {
     other_brew: SeededBrew,
     /// 記録が無い利用者のセッション。
     empty_session: String,
+    /// 購入の削除のテストの利用者 (0056)。写真つきの購入 1 件と抽出 2 件を持つ。
+    delete_purchase_session: String,
+    delete_purchase_purchase: SeededPurchase,
+    delete_purchase_brews: Vec<SeededBrew>,
+    /// 購入に付けた写真のオブジェクトキー (R2 の検査に使う)。
+    delete_purchase_photo_key: String,
+    /// 抽出の削除のテストの利用者 (0056)。購入 1 件と抽出 2 件を持つ。
+    delete_brew_session: String,
+    delete_brew_purchase: SeededPurchase,
+    delete_brew_brews: Vec<SeededBrew>,
 }
 
 /// 下ごしらえを 1 回だけ組み立てる。
@@ -211,6 +221,62 @@ fn build_data() -> TestData {
     seed.user(&empty_user, "empty user", created);
     let empty_session = seed.session(&empty_user, future, created);
 
+    // 購入の削除のテストの利用者 (0056)。写真つきの購入 1 件と抽出 2 件を持つ。
+    let delete_purchase_user = user_id(11);
+    seed.user(&delete_purchase_user, "delete purchase user", created);
+    let delete_purchase_session = seed.session(&delete_purchase_user, future, created);
+    let delete_purchase_product = seed.product(&delete_purchase_user, "削除の購入の豆", T21, T21);
+    let delete_purchase_purchase = seed.purchase(
+        &delete_purchase_user,
+        &delete_purchase_product.id,
+        None,
+        D21,
+        T21,
+        T21,
+    );
+    let delete_purchase_photo_key = format!(
+        "users/{delete_purchase_user}/purchases/{}/photo.jpg",
+        delete_purchase_purchase.id
+    );
+    seed.raw(&format!(
+        "UPDATE purchases SET photo_key = '{delete_purchase_photo_key}' WHERE id = '{}'",
+        delete_purchase_purchase.id
+    ));
+    let delete_purchase_brews = vec![
+        seed.brew(
+            &delete_purchase_user,
+            &delete_purchase_purchase.id,
+            B21,
+            T21,
+            T21,
+        ),
+        seed.brew(
+            &delete_purchase_user,
+            &delete_purchase_purchase.id,
+            B20,
+            T20,
+            T20,
+        ),
+    ];
+
+    // 抽出の削除のテストの利用者 (0056)。購入 1 件と抽出 2 件を持つ。
+    let delete_brew_user = user_id(12);
+    seed.user(&delete_brew_user, "delete brew user", created);
+    let delete_brew_session = seed.session(&delete_brew_user, future, created);
+    let delete_brew_product = seed.product(&delete_brew_user, "削除の抽出の豆", T21, T21);
+    let delete_brew_purchase = seed.purchase(
+        &delete_brew_user,
+        &delete_brew_product.id,
+        None,
+        D21,
+        T21,
+        T21,
+    );
+    let delete_brew_brews = vec![
+        seed.brew(&delete_brew_user, &delete_brew_purchase.id, B21, T21, T21),
+        seed.brew(&delete_brew_user, &delete_brew_purchase.id, B20, T20, T20),
+    ];
+
     TestData {
         seed_sql: seed.sql(),
         purchase_list_user,
@@ -240,6 +306,13 @@ fn build_data() -> TestData {
         other_purchase,
         other_brew,
         empty_session,
+        delete_purchase_session,
+        delete_purchase_purchase,
+        delete_purchase_brews,
+        delete_purchase_photo_key,
+        delete_brew_session,
+        delete_brew_purchase,
+        delete_brew_brews,
     }
 }
 
@@ -1100,6 +1173,103 @@ mod purchases {
             &json!({ "roast": "ロースト" }),
         ));
     }
+
+    // 購入の削除 (0056)。
+
+    #[test]
+    fn wrangler_purchases_delete_ok_cascades_to_the_brews_and_the_photo() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.delete_purchase_session));
+
+        // 削除の影響: 消える抽出 2 件 (購入は消えないため purchases は無い)。
+        let impact = assert_status(
+            client.get(&format!(
+                "/api/purchases/{}/delete-impact",
+                data.delete_purchase_purchase.id
+            )),
+            200,
+        );
+        assert_eq!(impact["brews"], 2, "{impact}");
+        assert!(impact.get("purchases").is_none(), "{impact}");
+
+        // 写真のオブジェクトを R2 に置いてから削除する。
+        lease
+            .use_server(|server| {
+                server.put_r2_object(
+                    "brewbook-photos",
+                    &data.delete_purchase_photo_key,
+                    b"photo-bytes",
+                    "image/jpeg",
+                )
+            })
+            .expect("the photo object must be put");
+
+        // 削除は 204。購入と抽出が消え、写真のオブジェクトも消える。
+        assert_status(
+            client.delete(&format!(
+                "/api/purchases/{}",
+                data.delete_purchase_purchase.id
+            )),
+            204,
+        );
+        assert_not_found(client.get(&format!(
+            "/api/purchases/{}",
+            data.delete_purchase_purchase.id
+        )));
+        for brew in &data.delete_purchase_brews {
+            assert_not_found(client.get(&format!("/api/brews/{}", brew.id)));
+        }
+        let object = lease
+            .use_server(|server| {
+                server.get_r2_object("brewbook-photos", &data.delete_purchase_photo_key)
+            })
+            .expect("the object must be readable");
+        assert!(object.is_none(), "the photo object must be deleted");
+    }
+
+    #[test]
+    fn wrangler_purchases_delete_unauthenticated_401() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        assert_unauthorized(anonymous(&base_url).delete(&format!(
+            "/api/purchases/{}",
+            data.delete_purchase_purchase.id
+        )));
+    }
+
+    #[test]
+    fn wrangler_purchases_delete_impact_unauthenticated_401() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        assert_unauthorized(anonymous(&base_url).get(&format!(
+            "/api/purchases/{}/delete-impact",
+            data.delete_purchase_purchase.id
+        )));
+    }
+
+    #[test]
+    fn wrangler_purchases_delete_other_user_404() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.delete_purchase_session));
+        // 他の利用者の購入は消えず、影響の取得も 404 (FR-5)。
+        assert_not_found(client.delete(&format!("/api/purchases/{}", data.other_purchase.id)));
+        assert_not_found(client.get(&format!(
+            "/api/purchases/{}/delete-impact",
+            data.other_purchase.id
+        )));
+        let other = assert_status(
+            ApiClient::new(&base_url, Some(&data.other_session))
+                .get(&format!("/api/purchases/{}", data.other_purchase.id)),
+            200,
+        );
+        assert_eq!(other["id"], data.other_purchase.id, "{other}");
+    }
 }
 
 mod brews {
@@ -1843,6 +2013,54 @@ mod brews {
             &format!("/api/brews/{}", data.brew_list_brews[0].id),
             &json!({ "rating": 3 }),
         ));
+    }
+
+    // 抽出の削除 (0056)。
+
+    #[test]
+    fn wrangler_brews_delete_ok_removes_only_the_brew() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.delete_brew_session));
+        let deleted = &data.delete_brew_brews[0];
+        let kept = &data.delete_brew_brews[1];
+
+        // 抽出は他から参照されないため、削除は 204 で行だけが消える。
+        assert_status(client.delete(&format!("/api/brews/{}", deleted.id)), 204);
+        assert_not_found(client.get(&format!("/api/brews/{}", deleted.id)));
+        // 同じ購入の他の抽出と購入は残る。
+        assert_status(client.get(&format!("/api/brews/{}", kept.id)), 200);
+        assert_status(
+            client.get(&format!("/api/purchases/{}", data.delete_brew_purchase.id)),
+            200,
+        );
+    }
+
+    #[test]
+    fn wrangler_brews_delete_unauthenticated_401() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        assert_unauthorized(
+            anonymous(&base_url).delete(&format!("/api/brews/{}", data.delete_brew_brews[0].id)),
+        );
+    }
+
+    #[test]
+    fn wrangler_brews_delete_other_user_404() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.delete_brew_session));
+        // 他の利用者の抽出は消えない (FR-5)。
+        assert_not_found(client.delete(&format!("/api/brews/{}", data.other_brew.id)));
+        let other = assert_status(
+            ApiClient::new(&base_url, Some(&data.other_session))
+                .get(&format!("/api/brews/{}", data.other_brew.id)),
+            200,
+        );
+        assert_eq!(other["id"], data.other_brew.id, "{other}");
     }
 }
 

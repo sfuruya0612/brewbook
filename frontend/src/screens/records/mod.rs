@@ -108,6 +108,35 @@ pub fn DiscardConfirm(
     }
 }
 
+/// 記録の削除の確認 (0056)。確認の後に削除の API を呼ぶ。
+#[component]
+pub fn DeleteConfirm(
+    /// 開いているか。確認の後は false にする。
+    open: Signal<bool>,
+    /// 題 (ARB から取る)。
+    title: String,
+    /// 本文 (ARB から取る)。連鎖で消える記録の件数を含む。
+    message: String,
+    /// 削除するときの動き。
+    on_confirm: EventHandler<()>,
+) -> Element {
+    let mut open = open;
+    rsx! {
+        ConfirmDialog {
+            title,
+            message,
+            cancel_label: t(Key::CancelButton).to_string(),
+            confirm_label: t(Key::DeleteConfirmButton).to_string(),
+            danger: true,
+            on_cancel: move |_| open.set(false),
+            on_confirm: move |_| {
+                open.set(false);
+                on_confirm.call(());
+            },
+        }
+    }
+}
+
 /// 写真を `data:` URL にするための base64 (プレビュー用。外部のクレートを増やさない)。
 pub fn base64_encode(bytes: &[u8]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

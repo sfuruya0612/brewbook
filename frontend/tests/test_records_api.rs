@@ -718,3 +718,53 @@ fn a_failed_completion_is_reported() {
     assert!(matches!(error, RecordError::Api(_)), "{error:?}");
     // 応答の形式が違う応答も失敗にする (完了通知の 200 が JSON でない場合)。
 }
+
+/// 記録の削除と、削除の影響の取得 (0056)。
+#[test]
+fn a_record_is_deleted_and_the_impact_is_read() {
+    // 店の削除の影響は購入の件数を読み、無い項目 (抽出) は 0 にする。
+    let (api, transport) = with_response(json!({"purchases": 2}));
+    let impact = block_on(api.shop_delete_impact("s1")).expect("the impact must be read");
+    assert_eq!((impact.purchases, impact.brews), (2, 0));
+    assert_eq!(transport.last_request().method, Method::Get);
+    assert_eq!(transport.last_request().path, "/api/shops/s1/delete-impact");
+
+    // 商品の削除の影響は購入と抽出の件数を読む。
+    let (api, transport) = with_response(json!({"purchases": 2, "brews": 5}));
+    let impact = block_on(api.product_delete_impact("p1")).expect("the impact must be read");
+    assert_eq!((impact.purchases, impact.brews), (2, 5));
+    assert_eq!(
+        transport.last_request().path,
+        "/api/products/p1/delete-impact"
+    );
+
+    // 購入の削除の影響は抽出の件数だけを読む。
+    let (api, _) = with_response(json!({"brews": 3}));
+    let impact = block_on(api.purchase_delete_impact("b1")).expect("the impact must be read");
+    assert_eq!((impact.purchases, impact.brews), (0, 3));
+
+    // 削除の 4 種は `DELETE` を送り、204 の空の本文を成功として扱う。
+    let (api_client, transport) = client(vec![support::FakeTransport::response(204, "")]);
+    let api = RecordsApi::new(api_client);
+    block_on(api.delete_shop("s1")).expect("the shop must be deleted");
+    assert_eq!(transport.last_request().method, Method::Delete);
+    assert_eq!(transport.last_request().path, "/api/shops/s1");
+
+    let (api_client, transport) = client(vec![support::FakeTransport::response(204, "")]);
+    let api = RecordsApi::new(api_client);
+    block_on(api.delete_product("p1")).expect("the product must be deleted");
+    assert_eq!(transport.last_request().method, Method::Delete);
+    assert_eq!(transport.last_request().path, "/api/products/p1");
+
+    let (api_client, transport) = client(vec![support::FakeTransport::response(204, "")]);
+    let api = RecordsApi::new(api_client);
+    block_on(api.delete_purchase("b1")).expect("the purchase must be deleted");
+    assert_eq!(transport.last_request().method, Method::Delete);
+    assert_eq!(transport.last_request().path, "/api/purchases/b1");
+
+    let (api_client, transport) = client(vec![support::FakeTransport::response(204, "")]);
+    let api = RecordsApi::new(api_client);
+    block_on(api.delete_brew("w1")).expect("the brew must be deleted");
+    assert_eq!(transport.last_request().method, Method::Delete);
+    assert_eq!(transport.last_request().path, "/api/brews/w1");
+}

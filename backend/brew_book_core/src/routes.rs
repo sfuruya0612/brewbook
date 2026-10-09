@@ -190,6 +190,24 @@ pub const ROUTES: &[Route] = &[
         ok_test: OkTest::Ci,
     },
     Route {
+        // 店を削除する (0056)。購入の店の指定を外し、購入は残す。
+        name: "shops_delete",
+        method: Method::Delete,
+        pattern: "/api/shops/:id",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // 店の削除で店の指定が外れる購入の件数を返す (0056)。
+        name: "shops_delete_impact",
+        method: Method::Get,
+        pattern: "/api/shops/:id/delete-impact",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
+    Route {
         name: "products_list",
         method: Method::Get,
         pattern: "/api/products",
@@ -235,6 +253,24 @@ pub const ROUTES: &[Route] = &[
         name: "products_favorite_delete",
         method: Method::Delete,
         pattern: "/api/products/:id/favorite",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // 商品を削除する (0056)。購入と抽出と写真と Flavor Notes の対応も削除する。
+        name: "products_delete",
+        method: Method::Delete,
+        pattern: "/api/products/:id",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // 商品の削除で消える購入と抽出の件数を返す (0056)。
+        name: "products_delete_impact",
+        method: Method::Get,
+        pattern: "/api/products/:id/delete-impact",
         auth_required: true,
         has_input: false,
         ok_test: OkTest::Ci,
@@ -293,6 +329,24 @@ pub const ROUTES: &[Route] = &[
         name: "purchases_favorite_delete",
         method: Method::Delete,
         pattern: "/api/purchases/:id/favorite",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // 購入を削除する (0056)。抽出と写真も削除する。
+        name: "purchases_delete",
+        method: Method::Delete,
+        pattern: "/api/purchases/:id",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // 購入の削除で消える抽出の件数を返す (0056)。
+        name: "purchases_delete_impact",
+        method: Method::Get,
+        pattern: "/api/purchases/:id/delete-impact",
         auth_required: true,
         has_input: false,
         ok_test: OkTest::Ci,
@@ -375,6 +429,15 @@ pub const ROUTES: &[Route] = &[
         name: "brews_favorite_delete",
         method: Method::Delete,
         pattern: "/api/brews/:id/favorite",
+        auth_required: true,
+        has_input: false,
+        ok_test: OkTest::Ci,
+    },
+    Route {
+        // 抽出を削除する (0056)。他から参照されないため、行の削除だけ。
+        name: "brews_delete",
+        method: Method::Delete,
+        pattern: "/api/brews/:id",
         auth_required: true,
         has_input: false,
         ok_test: OkTest::Ci,

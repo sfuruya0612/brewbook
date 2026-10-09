@@ -85,6 +85,7 @@ fn the_record_screens_have_the_expected_props() {
         id: "b1".to_string(),
         embedded: true,
         on_edit: None,
+        on_deleted: None,
     };
     assert_eq!(detail.id, "b1");
     let shop_form = ShopFormProps {

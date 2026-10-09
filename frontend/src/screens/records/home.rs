@@ -110,6 +110,7 @@ pub fn HomeScreen() -> Element {
                         id,
                         embedded: true,
                         on_edit: EventHandler::new(move |_| creating.set(true)),
+                        on_deleted: EventHandler::new(move |_| selected.set(None)),
                     }
                 }
             })

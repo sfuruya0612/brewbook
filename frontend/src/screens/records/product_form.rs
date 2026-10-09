@@ -7,10 +7,10 @@
 use dioxus::prelude::*;
 use dioxus_router::navigator;
 
-use crate::i18n::{t, Key};
+use crate::i18n::{t, t_args, Key};
 use crate::records::{
-    record_error_key, save_target, validate_product_form, RecordError, RecordServices, RecordsApi,
-    SaveTarget, SuggestionTarget,
+    record_error_key, record_error_not_found, save_target, validate_product_form, DeleteImpact,
+    RecordError, RecordServices, RecordsApi, SaveTarget, SuggestionTarget,
 };
 use crate::screens::ScreenAppBar;
 use crate::ui::{
@@ -18,7 +18,8 @@ use crate::ui::{
 };
 
 use super::{
-    clear_notice_after, mark_records_changed, retryable_banner, DiscardConfirm, SuggestionField,
+    clear_notice_after, mark_records_changed, retryable_banner, DeleteConfirm, DiscardConfirm,
+    SuggestionField,
 };
 
 /// 商品の登録 (FR-7)。
@@ -77,6 +78,11 @@ pub fn ProductForm(
     let mut busy = use_signal(|| false);
     let mut dirty = use_signal(|| false);
     let mut discard_open = use_signal(|| false);
+    // 削除の確認と、削除の影響と失敗の再試行 (0056)。
+    let mut delete_open = use_signal(|| false);
+    let mut delete_impact = use_signal(|| None::<DeleteImpact>);
+    let mut impact_error = use_signal(|| None::<RecordError>);
+    let mut delete_error = use_signal(|| None::<RecordError>);
 
     // 編集のために現在の値を読み込む。再試行でも同じ処理を呼ぶ。
     let reload_services = services.clone();
@@ -187,6 +193,8 @@ pub fn ProductForm(
     let retry_save = EventHandler::new(move |_| save.call(()));
     let failure = save_error();
     let load_failure = load_error();
+    let impact_failure = impact_error();
+    let delete_failure = delete_error();
     // 星は編集の画面 (id があるとき) にだけ置く (新規の登録では ID が無い。FR-21)。
     let favorite_services = services.clone();
     let favorite_id = id.clone();
@@ -218,6 +226,71 @@ pub fn ProductForm(
         Key::FavoriteAddLabel
     })
     .to_string();
+    // 削除 (0056)。削除の影響の件数を引いて確認を出し、失敗は再試行のバナーで知らせる。
+    let request_services = services.clone();
+    let request_id = id.clone();
+    let mut request_revision = revision;
+    let mut request_notice = notice;
+    let request_delete = EventHandler::new(move |_| {
+        let Some(id) = request_id.clone() else {
+            return;
+        };
+        let api = RecordsApi::new(request_services.api.clone());
+        spawn(async move {
+            match api.product_delete_impact(&id).await {
+                Ok(impact) => {
+                    delete_impact.set(Some(impact));
+                    delete_open.set(true);
+                }
+                // 記録が既に無い場合は成功と同じ扱いにする (0056)。
+                Err(failure) if record_error_not_found(&failure) => {
+                    mark_records_changed(&mut request_revision);
+                    request_notice.set(Some(t(Key::RecordDeletedMessage).to_string()));
+                    close_now.call(());
+                }
+                Err(failure) => impact_error.set(Some(failure)),
+            }
+        });
+    });
+    let delete_services = services.clone();
+    let delete_id = id.clone();
+    let mut delete_revision = revision;
+    let mut delete_notice = notice;
+    let delete_now = EventHandler::new(move |_| {
+        let Some(id) = delete_id.clone() else {
+            return;
+        };
+        let api = RecordsApi::new(delete_services.api.clone());
+        spawn(async move {
+            match api.delete_product(&id).await {
+                Ok(()) => {}
+                // 記録が既に無い場合は成功と同じ扱いにする (0056)。
+                Err(failure) if record_error_not_found(&failure) => {}
+                Err(failure) => {
+                    delete_error.set(Some(failure));
+                    return;
+                }
+            }
+            mark_records_changed(&mut delete_revision);
+            delete_notice.set(Some(t(Key::RecordDeletedMessage).to_string()));
+            // 削除の後は破棄の確認を経ずに閉じる (0056)。
+            close_now.call(());
+        });
+    });
+    let delete_message = delete_impact().map(|impact| match (impact.purchases, impact.brews) {
+        (0, _) => t(Key::DeleteProductConfirmMessage).to_string(),
+        (purchases, 0) => t_args(
+            Key::DeleteProductConfirmMessageWithPurchases,
+            &[("count", &purchases.to_string())],
+        ),
+        (purchases, brews) => t_args(
+            Key::DeleteProductConfirmMessageWithCascades,
+            &[
+                ("purchases", &purchases.to_string()),
+                ("brews", &brews.to_string()),
+            ],
+        ),
+    });
     // 保存は新規でも常に出す (Flutter と同じ)。
     let actions = rsx! {
         if id.is_some() && !loading() && load_failure.is_none() {
@@ -225,6 +298,11 @@ pub fn ProductForm(
                 name: favorite_name,
                 label: favorite_label,
                 onclick: move |_| toggle_favorite.call(()),
+            }
+            IconButton {
+                name: "delete".to_string(),
+                label: t(Key::DeleteButton).to_string(),
+                onclick: move |_| request_delete.call(()),
             }
         }
         Button {
@@ -354,12 +432,26 @@ pub fn ProductForm(
                         if let Some(failure) = failure {
                             {retryable_banner(&failure, retry_save)}
                         }
+                        if let Some(failure) = impact_failure {
+                            {retryable_banner(&failure, request_delete)}
+                        }
+                        if let Some(failure) = delete_failure {
+                            {retryable_banner(&failure, delete_now)}
+                        }
                     }
                 }
             }
         }
         if discard_open() {
             DiscardConfirm { open: discard_open, on_discard: confirm_discard }
+        }
+        if delete_open() {
+            DeleteConfirm {
+                open: delete_open,
+                title: t(Key::DeleteProductConfirmTitle).to_string(),
+                message: delete_message.unwrap_or_default(),
+                on_confirm: move |_| delete_now.call(()),
+            }
         }
         if let Some(message) = notice() {
             {clear_notice_after(notice)}

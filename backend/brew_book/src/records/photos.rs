@@ -295,6 +295,26 @@ pub async fn delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Re
     purchases::respond_fetched(&d1, &session.user_id, id).await
 }
 
+/// 指定したキーのオブジェクトを R2 から削除する。記録の削除だけが使う (0056)。
+///
+/// R2 の複数キーの削除は 1 回に最大 1,000 キーのため、それを超えるときは分けて呼ぶ。
+/// 同じキーの削除は繰り返しても成功するため、途中で失敗しても利用者が再試行できる。
+pub async fn delete_objects(env: &Env, keys: &[String]) -> Result<()> {
+    if keys.is_empty() {
+        return Ok(());
+    }
+    let bucket = env.bucket(PHOTOS_BINDING)?;
+    for chunk in keys.chunks(MAX_DELETE_KEYS_PER_CALL) {
+        bucket
+            .delete_multiple(chunk.iter().map(String::as_str).collect::<Vec<&str>>())
+            .await?;
+    }
+    Ok(())
+}
+
+/// R2 の複数キーの削除 1 回で消せるキーの数の上限。
+const MAX_DELETE_KEYS_PER_CALL: usize = 1_000;
+
 /// 利用者の全オブジェクトを R2 から削除する。アカウント削除だけが使う (FR-15、ADR-0003)。
 ///
 /// 紐づけ済み (`users/<利用者 ID>/`) と紐づけ前 (`pending/<利用者 ID>/`) の両方を対象にする。

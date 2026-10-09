@@ -8,12 +8,14 @@ use dioxus_router::navigator;
 
 use crate::i18n::{current_language, t, Key};
 use crate::records::display::{brew_reference_tiles, count_text, number_text, rating_text};
-use crate::records::{record_error_key, RecordError, RecordServices, RecordsApi};
+use crate::records::{
+    record_error_key, record_error_not_found, RecordError, RecordServices, RecordsApi,
+};
 use crate::router::Route;
 use crate::screens::ScreenAppBar;
 use crate::ui::{IconButton, Ledger, LedgerRow, Rating, ReferenceChain, ReferenceTile};
 
-use super::{clear_notice_after, mark_records_changed, retryable_banner};
+use super::{clear_notice_after, mark_records_changed, retryable_banner, DeleteConfirm};
 
 /// 抽出の詳細 (FR-11)。
 #[component]
@@ -36,6 +38,10 @@ pub fn BrewDetail(
     /// 編集を開く動き。無いときは編集の経路を上に積む。
     #[props(default)]
     on_edit: Option<EventHandler<()>>,
+
+    /// 削除できたときの動き。無いときは前の画面へ戻る。
+    #[props(default)]
+    on_deleted: Option<EventHandler<()>>,
 ) -> Element {
     let services = use_context::<RecordServices>();
     let revision = use_context::<Signal<u64>>();
@@ -44,6 +50,9 @@ pub fn BrewDetail(
     let mut brew = use_signal(|| None::<crate::records::Brew>);
     let mut error = use_signal(|| None::<RecordError>);
     let mut loading = use_signal(|| true);
+    // 削除の確認と、削除の失敗の再試行 (0056)。
+    let mut delete_open = use_signal(|| false);
+    let mut delete_error = use_signal(|| None::<RecordError>);
 
     let reload_id = id.clone();
     let reload_services = services.clone();
@@ -71,6 +80,7 @@ pub fn BrewDetail(
     let offset = services.clock.utc_offset_minutes();
     let current = brew();
     let failure = error();
+    let delete_failure = delete_error();
     let favorited = current
         .as_ref()
         .is_some_and(|brew| brew.favorited_at.is_some());
@@ -88,6 +98,35 @@ pub fn BrewDetail(
                     favorite_notice.set(Some(t(record_error_key(&failure)).to_string()))
                 }
             }
+        });
+    });
+    // 削除 (0056)。確認の後に削除し、失敗は再試行のバナーで知らせる。
+    let delete_services = services.clone();
+    let delete_id = id.clone();
+    let mut delete_revision = revision;
+    let mut delete_notice = notice;
+    let close_after_delete = EventHandler::new(move |_| match on_deleted {
+        Some(handler) => handler.call(()),
+        None => {
+            navigator.go_back();
+        }
+    });
+    let delete_now = EventHandler::new(move |_| {
+        let api = RecordsApi::new(delete_services.api.clone());
+        let id = delete_id.clone();
+        spawn(async move {
+            match api.delete_brew(&id).await {
+                Ok(()) => {}
+                // 記録が既に無い場合は成功と同じ扱いにする (0056)。
+                Err(failure) if record_error_not_found(&failure) => {}
+                Err(failure) => {
+                    delete_error.set(Some(failure));
+                    return;
+                }
+            }
+            mark_records_changed(&mut delete_revision);
+            delete_notice.set(Some(t(Key::RecordDeletedMessage).to_string()));
+            close_after_delete.call(());
         });
     });
     let actions = current.as_ref().map(|_| {
@@ -113,6 +152,11 @@ pub fn BrewDetail(
                         let _ = navigator.push(Route::BrewEdit { id: id.clone() });
                     }
                 },
+            }
+            IconButton {
+                name: "delete".to_string(),
+                label: t(Key::DeleteButton).to_string(),
+                onclick: move |_| delete_open.set(true),
             }
         }
     });
@@ -220,6 +264,17 @@ pub fn BrewDetail(
                 if let Some(failure) = failure {
                     {retryable_banner(&failure, reload)}
                 }
+                if let Some(failure) = delete_failure {
+                    {retryable_banner(&failure, delete_now)}
+                }
+            }
+        }
+        if delete_open() {
+            DeleteConfirm {
+                open: delete_open,
+                title: t(Key::DeleteBrewConfirmTitle).to_string(),
+                message: t(Key::DeleteBrewConfirmMessage).to_string(),
+                on_confirm: move |_| delete_now.call(()),
             }
         }
         if let Some(message) = notice() {

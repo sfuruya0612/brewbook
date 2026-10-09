@@ -296,6 +296,29 @@ impl PlaceCandidate {
     }
 }
 
+/// 記録の削除の影響の件数 (0056)。
+///
+/// 削除の確認のダイアログに出す。対象によって意味が異なり、店では `purchases` が
+/// 店の指定が外れる購入の件数 (購入は消えない)、商品では `purchases` が消える購入の件数、
+/// `brews` が消える抽出の件数である。応答に無い項目は 0 にする。
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct DeleteImpact {
+    /// 削除される (店では店の指定が外れる) 購入の件数。
+    pub purchases: u64,
+    /// 削除される抽出の件数。
+    pub brews: u64,
+}
+
+impl DeleteImpact {
+    /// JSON のオブジェクトから組み立てる。
+    pub fn from_json(json: &Map<String, Value>) -> Result<Self, RecordError> {
+        Ok(Self {
+            purchases: optional_count(json, "purchases")?,
+            brews: optional_count(json, "brews")?,
+        })
+    }
+}
+
 /// 一覧の 1 ページ (カーソル方式。ADR-0002)。
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RecordPage<T> {
@@ -388,6 +411,15 @@ pub(crate) fn count_field(json: &Map<String, Value>, key: &str) -> Result<u64, R
     let value = optional_i64(json, key)?
         .ok_or_else(|| format_error(format!("the {key} field must be a number")))?;
     u64::try_from(value).map_err(|_| format_error(format!("the {key} field must not be negative")))
+}
+
+/// 0 以上の整数の項目を読む。無い場合と `null` は 0 にする (0056 の削除の影響)。
+pub(crate) fn optional_count(json: &Map<String, Value>, key: &str) -> Result<u64, RecordError> {
+    match optional_i64(json, key)? {
+        Some(value) => u64::try_from(value)
+            .map_err(|_| format_error(format!("the {key} field must not be negative"))),
+        None => Ok(0),
+    }
 }
 
 /// 整数の項目を読む。無い場合と `null` は None にする。

@@ -1138,6 +1138,142 @@ pub fn export_rows(
     }
 }
 
+/// `id` と `user_id` の両方で絞って行を消す SQL を組み立てる (0056)。
+///
+/// 存在しない ID と他の利用者の ID は消さない (ADR-0006)。
+fn delete_by_id(table: &'static str, user_id: &str, id: &str) -> Statement {
+    Statement {
+        sql: format!("DELETE FROM {table} WHERE id = ? AND user_id = ?"),
+        params: vec![Value::Text(id.to_owned()), Value::Text(user_id.to_owned())],
+    }
+}
+
+/// `column` が `id` の行の件数を、利用者の行だけを対象に数える SQL を組み立てる (0056)。
+fn count_by_id(table: &'static str, column: &str, user_id: &str, id: &str) -> Statement {
+    Statement {
+        sql: format!("SELECT COUNT(*) AS count FROM {table} WHERE {column} = ? AND user_id = ?"),
+        params: vec![Value::Text(id.to_owned()), Value::Text(user_id.to_owned())],
+    }
+}
+
+/// 店を削除する SQL を組み立てる (0056)。
+pub fn shop_delete(user_id: &str, id: &str) -> Statement {
+    delete_by_id(SHOPS_TABLE, user_id, id)
+}
+
+/// 店を指定している購入の店の指定を外す SQL を組み立てる (0056)。
+///
+/// 購入は消さず、行の内容が変わるため `updated_at` を現在時刻にする (ADR-0006)。
+pub fn shop_clear_purchases(user_id: &str, id: &str, updated_at: &str) -> Statement {
+    Statement {
+        sql: format!(
+            "UPDATE {PURCHASES_TABLE} SET shop_id = NULL, updated_at = ? \
+             WHERE shop_id = ? AND user_id = ?"
+        ),
+        params: vec![
+            Value::Text(updated_at.to_owned()),
+            Value::Text(id.to_owned()),
+            Value::Text(user_id.to_owned()),
+        ],
+    }
+}
+
+/// 店の削除で店の指定が外れる購入の件数を数える SQL を組み立てる (0056)。
+pub fn shop_delete_impact(user_id: &str, id: &str) -> Statement {
+    count_by_id(PURCHASES_TABLE, "shop_id", user_id, id)
+}
+
+/// 商品を削除する SQL を組み立てる (0056)。
+pub fn product_delete(user_id: &str, id: &str) -> Statement {
+    delete_by_id(PRODUCTS_TABLE, user_id, id)
+}
+
+/// 商品の購入を全て削除する SQL を組み立てる (0056)。購入に紐づく抽出は先に消す。
+pub fn product_purchases_delete(user_id: &str, product_id: &str) -> Statement {
+    Statement {
+        sql: format!("DELETE FROM {PURCHASES_TABLE} WHERE product_id = ? AND user_id = ?"),
+        params: vec![
+            Value::Text(product_id.to_owned()),
+            Value::Text(user_id.to_owned()),
+        ],
+    }
+}
+
+/// 商品の購入に紐づく抽出を全て削除する SQL を組み立てる (0056)。
+pub fn product_brews_delete(user_id: &str, product_id: &str) -> Statement {
+    Statement {
+        sql: format!(
+            "DELETE FROM {BREWS_TABLE} WHERE user_id = ? AND purchase_id IN \
+             (SELECT id FROM {PURCHASES_TABLE} WHERE product_id = ? AND user_id = ?)"
+        ),
+        params: vec![
+            Value::Text(user_id.to_owned()),
+            Value::Text(product_id.to_owned()),
+            Value::Text(user_id.to_owned()),
+        ],
+    }
+}
+
+/// 商品の購入の写真のキーを引く SQL を組み立てる (0056)。写真の無い購入は含めない。
+pub fn product_purchase_photo_keys(user_id: &str, product_id: &str) -> Statement {
+    Statement {
+        sql: format!(
+            "SELECT photo_key FROM {PURCHASES_TABLE} \
+             WHERE product_id = ? AND user_id = ? AND photo_key IS NOT NULL"
+        ),
+        params: vec![
+            Value::Text(product_id.to_owned()),
+            Value::Text(user_id.to_owned()),
+        ],
+    }
+}
+
+/// 商品の削除で消える購入と抽出の件数を数える SQL を組み立てる (0056)。
+pub fn product_delete_impact(user_id: &str, id: &str) -> Statement {
+    Statement {
+        sql: format!(
+            "SELECT \
+             (SELECT COUNT(*) FROM {PURCHASES_TABLE} WHERE product_id = ? AND user_id = ?) \
+             AS purchases, \
+             (SELECT COUNT(*) FROM {BREWS_TABLE} WHERE user_id = ? AND purchase_id IN \
+             (SELECT id FROM {PURCHASES_TABLE} WHERE product_id = ? AND user_id = ?)) AS brews"
+        ),
+        params: vec![
+            Value::Text(id.to_owned()),
+            Value::Text(user_id.to_owned()),
+            Value::Text(user_id.to_owned()),
+            Value::Text(id.to_owned()),
+            Value::Text(user_id.to_owned()),
+        ],
+    }
+}
+
+/// 購入を削除する SQL を組み立てる (0056)。
+pub fn purchase_delete(user_id: &str, id: &str) -> Statement {
+    delete_by_id(PURCHASES_TABLE, user_id, id)
+}
+
+/// 購入に紐づく抽出を全て削除する SQL を組み立てる (0056)。
+pub fn purchase_brews_delete(user_id: &str, purchase_id: &str) -> Statement {
+    Statement {
+        sql: format!("DELETE FROM {BREWS_TABLE} WHERE purchase_id = ? AND user_id = ?"),
+        params: vec![
+            Value::Text(purchase_id.to_owned()),
+            Value::Text(user_id.to_owned()),
+        ],
+    }
+}
+
+/// 購入の削除で消える抽出の件数を数える SQL を組み立てる (0056)。
+pub fn purchase_delete_impact(user_id: &str, id: &str) -> Statement {
+    count_by_id(BREWS_TABLE, "purchase_id", user_id, id)
+}
+
+/// 抽出を削除する SQL を組み立てる (0056)。
+pub fn brew_delete(user_id: &str, id: &str) -> Statement {
+    delete_by_id(BREWS_TABLE, user_id, id)
+}
+
 /// アカウント削除 (FR-15) で利用者に属する全行を消す SQL を組み立てる。
 ///
 /// 外部キーの参照元から先に消す順に並べ、どの文も利用者 ID を 1 つだけ束縛する (ADR-0006)。

@@ -243,4 +243,17 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "検索中",                                                    // searchingLabel
     "住所の候補が見つかりません。手入力で続けられます。",        // addressSearchEmpty
     "地図",                                                      // mapTitle
+    "抽出を削除",                                                 // deleteBrewConfirmTitle
+    "この抽出を削除します。取り消せません。",                     // deleteBrewConfirmMessage
+    "購入を削除",                                                 // deletePurchaseConfirmTitle
+    "この購入を削除します。取り消せません。",                     // deletePurchaseConfirmMessage
+    "この購入を削除します。購入に紐づく抽出 {count} 件も削除されます。取り消せません。", // deletePurchaseConfirmMessageWithBrews
+    "商品を削除",                                                 // deleteProductConfirmTitle
+    "この商品を削除します。取り消せません。",                     // deleteProductConfirmMessage
+    "この商品を削除します。商品の購入 {count} 件も削除されます。取り消せません。", // deleteProductConfirmMessageWithPurchases
+    "この商品を削除します。商品の購入 {purchases} 件と、購入に紐づく抽出 {brews} 件も削除されます。取り消せません。", // deleteProductConfirmMessageWithCascades
+    "店を削除",                                                   // deleteShopConfirmTitle
+    "この店を削除します。取り消せません。",                       // deleteShopConfirmMessage
+    "この店を削除します。購入 {count} 件の店の指定が外れます。取り消せません。", // deleteShopConfirmMessageWithPurchases
+    "削除しました。",                                             // recordDeletedMessage
 ];

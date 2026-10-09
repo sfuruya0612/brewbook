@@ -84,6 +84,24 @@ fn statements() -> Vec<String> {
     );
     statements
         .push(query::set_favorited_at("shops", ID, USER, None, "2026-09-21T00:00:00.000Z").sql);
+    // 記録の削除 (0056)。削除と、影響の件数と写真のキーを数える・引く SELECT。
+    for statement in [
+        query::shop_delete(USER, ID),
+        query::shop_clear_purchases(USER, ID, "2026-09-21T00:00:00.000Z"),
+        query::shop_delete_impact(USER, ID),
+        query::product_delete(USER, ID),
+        query::product_brews_delete(USER, ID),
+        query::product_purchases_delete(USER, ID),
+        query::product_purchase_photo_keys(USER, ID),
+        query::product_delete_impact(USER, ID),
+        query::delete_product_flavor_tags(USER, ID),
+        query::purchase_delete(USER, ID),
+        query::purchase_brews_delete(USER, ID),
+        query::purchase_delete_impact(USER, ID),
+        query::brew_delete(USER, ID),
+    ] {
+        statements.push(statement.sql);
+    }
     statements.push(query::flavor_tags_list(USER).sql);
     statements.push(query::suggestions(USER, SuggestionItem::Producer, "q").sql);
 

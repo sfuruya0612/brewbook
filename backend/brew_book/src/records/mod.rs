@@ -240,6 +240,19 @@ pub async fn purchase_exists(d1: &D1Database, user_id: &str, id: &str) -> Result
     Ok(row.is_some())
 }
 
+/// 件数を数えるクエリの結果を読む (0056)。行が無いときは 0 にする。
+pub async fn count_rows(d1: &D1Database, statement: &query::Statement) -> Result<i64> {
+    let row: Option<CountRow> = db::prepared(d1, statement)?.first(None).await?;
+    Ok(row.map(|row| row.count).unwrap_or(0))
+}
+
+/// 件数を数えるクエリの行 (0056)。
+#[derive(Debug, serde::Deserialize)]
+struct CountRow {
+    /// 数えた件数。
+    count: i64,
+}
+
 /// 応答の商品に Flavor Notes を付ける (FR-8)。商品のタグは 1 つのクエリでまとめて引く。
 pub async fn attach_flavor_notes(
     d1: &D1Database,

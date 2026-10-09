@@ -1157,6 +1157,154 @@ mod export_queries {
     }
 }
 
+mod deletion_queries {
+    use super::*;
+    use brew_book_core::query;
+
+    #[test]
+    fn every_delete_statement_filters_by_id_and_user() {
+        for (name, statement, table) in [
+            (
+                "shop",
+                query::shop_delete(USER_ID, SHOP_ID),
+                query::SHOPS_TABLE,
+            ),
+            (
+                "product",
+                query::product_delete(USER_ID, SHOP_ID),
+                query::PRODUCTS_TABLE,
+            ),
+            (
+                "purchase",
+                query::purchase_delete(USER_ID, SHOP_ID),
+                query::PURCHASES_TABLE,
+            ),
+            (
+                "brew",
+                query::brew_delete(USER_ID, SHOP_ID),
+                query::BREWS_TABLE,
+            ),
+        ] {
+            assert_eq!(
+                statement.sql,
+                format!("DELETE FROM {table} WHERE id = ? AND user_id = ?"),
+                "{name}"
+            );
+            assert_eq!(
+                statement.params,
+                vec![
+                    Value::Text(SHOP_ID.to_owned()),
+                    Value::Text(USER_ID.to_owned()),
+                ],
+                "{name}"
+            );
+            assert!(
+                !statement.sql.contains(USER_ID) && !statement.sql.contains(SHOP_ID),
+                "the values must not appear in the SQL of {name}: {}",
+                statement.sql
+            );
+        }
+    }
+
+    #[test]
+    fn the_shop_delete_clears_the_shop_of_the_purchases_and_updates_the_timestamp() {
+        let statement = query::shop_clear_purchases(USER_ID, SHOP_ID, AT);
+        assert_eq!(
+            statement.sql,
+            "UPDATE purchases SET shop_id = NULL, updated_at = ? \
+             WHERE shop_id = ? AND user_id = ?"
+        );
+        assert_eq!(
+            statement.params,
+            vec![
+                Value::Text(AT.to_owned()),
+                Value::Text(SHOP_ID.to_owned()),
+                Value::Text(USER_ID.to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_product_delete_carries_the_children_and_the_photo_keys() {
+        let brews = query::product_brews_delete(USER_ID, SHOP_ID);
+        assert_eq!(
+            brews.sql,
+            "DELETE FROM brews WHERE user_id = ? AND purchase_id IN \
+             (SELECT id FROM purchases WHERE product_id = ? AND user_id = ?)"
+        );
+        assert_eq!(
+            brews.params,
+            vec![
+                Value::Text(USER_ID.to_owned()),
+                Value::Text(SHOP_ID.to_owned()),
+                Value::Text(USER_ID.to_owned()),
+            ]
+        );
+
+        let purchases = query::product_purchases_delete(USER_ID, SHOP_ID);
+        assert_eq!(
+            purchases.sql,
+            "DELETE FROM purchases WHERE product_id = ? AND user_id = ?"
+        );
+        assert_eq!(
+            purchases.params,
+            vec![
+                Value::Text(SHOP_ID.to_owned()),
+                Value::Text(USER_ID.to_owned()),
+            ]
+        );
+
+        let keys = query::product_purchase_photo_keys(USER_ID, SHOP_ID);
+        assert_eq!(
+            keys.sql,
+            "SELECT photo_key FROM purchases \
+             WHERE product_id = ? AND user_id = ? AND photo_key IS NOT NULL"
+        );
+        assert_eq!(
+            keys.params,
+            vec![
+                Value::Text(SHOP_ID.to_owned()),
+                Value::Text(USER_ID.to_owned()),
+            ]
+        );
+
+        let purchase_brews = query::purchase_brews_delete(USER_ID, SHOP_ID);
+        assert_eq!(
+            purchase_brews.sql,
+            "DELETE FROM brews WHERE purchase_id = ? AND user_id = ?"
+        );
+    }
+
+    #[test]
+    fn the_impact_queries_count_the_rows_of_the_user() {
+        let shops = query::shop_delete_impact(USER_ID, SHOP_ID);
+        assert_eq!(
+            shops.sql,
+            "SELECT COUNT(*) AS count FROM purchases WHERE shop_id = ? AND user_id = ?"
+        );
+        assert_eq!(
+            shops.params,
+            vec![
+                Value::Text(SHOP_ID.to_owned()),
+                Value::Text(USER_ID.to_owned()),
+            ]
+        );
+
+        let purchases = query::purchase_delete_impact(USER_ID, SHOP_ID);
+        assert_eq!(
+            purchases.sql,
+            "SELECT COUNT(*) AS count FROM brews WHERE purchase_id = ? AND user_id = ?"
+        );
+
+        let products = query::product_delete_impact(USER_ID, SHOP_ID);
+        assert!(products.sql.contains("AS purchases"), "{}", products.sql);
+        assert!(products.sql.contains("AS brews"), "{}", products.sql);
+        assert_eq!(products.params.len(), 5);
+        let placeholders = products.sql.matches('?').count();
+        assert_eq!(placeholders, products.params.len());
+    }
+}
+
 mod conditions {
     use super::*;
     use brew_book_core::query::{self, BrewValues, ProductValues, PurchaseValues, ShopValues};
@@ -1430,6 +1578,66 @@ mod conditions {
         checked.push(Checked {
             name: "set the favorite",
             statement: query::set_favorited_at(query::SHOPS_TABLE, SHOP_ID, USER_ID, Some(AT), AT),
+            kind: Kind::Row,
+        });
+        checked.push(Checked {
+            name: "shop delete",
+            statement: query::shop_delete(USER_ID, SHOP_ID),
+            kind: Kind::Row,
+        });
+        checked.push(Checked {
+            name: "shop clear purchases",
+            statement: query::shop_clear_purchases(USER_ID, SHOP_ID, AT),
+            kind: Kind::Row,
+        });
+        checked.push(Checked {
+            name: "shop delete impact",
+            statement: query::shop_delete_impact(USER_ID, SHOP_ID),
+            kind: Kind::Row,
+        });
+        checked.push(Checked {
+            name: "product delete",
+            statement: query::product_delete(USER_ID, SHOP_ID),
+            kind: Kind::Row,
+        });
+        checked.push(Checked {
+            name: "product brews delete",
+            statement: query::product_brews_delete(USER_ID, SHOP_ID),
+            kind: Kind::Row,
+        });
+        checked.push(Checked {
+            name: "product purchases delete",
+            statement: query::product_purchases_delete(USER_ID, SHOP_ID),
+            kind: Kind::Row,
+        });
+        checked.push(Checked {
+            name: "product purchase photo keys",
+            statement: query::product_purchase_photo_keys(USER_ID, SHOP_ID),
+            kind: Kind::Row,
+        });
+        checked.push(Checked {
+            name: "product delete impact",
+            statement: query::product_delete_impact(USER_ID, SHOP_ID),
+            kind: Kind::Row,
+        });
+        checked.push(Checked {
+            name: "purchase delete",
+            statement: query::purchase_delete(USER_ID, SHOP_ID),
+            kind: Kind::Row,
+        });
+        checked.push(Checked {
+            name: "purchase brews delete",
+            statement: query::purchase_brews_delete(USER_ID, SHOP_ID),
+            kind: Kind::Row,
+        });
+        checked.push(Checked {
+            name: "purchase delete impact",
+            statement: query::purchase_delete_impact(USER_ID, SHOP_ID),
+            kind: Kind::Row,
+        });
+        checked.push(Checked {
+            name: "brew delete",
+            statement: query::brew_delete(USER_ID, SHOP_ID),
             kind: Kind::Row,
         });
         checked.push(Checked {

@@ -235,6 +235,51 @@ async fn set_favorite(
     }
 }
 
+/// 店を削除する (0056)。認証が必要。
+///
+/// 店を指定している購入の店の指定を外してから店の行を削除する。購入は残す。
+/// 存在しない ID と他の利用者の ID は 404 にする (ADR-0006)。
+pub async fn delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    let Some(id) = id else {
+        return Ok(not_found("the shop does not exist"));
+    };
+    let d1 = db::database(env)?;
+    if find(&d1, &session.user_id, Some(id)).await?.is_none() {
+        return Ok(not_found("the shop does not exist"));
+    }
+    let now = db::now_text()?;
+    let statements = vec![
+        db::prepared(
+            &d1,
+            &query::shop_clear_purchases(&session.user_id, id, &now),
+        )?,
+        db::prepared(&d1, &query::shop_delete(&session.user_id, id))?,
+    ];
+    db::execute_batch(&d1, statements).await?;
+    Ok(Response::empty()?.with_status(204))
+}
+
+/// 店の削除で店の指定が外れる購入の件数を返す (0056)。認証が必要。
+pub async fn delete_impact(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    let Some(id) = id else {
+        return Ok(not_found("the shop does not exist"));
+    };
+    let d1 = db::database(env)?;
+    if find(&d1, &session.user_id, Some(id)).await?.is_none() {
+        return Ok(not_found("the shop does not exist"));
+    }
+    let purchases =
+        super::count_rows(&d1, &query::shop_delete_impact(&session.user_id, id)).await?;
+    respond::json(&ShopDeleteImpactResponse { purchases })
+}
+
+/// 店の削除の影響の応答 (0056)。
+#[derive(Debug, Serialize)]
+struct ShopDeleteImpactResponse {
+    /// 店の指定が外れる購入の件数。
+    purchases: i64,
+}
+
 /// 店を 1 件引く。ID が無いときと行が無いときは None。
 async fn find(d1: &D1Database, user_id: &str, id: Option<&str>) -> Result<Option<ShopResponse>> {
     let Some(id) = id else {

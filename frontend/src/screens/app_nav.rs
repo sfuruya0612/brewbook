@@ -117,7 +117,7 @@ pub fn ScreenAppBar(
     /// 先頭の操作を押したときの動き。
     #[props(default)]
     on_leading: EventHandler<MouseEvent>,
-    /// 末尾の操作 (アイコンと文字ボタンで最大 2 つ)。
+    /// 末尾の操作 (アイコンと文字ボタンで最大 3 つ)。
     #[props(default)]
     actions: Option<Element>,
     /// ハンバーガーメニューを出すか (最上位の画面だけ true)。

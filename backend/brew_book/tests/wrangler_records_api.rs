@@ -15,13 +15,22 @@ use std::time::Duration;
 use reqwest::blocking::Response;
 use serde_json::{json, Value};
 use support::http::{error_code, read, ApiClient};
-use support::seed::{user_id, Seed, SeededProduct, SeededShop};
+use support::seed::{user_id, Seed, SeededBrew, SeededProduct, SeededPurchase, SeededShop};
 use support::ServerLease;
 
 /// 下ごしらえに使う時刻 (ISO 8601 UTC の固定長)。
 const T21: &str = "2026-09-21T00:00:00.000Z";
 const T20: &str = "2026-09-20T00:00:00.000Z";
 const T19: &str = "2026-09-19T00:00:00.000Z";
+
+/// 下ごしらえに使う日付。
+const D21: &str = "2026-09-21";
+const D20: &str = "2026-09-20";
+
+/// 下ごしらえに使う抽出日時。
+const B21: &str = "2026-09-21T10:00:00.000Z";
+const B20: &str = "2026-09-20T10:00:00.000Z";
+const B19: &str = "2026-09-19T10:00:00.000Z";
 
 /// このテストファイルの下ごしらえと、テストが使う値。
 struct TestData {
@@ -57,6 +66,19 @@ struct TestData {
     log_session: String,
     /// お気に入りの絞り込みのテスト専用の利用者のセッション。
     favorite_filter_session: String,
+    /// 店の削除のテストの利用者 (0056)。店 1 件と、その店を指定する購入 2 件を持つ。
+    delete_shop_session: String,
+    delete_shop_shop: SeededShop,
+    delete_shop_purchases: Vec<SeededPurchase>,
+    /// 商品の削除のテストの利用者 (0056)。購入 2 件 (1 件は写真つき) と抽出 3 件と、
+    /// 同じタグを共有する商品 2 件を持つ。
+    delete_product_session: String,
+    delete_product_product: SeededProduct,
+    delete_product_other_product: SeededProduct,
+    delete_product_purchases: Vec<SeededPurchase>,
+    delete_product_brews: Vec<SeededBrew>,
+    /// 商品の購入に付けた写真のオブジェクトキー (R2 の検査に使う)。
+    delete_product_photo_key: String,
 }
 
 /// 下ごしらえを 1 回だけ組み立てる。
@@ -156,6 +178,100 @@ fn build_data() -> TestData {
     seed.user(&favorite_filter_user, "favorite filter user", created);
     let favorite_filter_session = seed.session(&favorite_filter_user, future, created);
 
+    // 店の削除のテストの利用者 (0056)。店 1 件と、その店を指定する購入 2 件を持つ。
+    let delete_shop_user = user_id(21);
+    seed.user(&delete_shop_user, "delete shop user", created);
+    let delete_shop_session = seed.session(&delete_shop_user, future, created);
+    let delete_shop_product = seed.product(&delete_shop_user, "削除の店の豆", T21, T21);
+    let delete_shop_shop = seed.shop(&delete_shop_user, "削除する店", Some("東京都"), T21, T21);
+    let delete_shop_purchases = vec![
+        seed.purchase(
+            &delete_shop_user,
+            &delete_shop_product.id,
+            Some(&delete_shop_shop.id),
+            D21,
+            T21,
+            T21,
+        ),
+        seed.purchase(
+            &delete_shop_user,
+            &delete_shop_product.id,
+            Some(&delete_shop_shop.id),
+            D20,
+            T20,
+            T20,
+        ),
+    ];
+
+    // 商品の削除のテストの利用者 (0056)。購入 2 件 (1 件は写真つき) と抽出 3 件と、
+    // 同じタグを共有する商品 2 件を持つ。
+    let delete_product_user = user_id(22);
+    seed.user(&delete_product_user, "delete product user", created);
+    let delete_product_session = seed.session(&delete_product_user, future, created);
+    let delete_product_product = seed.product(&delete_product_user, "削除する豆", T21, T21);
+    let delete_product_other_product = seed.product(&delete_product_user, "残る豆", T20, T20);
+    let shared_tag = seed.flavor_tag(&delete_product_user, "shared");
+    seed.product_flavor_tag(
+        &delete_product_user,
+        &delete_product_product.id,
+        &shared_tag,
+    );
+    seed.product_flavor_tag(
+        &delete_product_user,
+        &delete_product_other_product.id,
+        &shared_tag,
+    );
+    let delete_product_purchases = vec![
+        seed.purchase(
+            &delete_product_user,
+            &delete_product_product.id,
+            None,
+            D21,
+            T21,
+            T21,
+        ),
+        seed.purchase(
+            &delete_product_user,
+            &delete_product_product.id,
+            None,
+            D20,
+            T20,
+            T20,
+        ),
+    ];
+    // 1 件目の購入に写真のキーを付ける (R2 のオブジェクトはテストが置く)。
+    let delete_product_photo_key = format!(
+        "users/{delete_product_user}/purchases/{}/photo.jpg",
+        delete_product_purchases[0].id
+    );
+    seed.raw(&format!(
+        "UPDATE purchases SET photo_key = '{delete_product_photo_key}' WHERE id = '{}'",
+        delete_product_purchases[0].id
+    ));
+    let delete_product_brews = vec![
+        seed.brew(
+            &delete_product_user,
+            &delete_product_purchases[0].id,
+            B21,
+            T21,
+            T21,
+        ),
+        seed.brew(
+            &delete_product_user,
+            &delete_product_purchases[0].id,
+            B20,
+            T20,
+            T20,
+        ),
+        seed.brew(
+            &delete_product_user,
+            &delete_product_purchases[1].id,
+            B19,
+            T19,
+            T19,
+        ),
+    ];
+
     TestData {
         seed_sql: seed.sql(),
         list_user,
@@ -179,6 +295,15 @@ fn build_data() -> TestData {
         empty_session,
         log_session,
         favorite_filter_session,
+        delete_shop_session,
+        delete_shop_shop,
+        delete_shop_purchases,
+        delete_product_session,
+        delete_product_product,
+        delete_product_other_product,
+        delete_product_purchases,
+        delete_product_brews,
+        delete_product_photo_key,
     }
 }
 
@@ -777,6 +902,82 @@ mod shops {
             ApiClient::new(&base_url, Some(&data.list_session))
                 .patch_json("/api/shops/no-such-id", &json!({ "name": "のっとり" })),
         );
+        let other = assert_status(
+            ApiClient::new(&base_url, Some(&data.other_session))
+                .get(&format!("/api/shops/{}", data.other_shop.id)),
+            200,
+        );
+        assert_eq!(other["name"], data.other_shop.name);
+    }
+
+    // 店の削除 (0056)。
+
+    #[test]
+    fn wrangler_shops_delete_ok_and_keeps_the_purchases() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.delete_shop_session));
+
+        // 削除の影響: 店の指定が外れる購入の件数 (抽出は消えないため brews は無い)。
+        let impact = assert_status(
+            client.get(&format!(
+                "/api/shops/{}/delete-impact",
+                data.delete_shop_shop.id
+            )),
+            200,
+        );
+        assert_eq!(impact["purchases"], 2, "{impact}");
+        assert!(impact.get("brews").is_none(), "{impact}");
+
+        // 削除は 204。店は消え、購入は残って店の指定だけが外れる。
+        assert_status(
+            client.delete(&format!("/api/shops/{}", data.delete_shop_shop.id)),
+            204,
+        );
+        assert_not_found(client.get(&format!("/api/shops/{}", data.delete_shop_shop.id)));
+        for purchase in &data.delete_shop_purchases {
+            let body = assert_status(client.get(&format!("/api/purchases/{}", purchase.id)), 200);
+            assert_eq!(body["shop_id"], Value::Null, "{body}");
+            assert_eq!(body["shop"], Value::Null, "{body}");
+        }
+        // 削除の後の影響の取得は 404。
+        assert_not_found(client.get(&format!(
+            "/api/shops/{}/delete-impact",
+            data.delete_shop_shop.id
+        )));
+    }
+
+    #[test]
+    fn wrangler_shops_delete_unauthenticated_401() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        assert_unauthorized(
+            anonymous(&base_url).delete(&format!("/api/shops/{}", data.delete_shop_shop.id)),
+        );
+    }
+
+    #[test]
+    fn wrangler_shops_delete_impact_unauthenticated_401() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        assert_unauthorized(anonymous(&base_url).get(&format!(
+            "/api/shops/{}/delete-impact",
+            data.delete_shop_shop.id
+        )));
+    }
+
+    #[test]
+    fn wrangler_shops_delete_other_user_404() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.delete_shop_session));
+        // 他の利用者の店は消えず、影響の取得も 404 (FR-5)。
+        assert_not_found(client.delete(&format!("/api/shops/{}", data.other_shop.id)));
+        assert_not_found(client.get(&format!("/api/shops/{}/delete-impact", data.other_shop.id)));
         let other = assert_status(
             ApiClient::new(&base_url, Some(&data.other_session))
                 .get(&format!("/api/shops/{}", data.other_shop.id)),
@@ -1425,6 +1626,112 @@ mod products {
             ApiClient::new(&base_url, Some(&data.product_list_session))
                 .patch_json("/api/products/no-such-id", &json!({ "name": "のっとり" })),
         );
+        let other = assert_status(
+            ApiClient::new(&base_url, Some(&data.other_session))
+                .get(&format!("/api/products/{}", data.other_product.id)),
+            200,
+        );
+        assert_eq!(other["name"], data.other_product.name);
+    }
+
+    // 商品の削除 (0056)。
+
+    #[test]
+    fn wrangler_products_delete_ok_cascades_and_keeps_the_tags() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.delete_product_session));
+
+        // 削除の影響: 消える購入 2 件と抽出 3 件。
+        let impact = assert_status(
+            client.get(&format!(
+                "/api/products/{}/delete-impact",
+                data.delete_product_product.id
+            )),
+            200,
+        );
+        assert_eq!(impact["purchases"], 2, "{impact}");
+        assert_eq!(impact["brews"], 3, "{impact}");
+
+        // 写真のオブジェクトを R2 に置いてから削除する。
+        lease
+            .use_server(|server| {
+                server.put_r2_object(
+                    "brewbook-photos",
+                    &data.delete_product_photo_key,
+                    b"photo-bytes",
+                    "image/jpeg",
+                )
+            })
+            .expect("the photo object must be put");
+
+        // 削除は 204。
+        assert_status(
+            client.delete(&format!("/api/products/{}", data.delete_product_product.id)),
+            204,
+        );
+
+        // 商品、購入、抽出が消え、他の商品のタグの対応は残る (タグの行は消さない。ADR-0006)。
+        assert_not_found(client.get(&format!("/api/products/{}", data.delete_product_product.id)));
+        for purchase in &data.delete_product_purchases {
+            assert_not_found(client.get(&format!("/api/purchases/{}", purchase.id)));
+        }
+        for brew in &data.delete_product_brews {
+            assert_not_found(client.get(&format!("/api/brews/{}", brew.id)));
+        }
+        let other = assert_status(
+            client.get(&format!(
+                "/api/products/{}",
+                data.delete_product_other_product.id
+            )),
+            200,
+        );
+        assert_eq!(other["flavor_notes"], json!(["shared"]), "{other}");
+
+        // 写真のオブジェクトは消えている。
+        let object = lease
+            .use_server(|server| {
+                server.get_r2_object("brewbook-photos", &data.delete_product_photo_key)
+            })
+            .expect("the object must be readable");
+        assert!(object.is_none(), "the photo object must be deleted");
+    }
+
+    #[test]
+    fn wrangler_products_delete_unauthenticated_401() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        assert_unauthorized(
+            anonymous(&base_url)
+                .delete(&format!("/api/products/{}", data.delete_product_product.id)),
+        );
+    }
+
+    #[test]
+    fn wrangler_products_delete_impact_unauthenticated_401() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        assert_unauthorized(anonymous(&base_url).get(&format!(
+            "/api/products/{}/delete-impact",
+            data.delete_product_product.id
+        )));
+    }
+
+    #[test]
+    fn wrangler_products_delete_other_user_404() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.delete_product_session));
+        // 他の利用者の商品は消えず、影響の取得も 404 (FR-5)。
+        assert_not_found(client.delete(&format!("/api/products/{}", data.other_product.id)));
+        assert_not_found(client.get(&format!(
+            "/api/products/{}/delete-impact",
+            data.other_product.id
+        )));
         let other = assert_status(
             ApiClient::new(&base_url, Some(&data.other_session))
                 .get(&format!("/api/products/{}", data.other_product.id)),

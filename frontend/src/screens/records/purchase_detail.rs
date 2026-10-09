@@ -6,13 +6,14 @@
 use dioxus::prelude::*;
 use dioxus_router::navigator;
 
-use crate::i18n::{current_language, t, Key};
+use crate::i18n::{current_language, t, t_args, Key};
 use crate::records::display::{
     purchase_reference_tiles, purchase_row_subtitle, purchase_tile_name,
 };
 use crate::records::stats::RatingHistoryEntry;
 use crate::records::{
-    record_error_key, RecordError, RecordServices, RecordsApi, StatsApi, MAX_PHOTO_LONG_SIDE,
+    record_error_key, record_error_not_found, DeleteImpact, RecordError, RecordServices,
+    RecordsApi, StatsApi, MAX_PHOTO_LONG_SIDE,
 };
 use crate::router::Route;
 use crate::screens::stats::RatingHistoryChart;
@@ -21,7 +22,7 @@ use crate::ui::{
     Button, ButtonVariant, IconButton, Ledger, LedgerRow, ReferenceChain, ReferenceTile, TagChip,
 };
 
-use super::{clear_notice_after, mark_records_changed, retryable_banner};
+use super::{clear_notice_after, mark_records_changed, retryable_banner, DeleteConfirm};
 
 /// 購入の詳細 (FR-9)。
 #[component]
@@ -44,6 +45,10 @@ pub fn PurchaseDetail(
     /// 編集を開く動き。無いときは編集の経路を上に積む。
     #[props(default)]
     on_edit: Option<EventHandler<()>>,
+
+    /// 削除できたときの動き。無いときは前の画面へ戻る。
+    #[props(default)]
+    on_deleted: Option<EventHandler<()>>,
 ) -> Element {
     let services = use_context::<RecordServices>();
     let mut revision = use_context::<Signal<u64>>();
@@ -56,6 +61,11 @@ pub fn PurchaseDetail(
     let mut photo_error = use_signal(|| None::<RecordError>);
     let mut photo_busy = use_signal(|| false);
     let mut loading = use_signal(|| true);
+    // 削除の確認と、削除の影響と失敗の再試行 (0056)。
+    let mut delete_open = use_signal(|| false);
+    let mut delete_impact = use_signal(|| None::<DeleteImpact>);
+    let mut impact_error = use_signal(|| None::<RecordError>);
+    let mut delete_error = use_signal(|| None::<RecordError>);
 
     let reload_services = services.clone();
     let reload_id = id.clone();
@@ -136,11 +146,76 @@ pub fn PurchaseDetail(
         });
     });
 
+    // 削除 (0056)。削除の影響の件数を引いて確認を出し、失敗は再試行のバナーで知らせる。
+    let request_services = services.clone();
+    let request_id = id.clone();
+    let mut request_revision = revision;
+    let mut request_notice = notice;
+    let close_after_delete = EventHandler::new(move |_| match on_deleted {
+        Some(handler) => handler.call(()),
+        None => {
+            navigator.go_back();
+        }
+    });
+    let request_delete = EventHandler::new(move |_| {
+        let api = RecordsApi::new(request_services.api.clone());
+        let id = request_id.clone();
+        spawn(async move {
+            match api.purchase_delete_impact(&id).await {
+                Ok(impact) => {
+                    delete_impact.set(Some(impact));
+                    delete_open.set(true);
+                }
+                // 記録が既に無い場合は成功と同じ扱いにする (0056)。
+                Err(failure) if record_error_not_found(&failure) => {
+                    mark_records_changed(&mut request_revision);
+                    request_notice.set(Some(t(Key::RecordDeletedMessage).to_string()));
+                    close_after_delete.call(());
+                }
+                Err(failure) => impact_error.set(Some(failure)),
+            }
+        });
+    });
+    let record_services = services.clone();
+    let record_id = id.clone();
+    let mut record_revision = revision;
+    let mut record_notice = notice;
+    let delete_now = EventHandler::new(move |_| {
+        let api = RecordsApi::new(record_services.api.clone());
+        let id = record_id.clone();
+        spawn(async move {
+            match api.delete_purchase(&id).await {
+                Ok(()) => {}
+                // 記録が既に無い場合は成功と同じ扱いにする (0056)。
+                Err(failure) if record_error_not_found(&failure) => {}
+                Err(failure) => {
+                    delete_error.set(Some(failure));
+                    return;
+                }
+            }
+            mark_records_changed(&mut record_revision);
+            record_notice.set(Some(t(Key::RecordDeletedMessage).to_string()));
+            close_after_delete.call(());
+        });
+    });
+
     let language = current_language();
     let current = purchase();
     let failure = error();
     let ratings_failure = ratings_error();
     let photo_failure = photo_error();
+    let impact_failure = impact_error();
+    let delete_failure = delete_error();
+    let delete_message = delete_impact().map(|impact| {
+        if impact.brews > 0 {
+            t_args(
+                Key::DeletePurchaseConfirmMessageWithBrews,
+                &[("count", &impact.brews.to_string())],
+            )
+        } else {
+            t(Key::DeletePurchaseConfirmMessage).to_string()
+        }
+    });
     let photo_url = format!("{}/purchases/{}/photo", services.api.base_path(), id);
     let favorited = current
         .as_ref()
@@ -184,6 +259,11 @@ pub fn PurchaseDetail(
                         let _ = navigator.push(Route::PurchaseEdit { id: id.clone() });
                     }
                 },
+            }
+            IconButton {
+                name: "delete".to_string(),
+                label: t(Key::DeleteButton).to_string(),
+                onclick: move |_| request_delete.call(()),
             }
         }
     });
@@ -314,6 +394,20 @@ pub fn PurchaseDetail(
                 if let Some(failure) = failure {
                     {retryable_banner(&failure, reload)}
                 }
+                if let Some(failure) = impact_failure {
+                    {retryable_banner(&failure, request_delete)}
+                }
+                if let Some(failure) = delete_failure {
+                    {retryable_banner(&failure, delete_now)}
+                }
+            }
+        }
+        if delete_open() {
+            DeleteConfirm {
+                open: delete_open,
+                title: t(Key::DeletePurchaseConfirmTitle).to_string(),
+                message: delete_message.unwrap_or_default(),
+                on_confirm: move |_| delete_now.call(()),
             }
         }
         if let Some(message) = notice() {

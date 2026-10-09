@@ -522,6 +522,24 @@ async fn set_favorite(
     respond_fetched(&d1, &session.user_id, id).await
 }
 
+/// 抽出を削除する (0056)。認証が必要。
+///
+/// 他から参照されないため、行の削除だけを行う。
+/// 存在しない ID と他の利用者の ID は 404 にする (ADR-0006)。
+pub async fn delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
+    let Some(id) = id else {
+        return Ok(not_found("the brew does not exist"));
+    };
+    let d1 = db::database(env)?;
+    if find(&d1, &session.user_id, id).await?.is_none() {
+        return Ok(not_found("the brew does not exist"));
+    }
+    db::prepared(&d1, &query::brew_delete(&session.user_id, id))?
+        .run()
+        .await?;
+    Ok(Response::empty()?.with_status(204))
+}
+
 /// 応答の商品に Flavor Notes を付ける (FR-8)。
 async fn attach_notes(d1: &D1Database, user_id: &str, brews: &mut [BrewResponse]) -> Result<()> {
     let mut products: Vec<&mut ProductResponse> = brews

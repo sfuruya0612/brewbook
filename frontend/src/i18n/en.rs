@@ -243,4 +243,17 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "Searching",                                  // searchingLabel
     "No address candidates were found. You can enter the address manually.", // addressSearchEmpty
     "Map",                                        // mapTitle
+    "Delete brew",                                // deleteBrewConfirmTitle
+    "This brew will be deleted. This cannot be undone.", // deleteBrewConfirmMessage
+    "Delete purchase",                            // deletePurchaseConfirmTitle
+    "This purchase will be deleted. This cannot be undone.", // deletePurchaseConfirmMessage
+    "This purchase will be deleted. {count} brews of this purchase will also be deleted. This cannot be undone.", // deletePurchaseConfirmMessageWithBrews
+    "Delete product",                             // deleteProductConfirmTitle
+    "This product will be deleted. This cannot be undone.", // deleteProductConfirmMessage
+    "This product will be deleted. {count} purchases of this product will also be deleted. This cannot be undone.", // deleteProductConfirmMessageWithPurchases
+    "This product will be deleted. {purchases} purchases and {brews} brews of those purchases will also be deleted. This cannot be undone.", // deleteProductConfirmMessageWithCascades
+    "Delete shop",                                // deleteShopConfirmTitle
+    "This shop will be deleted. This cannot be undone.", // deleteShopConfirmMessage
+    "This shop will be deleted. The shop will be cleared from {count} purchases. This cannot be undone.", // deleteShopConfirmMessageWithPurchases
+    "Deleted.",                                   // recordDeletedMessage
 ];
