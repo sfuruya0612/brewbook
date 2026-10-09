@@ -2,10 +2,10 @@
 # GitHub Actions の runner image の rustup は minimal プロファイルで入り、clippy と rustfmt は
 # stable ツールチェーンにだけ追加される (images/ubuntu/scripts/build/install-rust.sh)。
 # profile を書かないと mise は runner の rustup のプロファイルを引き継ぐため、mise が入れる
-# 1.98.1 に clippy と rustfmt が入らず、CI の lint が 'cargo-clippy' is not installed で失敗する
+# 1.99.0 に clippy と rustfmt が入らず、CI の lint が 'cargo-clippy' is not installed で失敗する
 # (2026-09-27 の CI、issue 0032)。profile と components を明示して、手元と CI の差をなくす (ADR-0009)。
 # https://mise.jdx.dev/lang/rust.html
-rust = { version = "1.98.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["wasm32-unknown-unknown"] }
+rust = { version = "1.99.0", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["wasm32-unknown-unknown"] }
 "cargo:worker-build" = "0.8.6"
 # wrangler は npm のパッケージで、mise は npm のツールの install dependency として node を要求する。
 # [tools] に node が無いと wrangler をインストールできず、Workers Builds のビルドが失敗する
