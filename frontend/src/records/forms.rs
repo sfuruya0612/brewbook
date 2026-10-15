@@ -1,14 +1,14 @@
 //! フォームの入力の検証と、推測の適用 (FR-9、FR-11、FR-19)。
 //!
 //! 画面の signal から渡された文字列を読み、API の入力 ([`super::inputs`]) を組み立てる。
-//! 推測 (FR-19) は空の入力欄にだけ入れ、入力済みの値は上書きしない。Dioxus に依存しない
-//! 純粋なモジュールにして、native の単体テストと PBT で守る (ADR-0013)。
+//! 推測 (FR-19) は推測できた項目を入力欄に入れ、入力済みの値も置き換える (ADR-0022)。
+//! Dioxus に依存しない純粋なモジュールにして、native の単体テストと PBT で守る (ADR-0013)。
 //! Flutter の `frontend/lib/screens/*_form_screen.dart` の判定と同じにする。
 
 use crate::i18n::Key;
 
-use super::inputs::{BrewInput, ProductInput, PurchaseInput, ShopInput};
-use super::models::{Product, ProductSuggestion, Purchase, PurchaseSuggestion, Shop};
+use super::inputs::{BrewInput, PurchaseInput, ShopInput};
+use super::models::{Purchase, PurchaseSuggestion, Shop};
 use super::values::{
     format_day, parse_count, parse_day, parse_decimal, parse_time, to_utc_iso8601, LocalDateTime,
 };
@@ -53,45 +53,22 @@ pub fn validate_shop_form(name: &str, address: &str) -> Result<ShopInput, Key> {
     })
 }
 
-/// 商品のフォームの入力 (FR-7、FR-8)。商品名は必須。
-///
-/// タグは前後の空白を除き、空のタグを落とし、同じ名前を 1 つにまとめる (FR-8)。
-pub fn validate_product_form(
-    name: &str,
-    producer: &str,
-    origin: &str,
-    region: &str,
-    process: &str,
-    variety: &str,
-    flavor_notes: &[String],
-) -> Result<ProductInput, Key> {
-    let name = name.trim();
-    if name.is_empty() {
-        return Err(Key::ValidationRequired);
-    }
-    let mut tags = Vec::new();
-    for note in flavor_notes {
-        let note = note.trim();
-        if note.is_empty() || tags.iter().any(|tag| tag == note) {
-            continue;
-        }
-        tags.push(note.to_string());
-    }
-    Ok(ProductInput {
-        name: name.to_string(),
-        producer: optional_text(producer),
-        origin: optional_text(origin),
-        region: optional_text(region),
-        process: optional_text(process),
-        variety: optional_text(variety),
-        flavor_notes: tags,
-    })
-}
-
-/// 購入のフォームの入力。
+/// 購入のフォームの入力。商品の項目も購入のフォームが持つ (ADR-0022)。
 pub struct PurchaseFormValues<'a> {
-    /// 選択中の商品。必須 (FR-9)。
-    pub product: Option<&'a Product>,
+    /// 商品名の入力。必須 (FR-9)。
+    pub name: &'a str,
+    /// 生産者の入力。
+    pub producer: &'a str,
+    /// 生産国の入力。
+    pub origin: &'a str,
+    /// 地域の入力。
+    pub region: &'a str,
+    /// 精製方法の入力。
+    pub process: &'a str,
+    /// 品種の入力。
+    pub variety: &'a str,
+    /// Flavor Notes のタグ (FR-8)。
+    pub flavor_notes: &'a [String],
     /// 選択中の店。任意 (FR-9)。
     pub shop: Option<&'a Shop>,
     /// 購入日の入力 (`YYYY-MM-DD`)。必須 (FR-9)。
@@ -111,8 +88,8 @@ pub struct PurchaseFormValues<'a> {
 /// 購入のフォームの検証の誤り。None の項目は誤りが無い。
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct PurchaseFormErrors {
-    /// 商品の誤り。
-    pub product: Option<Key>,
+    /// 商品名の誤り。
+    pub name: Option<Key>,
     /// 購入日の誤り。
     pub purchased_on: Option<Key>,
     /// 焙煎日の誤り。
@@ -126,7 +103,7 @@ pub struct PurchaseFormErrors {
 impl PurchaseFormErrors {
     /// 誤りが 1 つでもあるか (画面の上のバナーを出す判定)。
     pub fn has_errors(&self) -> bool {
-        self.product.is_some()
+        self.name.is_some()
             || self.purchased_on.is_some()
             || self.roast_date.is_some()
             || self.price.is_some()
@@ -136,11 +113,12 @@ impl PurchaseFormErrors {
 
 /// 購入のフォームの入力を検証し、API の入力にする (FR-9)。
 ///
-/// 商品と購入日は必須。焙煎日、価格、重量は空なら None にし、値があるときは形式を検査する。
+/// 商品名と購入日は必須。焙煎日、価格、重量は空なら None にし、値があるときは形式を検査する。
+/// タグは前後の空白を除き、空のタグを落とし、同じ名前を 1 つにまとめる (FR-8)。
 pub fn validate_purchase_form(
     values: PurchaseFormValues<'_>,
 ) -> Result<PurchaseInput, PurchaseFormErrors> {
-    let product = values.product;
+    let name = values.name.trim();
     let purchased_on = parse_day(values.purchased_on);
     let roast_date_text = values.roast_date.trim();
     let roast_date = if roast_date_text.is_empty() {
@@ -162,7 +140,7 @@ pub fn validate_purchase_form(
     };
 
     let errors = PurchaseFormErrors {
-        product: product.is_none().then_some(Key::ValidationProduct),
+        name: name.is_empty().then_some(Key::ValidationRequired),
         purchased_on: purchased_on.is_none().then_some(Key::ValidationDay),
         roast_date: if roast_date_text.is_empty() || roast_date.is_some() {
             None
@@ -183,11 +161,17 @@ pub fn validate_purchase_form(
     if errors.has_errors() {
         return Err(errors);
     }
-    let (Some(product), Some(purchased_on)) = (product, purchased_on) else {
+    let Some(purchased_on) = purchased_on else {
         return Err(errors);
     };
     Ok(PurchaseInput {
-        product_id: product.id.clone(),
+        name: name.to_string(),
+        producer: optional_text(values.producer),
+        origin: optional_text(values.origin),
+        region: optional_text(values.region),
+        process: optional_text(values.process),
+        variety: optional_text(values.variety),
+        flavor_notes: dedup_tags(values.flavor_notes),
         shop_id: values.shop.map(|shop| shop.id.clone()),
         purchased_on: format_day(purchased_on),
         roast: optional_text(values.roast),
@@ -199,82 +183,72 @@ pub fn validate_purchase_form(
     })
 }
 
-/// 推測をまだ空の入力欄にだけ入れる。入力済みの値は上書きしない (FR-19)。
+/// タグの前後の空白を除き、空のタグを落とし、同じ名前を 1 つにまとめる (FR-8)。
+pub fn dedup_tags(flavor_notes: &[String]) -> Vec<String> {
+    let mut tags: Vec<String> = Vec::new();
+    for note in flavor_notes {
+        let note = note.trim();
+        if note.is_empty() || tags.iter().any(|tag| tag == note) {
+            continue;
+        }
+        tags.push(note.to_string());
+    }
+    tags
+}
+
+/// 推測を入れる購入のフォームの入力欄 (FR-19)。
+pub struct PurchaseFormFields<'a> {
+    /// 商品名。
+    pub name: &'a mut String,
+    /// 生産者。
+    pub producer: &'a mut String,
+    /// 生産国。
+    pub origin: &'a mut String,
+    /// 地域。
+    pub region: &'a mut String,
+    /// 精製方法。
+    pub process: &'a mut String,
+    /// 品種。
+    pub variety: &'a mut String,
+    /// Flavor Notes のタグ。
+    pub flavor_notes: &'a mut Vec<String>,
+    /// 焙煎度。
+    pub roast: &'a mut String,
+    /// 焙煎日。
+    pub roast_date: &'a mut String,
+    /// 価格。
+    pub price: &'a mut String,
+    /// 重量。
+    pub weight: &'a mut String,
+}
+
+/// 推測できた項目を入力欄に入れる (FR-19、ADR-0022)。
 ///
-/// 通貨は推測しない (画面の既定値のまま。FR-19)。
-pub fn apply_purchase_suggestion(
-    roast: &mut String,
-    roast_date: &mut String,
-    price: &mut String,
-    weight: &mut String,
-    suggestion: &PurchaseSuggestion,
-) {
-    if let Some(value) = &suggestion.roast {
-        if roast.trim().is_empty() {
-            *roast = value.clone();
+/// 推測できた項目 (None でない項目) は入力済みの値も置き換える (写真の読み取りで入力を
+/// やり直す使い方のため。0057)。推測できなかった項目 (None) と空の Flavor Notes は入力欄を
+/// そのまま残す。通貨は推測しない (画面の既定値のまま。FR-19)。
+pub fn apply_purchase_suggestion(fields: PurchaseFormFields<'_>, suggestion: &PurchaseSuggestion) {
+    fn put(field: &mut String, value: &Option<String>) {
+        if let Some(value) = value {
+            *field = value.clone();
         }
     }
-    if let Some(value) = &suggestion.roast_date {
-        if roast_date.trim().is_empty() {
-            *roast_date = value.clone();
-        }
+    put(fields.name, &suggestion.name);
+    put(fields.producer, &suggestion.producer);
+    put(fields.origin, &suggestion.origin);
+    put(fields.region, &suggestion.region);
+    put(fields.process, &suggestion.process);
+    put(fields.variety, &suggestion.variety);
+    if !suggestion.flavor_notes.is_empty() {
+        *fields.flavor_notes = dedup_tags(&suggestion.flavor_notes);
     }
+    put(fields.roast, &suggestion.roast);
+    put(fields.roast_date, &suggestion.roast_date);
     if let Some(value) = suggestion.price_amount {
-        if price.trim().is_empty() {
-            *price = value.to_string();
-        }
+        *fields.price = value.to_string();
     }
     if let Some(value) = suggestion.weight_grams {
-        if weight.trim().is_empty() {
-            *weight = value.to_string();
-        }
-    }
-}
-
-/// 推測した商品名と照合した結果の扱い (FR-19)。
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum ProductMatch {
-    /// 一致する商品を選択する。
-    Select(Product),
-
-    /// 一致する商品が無いため、推測値を引き継いだ商品の登録の導線を出す。
-    Register(ProductSuggestion),
-
-    /// 何もしない (商品が選択済みか、推測した商品名が無い)。
-    None,
-}
-
-/// 推測した商品名を照合した結果から、画面の動きを決める (FR-19)。
-///
-/// 商品が未選択のときだけ一致する商品を選び、一致が無いときは登録の導線を出す。
-/// 選択済みの商品は上書きしない。
-pub fn product_match(
-    product_selected: bool,
-    suggestion: &PurchaseSuggestion,
-    matched: Option<Product>,
-) -> ProductMatch {
-    if product_selected {
-        return ProductMatch::None;
-    }
-    let Some(suggested) = &suggestion.product else {
-        return ProductMatch::None;
-    };
-    if suggested_product_name(suggested).is_none() {
-        return ProductMatch::None;
-    }
-    match matched {
-        Some(product) => ProductMatch::Select(product),
-        None => ProductMatch::Register(suggested.clone()),
-    }
-}
-
-/// 照合に使う、推測した商品名 (前後の空白を除く)。無いか空のときは None。
-pub fn suggested_product_name(suggested: &ProductSuggestion) -> Option<String> {
-    let name = suggested.name.as_deref()?.trim();
-    if name.is_empty() {
-        None
-    } else {
-        Some(name.to_string())
+        *fields.weight = value.to_string();
     }
 }
 

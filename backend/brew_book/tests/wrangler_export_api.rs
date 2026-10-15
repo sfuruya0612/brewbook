@@ -1,9 +1,9 @@
 //! 全記録のエクスポートの結合テスト (HTTP)。
 //!
-//! FR-14 の受け入れ基準 (6 テーブルの全行と全列、パスキーとセッションと
+//! FR-14 の受け入れ基準 (5 テーブルの全行と全列、パスキーとセッションと
 //! チャレンジと登録用トークンの除外、`photo_key` と写真取得 API のパス、写真の実体の除外) と、
 //! 成功指標の測定方法 (テスト専用の復元処理で別の利用者に取り込み、`user_id` と `photo_key` の
-//! 利用者 ID を付け替えた上で 6 テーブルの全行と全列を比較する) を検査する。
+//! 利用者 ID を付け替えた上で 5 テーブルの全行と全列を比較する) を検査する。
 //!
 //! テスト名の `wrangler_` は、`wrangler dev` を起動するテストを `backend:test` が名前で除外するための規約。
 //! サーバーは 1 つのテストファイルで 1 回だけ起動し、下ごしらえの SQL を先に実行する。
@@ -52,7 +52,7 @@ struct Table {
 /// 写真のバケット名 (wrangler.toml の R2 バインディングと同じ)。
 const PHOTO_BUCKET: &str = "brewbook-photos";
 
-/// エクスポートの対象の 6 テーブル (ADR-0006)。親から子の順に並べる (復元の挿入の順)。
+/// エクスポートの対象の 5 テーブル (ADR-0006、ADR-0022)。親から子の順に並べる (復元の挿入の順)。
 const TABLES: &[Table] = &[
     Table {
         name: "shops",
@@ -68,11 +68,24 @@ const TABLES: &[Table] = &[
         ],
     },
     Table {
-        name: "products",
+        name: "flavor_tags",
+        key: &["id"],
+        columns: &["id", "user_id", "name"],
+    },
+    Table {
+        name: "purchases",
         key: &["id"],
         columns: &[
             "id",
             "user_id",
+            "shop_id",
+            "purchased_on",
+            "roast",
+            "roast_date",
+            "price_amount",
+            "price_currency",
+            "weight_grams",
+            "photo_key",
             "name",
             "producer",
             "origin",
@@ -85,34 +98,9 @@ const TABLES: &[Table] = &[
         ],
     },
     Table {
-        name: "flavor_tags",
-        key: &["id"],
-        columns: &["id", "user_id", "name"],
-    },
-    Table {
-        name: "product_flavor_tags",
-        key: &["product_id", "tag_id"],
-        columns: &["user_id", "product_id", "tag_id"],
-    },
-    Table {
-        name: "purchases",
-        key: &["id"],
-        columns: &[
-            "id",
-            "user_id",
-            "product_id",
-            "shop_id",
-            "purchased_on",
-            "roast",
-            "roast_date",
-            "price_amount",
-            "price_currency",
-            "weight_grams",
-            "photo_key",
-            "created_at",
-            "updated_at",
-            "favorited_at",
-        ],
+        name: "purchase_flavor_tags",
+        key: &["purchase_id", "tag_id"],
+        columns: &["user_id", "purchase_id", "tag_id"],
     },
     Table {
         name: "brews",
@@ -140,17 +128,16 @@ const TABLES: &[Table] = &[
 /// 記録の利用者が持つテーブルごとの行数。下ごしらえの [`records`] と一致させる。
 const RECORD_COUNTS: &[(&str, usize)] = &[
     ("shops", 2),
-    ("products", 2),
     ("flavor_tags", 3),
-    ("product_flavor_tags", 3),
     ("purchases", 3),
+    ("purchase_flavor_tags", 3),
     ("brews", 3),
 ];
 
 /// このテストファイルの下ごしらえと、テストが使う値。
 struct TestData {
     seed_sql: String,
-    /// エクスポートの内容のテストの利用者 (6 テーブルの全列を埋めた記録を持つ)。
+    /// エクスポートの内容のテストの利用者 (5 テーブルの全列を埋めた記録を持つ)。
     export_user: String,
     export_session: String,
     /// エクスポートの行の ID に使う接頭辞。
@@ -208,7 +195,7 @@ fn build_data() -> TestData {
     let restore_user = user_id(3);
     seed.user(&restore_user, "restore user", CREATED);
 
-    // 他の利用者。6 テーブルに記録を持つ。
+    // 他の利用者。5 テーブルに記録を持つ。
     let other_user = user_id(4);
     seed.user(&other_user, "other user", CREATED);
     let other_session = seed.session(&other_user, FUTURE, CREATED);
@@ -216,7 +203,6 @@ fn build_data() -> TestData {
     records(&mut seed, &other_user, &other_prefix);
     let other_ids: Vec<String> = (0..2)
         .map(|index| row_id(&other_prefix, "shop", index))
-        .chain((0..2).map(|index| row_id(&other_prefix, "product", index)))
         .chain((0..3).map(|index| row_id(&other_prefix, "tag", index)))
         .chain((0..3).map(|index| row_id(&other_prefix, "purchase", index)))
         .chain((0..3).map(|index| row_id(&other_prefix, "brew", index)))
@@ -253,7 +239,7 @@ fn build_data() -> TestData {
     }
 }
 
-/// 6 テーブルに全列を埋めた記録を 1 利用者分入れる。行の ID は `<接頭辞>-<テーブル>-<添字>`。
+/// 5 テーブルに全列を埋めた記録を 1 利用者分入れる。行の ID は `<接頭辞>-<テーブル>-<添字>`。
 ///
 /// 任意の列は NULL の行と値のある行を混ぜ、エクスポートが全列を運ぶことを比較で検出できるようにする。
 /// 写真の `photo_key` は ADR-0003 のキーの形 (`users/<利用者 ID>/purchases/<購入 ID>/<UUID>.jpg`) にする。
@@ -270,73 +256,60 @@ fn records(seed: &mut Seed, user: &str, prefix: &str) {
         row_id(prefix, "shop", 1)
     ));
 
-    // 商品。添字 0 は任意の列を埋め、添字 1 は名前以外を NULL にする。
-    seed.raw(&format!(
-        "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
-         created_at, updated_at, favorited_at) VALUES \
-         ('{}', '{user}', '{prefix} の商品 0', '{prefix} の生産者 0', 'エチオピア', \
-          'イルガチェフェ', 'ウォッシュト', '在来種', '{T21}', '{T21}', '{T21}')",
-        row_id(prefix, "product", 0)
-    ));
-    seed.raw(&format!(
-        "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
-         created_at, updated_at) VALUES \
-         ('{}', '{user}', '{prefix} の商品 1', NULL, NULL, NULL, NULL, NULL, '{T20}', '{T20}')",
-        row_id(prefix, "product", 1)
-    ));
-
-    // Flavor Notes のタグ。添字 2 はどの商品からも参照されない。
+    // Flavor Notes のタグ。添字 2 はどの購入からも参照されない。
     for (index, name) in ["chocolate", "berry", "unused"].iter().enumerate() {
         seed.raw(&format!(
             "INSERT INTO flavor_tags (id, user_id, name) VALUES ('{}', '{user}', '{prefix}-{name}')",
             row_id(prefix, "tag", index)
         ));
     }
-    // 商品とタグの対応。
-    seed.raw(&format!(
-        "INSERT INTO product_flavor_tags (user_id, product_id, tag_id) VALUES ('{user}', '{}', '{}')",
-        row_id(prefix, "product", 0),
-        row_id(prefix, "tag", 0)
-    ));
-    seed.raw(&format!(
-        "INSERT INTO product_flavor_tags (user_id, product_id, tag_id) VALUES ('{user}', '{}', '{}')",
-        row_id(prefix, "product", 0),
-        row_id(prefix, "tag", 1)
-    ));
-    seed.raw(&format!(
-        "INSERT INTO product_flavor_tags (user_id, product_id, tag_id) VALUES ('{user}', '{}', '{}')",
-        row_id(prefix, "product", 1),
-        row_id(prefix, "tag", 0)
-    ));
 
-    // 購入。添字 0 は全列を埋め、添字 1 は店と任意の列を NULL にし、添字 2 は店を参照する。
+    // 購入。商品の項目も購入が持つ (ADR-0022)。添字 0 は全列を埋め、添字 1 は店と任意の列を
+    // NULL にし、添字 2 は店を参照する。
     seed.raw(&format!(
-        "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, roast_date, \
-         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at, favorited_at) \
-         VALUES ('{}', '{user}', '{}', '{}', '{D21}', '中煎り', '{D19}', 1200, 'JPY', 200, '{}', \
-          '{T21}', '{T21}', '{T21}')",
+        "INSERT INTO purchases (id, user_id, shop_id, purchased_on, roast, roast_date, \
+         price_amount, price_currency, weight_grams, photo_key, name, producer, origin, region, \
+         process, variety, created_at, updated_at, favorited_at) \
+         VALUES ('{}', '{user}', '{}', '{D21}', '中煎り', '{D19}', 1200, 'JPY', 200, '{}', \
+          '{prefix} の商品 0', '{prefix} の生産者 0', 'エチオピア', 'イルガチェフェ', \
+          'ウォッシュト', '在来種', '{T21}', '{T21}', '{T21}')",
         row_id(prefix, "purchase", 0),
-        row_id(prefix, "product", 0),
         row_id(prefix, "shop", 0),
         photo_key(user, prefix, 0)
     ));
     seed.raw(&format!(
-        "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, roast_date, \
-         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at) \
-         VALUES ('{}', '{user}', '{}', NULL, '{D20}', NULL, NULL, NULL, NULL, NULL, NULL, \
-          '{T20}', '{T20}')",
-        row_id(prefix, "purchase", 1),
-        row_id(prefix, "product", 1)
+        "INSERT INTO purchases (id, user_id, shop_id, purchased_on, roast, roast_date, \
+         price_amount, price_currency, weight_grams, photo_key, name, producer, origin, region, \
+         process, variety, created_at, updated_at) \
+         VALUES ('{}', '{user}', NULL, '{D20}', NULL, NULL, NULL, NULL, NULL, NULL, \
+          '{prefix} の商品 1', NULL, NULL, NULL, NULL, NULL, '{T20}', '{T20}')",
+        row_id(prefix, "purchase", 1)
     ));
     seed.raw(&format!(
-        "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, roast_date, \
-         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at) \
-         VALUES ('{}', '{user}', '{}', '{}', '{D19}', NULL, NULL, NULL, NULL, NULL, '{}', \
-          '{T19}', '{T19}')",
+        "INSERT INTO purchases (id, user_id, shop_id, purchased_on, roast, roast_date, \
+         price_amount, price_currency, weight_grams, photo_key, name, producer, origin, region, \
+         process, variety, created_at, updated_at) \
+         VALUES ('{}', '{user}', '{}', '{D19}', NULL, NULL, NULL, NULL, NULL, '{}', \
+          '{prefix} の商品 2', NULL, NULL, NULL, NULL, NULL, '{T19}', '{T19}')",
         row_id(prefix, "purchase", 2),
-        row_id(prefix, "product", 0),
         row_id(prefix, "shop", 1),
         photo_key(user, prefix, 2)
+    ));
+    // 購入とタグの対応。
+    seed.raw(&format!(
+        "INSERT INTO purchase_flavor_tags (user_id, purchase_id, tag_id) VALUES ('{user}', '{}', '{}')",
+        row_id(prefix, "purchase", 0),
+        row_id(prefix, "tag", 0)
+    ));
+    seed.raw(&format!(
+        "INSERT INTO purchase_flavor_tags (user_id, purchase_id, tag_id) VALUES ('{user}', '{}', '{}')",
+        row_id(prefix, "purchase", 0),
+        row_id(prefix, "tag", 1)
+    ));
+    seed.raw(&format!(
+        "INSERT INTO purchase_flavor_tags (user_id, purchase_id, tag_id) VALUES ('{user}', '{}', '{}')",
+        row_id(prefix, "purchase", 1),
+        row_id(prefix, "tag", 0)
     ));
 
     // 抽出。添字 0 は全列を埋め、添字 1 と添字 2 は任意の列を NULL にする。
@@ -484,7 +457,7 @@ fn sorted(table: &Table, rows: &[Value]) -> Vec<Value> {
     rows
 }
 
-/// データベースの利用者の 6 テーブルの行を読む。
+/// データベースの利用者の 5 テーブルの行を読む。
 fn snapshot(server: &DevServer, user: &str) -> BTreeMap<&'static str, Vec<Value>> {
     let mut tables = BTreeMap::new();
     for table in TABLES {
@@ -636,7 +609,7 @@ fn wrangler_export_ok() {
     );
     let body = assert_status(response, 200);
 
-    // トップレベルは 6 テーブルの名前を持つ配列だけにする (追加のメタデータを入れない)。
+    // トップレベルは 5 テーブルの名前を持つ配列だけにする (追加のメタデータを入れない)。
     let names: BTreeSet<&str> = body
         .as_object()
         .expect("the export must be an object")
@@ -646,10 +619,10 @@ fn wrangler_export_ok() {
     let expected: BTreeSet<&str> = TABLES.iter().map(|table| table.name).collect();
     assert_eq!(
         names, expected,
-        "the export must have the six tables: {body}"
+        "the export must have the five tables: {body}"
     );
 
-    // 6 テーブルの全行と全列が含まれる (FR-14)。
+    // 5 テーブルの全行と全列が含まれる (FR-14)。
     for table in TABLES {
         let rows = table_rows(&body, table);
         let count = RECORD_COUNTS
@@ -803,7 +776,7 @@ fn wrangler_export_returns_only_own_records() {
         );
     }
 
-    // 記録が無い利用者には 6 テーブルの空の配列を返す。
+    // 記録が無い利用者には 5 テーブルの空の配列を返す。
     let empty = assert_status(
         ApiClient::new(&base_url, Some(&data.empty_session)).get("/api/export"),
         200,
@@ -859,7 +832,7 @@ fn wrangler_export_round_trip_restores_every_row_and_column() {
     let source = lease.use_server(|server| snapshot(server, &data.round_trip_user));
     let export = assert_status(client.get("/api/export"), 200);
 
-    // エクスポートの JSON が、元の記録の 6 テーブルの全行と全列を持つ (FR-14)。
+    // エクスポートの JSON が、元の記録の 5 テーブルの全行と全列を持つ (FR-14)。
     assert_export_matches_source(&export, &source);
 
     // テスト専用の復元処理で別の利用者に取り込む (成功指標の測定方法)。
@@ -871,7 +844,7 @@ fn wrangler_export_round_trip_restores_every_row_and_column() {
     });
     let restored = lease.use_server(|server| snapshot(server, &data.restore_user));
 
-    // user_id と photo_key の利用者 ID を付け替えた上で、6 テーブルの全行と全列が一致する。
+    // user_id と photo_key の利用者 ID を付け替えた上で、5 テーブルの全行と全列が一致する。
     for table in TABLES {
         let expected = reassign_rows(
             table,

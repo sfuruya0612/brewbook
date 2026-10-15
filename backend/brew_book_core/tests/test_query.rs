@@ -25,7 +25,6 @@ mod list_builders {
             favorite_only: false,
             cursor,
             limit,
-            name: None,
         }
     }
 
@@ -97,7 +96,6 @@ mod list_builders {
                 SortOrder::Desc,
             )),
             limit: 200,
-            name: None,
         };
         let statement = list(&query).unwrap();
         assert!(statement.sql.contains(
@@ -166,7 +164,6 @@ mod list_builders {
             favorite_only: false,
             cursor: Some(integer),
             limit: 50,
-            name: None,
         };
         let statement = list(&query).unwrap();
         assert!(statement
@@ -201,7 +198,6 @@ mod list_builders {
             favorite_only: false,
             cursor: Some(real),
             limit: 50,
-            name: None,
         };
         let statement = list(&query).unwrap();
         assert!(statement
@@ -222,7 +218,6 @@ mod list_builders {
             favorite_only: false,
             cursor: Some(cursor),
             limit: 50,
-            name: None,
         };
         let statement = list(&query).unwrap();
         assert!(statement.sql.contains(
@@ -282,27 +277,6 @@ mod list_builders {
     }
 
     #[test]
-    fn a_list_query_with_a_name_filters_by_the_exact_name_ignoring_case() {
-        let mut query = shop_query(None, 50);
-        query.name = Some("Ethiopia");
-        let statement = list(&query).unwrap();
-        assert_eq!(
-            statement.sql,
-            "SELECT id, user_id, name, address, created_at, updated_at FROM shops \
-             WHERE user_id = ? AND name = ? COLLATE NOCASE \
-             ORDER BY created_at DESC NULLS LAST, id ASC LIMIT ?"
-        );
-        assert_eq!(
-            statement.params,
-            vec![
-                Value::Text(USER_ID.to_owned()),
-                Value::Text("Ethiopia".to_owned()),
-                Value::Integer(50),
-            ]
-        );
-    }
-
-    #[test]
     fn a_cursor_of_another_key_or_order_is_rejected() {
         // 別のキーのカーソル。
         let other_key = text_cursor(SortKey::PurchasedOn, "2026-09-21", SortOrder::Desc);
@@ -358,7 +332,6 @@ mod list_builders {
                         favorite_only: false,
                         cursor,
                         limit: 50,
-                        name: None,
                     };
                     let statement = list(&query).unwrap();
                     assert!(
@@ -383,22 +356,11 @@ mod list_builders {
 mod record_queries {
     use super::*;
     use brew_book_core::query::{
-        self, insert, update, InsertQuery, ProductValues, ShopValues, UpdateQuery, SHOPS_TABLE,
+        self, insert, update, InsertQuery, ShopValues, UpdateQuery, SHOPS_TABLE,
     };
 
     fn shop_values<'a>(name: &'a str, address: Option<&'a str>) -> ShopValues<'a> {
         ShopValues { name, address }
-    }
-
-    fn product_values<'a>(name: &'a str) -> ProductValues<'a> {
-        ProductValues {
-            name,
-            producer: None,
-            origin: None,
-            region: None,
-            process: None,
-            variety: None,
-        }
     }
 
     #[test]
@@ -462,31 +424,6 @@ mod record_queries {
     }
 
     #[test]
-    fn a_product_insert_and_update_carry_every_field() {
-        let insert =
-            query::product_insert(SHOP_ID, USER_ID, &product_values("豆"), AT, AT).unwrap();
-        assert_eq!(
-            insert.sql,
-            "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
-             created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        );
-        assert_eq!(insert.params.len(), 10);
-        assert_eq!(
-            insert.sql.matches('?').count(),
-            insert.params.len(),
-            "every placeholder must have a value: {}",
-            insert.sql
-        );
-        let update = query::product_update(SHOP_ID, USER_ID, &product_values("豆"), AT).unwrap();
-        assert_eq!(
-            update.sql,
-            "UPDATE products SET name = ?, producer = ?, origin = ?, region = ?, process = ?, \
-             variety = ?, updated_at = ? WHERE id = ? AND user_id = ?"
-        );
-        assert_eq!(update.params.len(), 9);
-    }
-
-    #[test]
     fn a_shop_update_filters_by_the_id_and_the_user_id() {
         let statement = query::shop_update(SHOP_ID, USER_ID, &shop_values("店", None), AT).unwrap();
         assert_eq!(
@@ -507,12 +444,12 @@ mod record_queries {
 
     #[test]
     fn the_tag_queries_filter_by_the_user() {
-        let delete = query::delete_product_flavor_tags(USER_ID, SHOP_ID);
+        let delete = query::delete_purchase_flavor_tags(USER_ID, SHOP_ID);
         assert_eq!(
             delete.sql,
-            "DELETE FROM product_flavor_tags WHERE product_id = ? AND user_id = ?"
+            "DELETE FROM purchase_flavor_tags WHERE purchase_id = ? AND user_id = ?"
         );
-        // 束縛の順は SQL のプレースホルダと同じ (商品、利用者) である。
+        // 束縛の順は SQL のプレースホルダと同じ (購入、利用者) である。
         assert_eq!(
             delete.params,
             vec![
@@ -526,10 +463,10 @@ mod record_queries {
             "INSERT INTO flavor_tags (id, user_id, name) VALUES (?, ?, ?) \
              ON CONFLICT (user_id, name) DO NOTHING"
         );
-        let association = query::insert_product_flavor_tag(USER_ID, SHOP_ID, "チョコ");
+        let association = query::insert_purchase_flavor_tag(USER_ID, SHOP_ID, "チョコ");
         assert_eq!(
             association.sql,
-            "INSERT INTO product_flavor_tags (user_id, product_id, tag_id) SELECT ?, ?, id FROM \
+            "INSERT INTO purchase_flavor_tags (user_id, purchase_id, tag_id) SELECT ?, ?, id FROM \
              flavor_tags WHERE user_id = ? AND name = ?"
         );
         assert_eq!(
@@ -552,14 +489,14 @@ mod record_queries {
     }
 
     #[test]
-    fn the_product_flavor_notes_query_lists_the_given_products() {
-        let statements = query::product_flavor_notes(USER_ID, &[SHOP_ID, "second"]);
+    fn the_purchase_flavor_notes_query_lists_the_given_purchases() {
+        let statements = query::purchase_flavor_notes(USER_ID, &[SHOP_ID, "second"]);
         assert_eq!(statements.len(), 1, "2 件は 1 つの文に収まる");
         let statement = &statements[0];
         assert!(
             statement
                 .sql
-                .contains("WHERE pft.user_id = ? AND t.user_id = ? AND pft.product_id IN (?, ?)"),
+                .contains("WHERE pft.user_id = ? AND t.user_id = ? AND pft.purchase_id IN (?, ?)"),
             "{}",
             statement.sql
         );
@@ -574,11 +511,11 @@ mod record_queries {
     }
 
     #[test]
-    fn the_product_flavor_notes_query_is_split_within_the_bound_values() {
-        // ページの上限 (200 件) を指定したときと同じ数の商品を渡す。
+    fn the_purchase_flavor_notes_query_is_split_within_the_bound_values() {
+        // ページの上限 (200 件) を指定したときと同じ数の購入を渡す。
         let ids: Vec<String> = (0..200).map(|index| format!("id-{index}")).collect();
         let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
-        let statements = query::product_flavor_notes(USER_ID, &ids);
+        let statements = query::purchase_flavor_notes(USER_ID, &ids);
         // D1 は 1 つのクエリに 100 個まで値を束縛できるため、複数の文に分かれる。
         assert!(statements.len() > 1, "the query must be split");
         for statement in &statements {
@@ -598,8 +535,8 @@ mod record_queries {
     }
 
     #[test]
-    fn the_product_flavor_notes_query_of_no_products_is_empty() {
-        assert!(query::product_flavor_notes(USER_ID, &[]).is_empty());
+    fn the_purchase_flavor_notes_query_of_no_purchases_is_empty() {
+        assert!(query::purchase_flavor_notes(USER_ID, &[]).is_empty());
     }
 
     #[test]
@@ -634,26 +571,28 @@ mod purchase_and_brew_queries {
     use super::*;
     use brew_book_core::query::{self, BrewValues, PurchaseValues};
 
-    /// 購入の列の別名 (結合の SQL の期待値に使う)。
+    /// 購入の列の別名 (結合の SQL の期待値に使う)。商品の項目も購入の列である (ADR-0022)。
     const PURCHASE_COLUMNS: &str = "p.id AS p_id, p.user_id AS p_user_id, \
-        p.product_id AS p_product_id, p.shop_id AS p_shop_id, p.purchased_on AS p_purchased_on, \
+        p.shop_id AS p_shop_id, p.purchased_on AS p_purchased_on, \
         p.roast AS p_roast, p.roast_date AS p_roast_date, p.price_amount AS p_price_amount, \
         p.price_currency AS p_price_currency, p.weight_grams AS p_weight_grams, \
-        p.photo_key AS p_photo_key, p.created_at AS p_created_at, p.updated_at AS p_updated_at, \
+        p.photo_key AS p_photo_key, p.name AS p_name, p.producer AS p_producer, \
+        p.origin AS p_origin, p.region AS p_region, p.process AS p_process, \
+        p.variety AS p_variety, p.created_at AS p_created_at, p.updated_at AS p_updated_at, \
         p.favorited_at AS p_favorited_at";
-    /// 商品の列の別名。
-    const PRODUCT_COLUMNS: &str = "pr.id AS pr_id, pr.user_id AS pr_user_id, pr.name AS pr_name, \
-        pr.producer AS pr_producer, pr.origin AS pr_origin, pr.region AS pr_region, \
-        pr.process AS pr_process, pr.variety AS pr_variety, pr.created_at AS pr_created_at, \
-        pr.updated_at AS pr_updated_at, pr.favorited_at AS pr_favorited_at";
     /// 店の列の別名。
     const SHOP_COLUMNS: &str = "sh.id AS sh_id, sh.user_id AS sh_user_id, sh.name AS sh_name, \
         sh.address AS sh_address, sh.created_at AS sh_created_at, sh.updated_at AS sh_updated_at, \
         sh.favorited_at AS sh_favorited_at";
 
-    fn purchase_values<'a>(product_id: &'a str, shop_id: Option<&'a str>) -> PurchaseValues<'a> {
+    fn purchase_values(shop_id: Option<&str>) -> PurchaseValues<'_> {
         PurchaseValues {
-            product_id,
+            name: "豆",
+            producer: None,
+            origin: None,
+            region: None,
+            process: None,
+            variety: None,
             shop_id,
             purchased_on: "2026-09-21",
             roast: None,
@@ -680,7 +619,7 @@ mod purchase_and_brew_queries {
     }
 
     #[test]
-    fn a_purchases_list_query_joins_the_product_and_the_shop() {
+    fn a_purchases_list_query_joins_the_shop_without_the_products() {
         let statement = query::purchases_list(
             USER_ID,
             SortKey::PurchasedOn,
@@ -693,14 +632,15 @@ mod purchase_and_brew_queries {
         assert_eq!(
             statement.sql,
             format!(
-                "SELECT {PURCHASE_COLUMNS}, {PRODUCT_COLUMNS}, {SHOP_COLUMNS} \
+                "SELECT {PURCHASE_COLUMNS}, {SHOP_COLUMNS} \
                  FROM purchases AS p \
-                 INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
                  LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id \
                  WHERE p.user_id = ? \
                  ORDER BY p.purchased_on DESC NULLS LAST, p.id ASC LIMIT ?"
             )
         );
+        // 商品のテーブルは無い (ADR-0022)。
+        assert!(!statement.sql.contains("products"), "{}", statement.sql);
         assert_eq!(
             statement.params,
             vec![Value::Text(USER_ID.to_owned()), Value::Integer(50)]
@@ -758,7 +698,7 @@ mod purchase_and_brew_queries {
     }
 
     #[test]
-    fn a_brews_list_query_joins_the_purchase_the_product_and_the_shop() {
+    fn a_brews_list_query_joins_the_purchase_and_the_shop() {
         let statement = query::brews_list(
             USER_ID,
             SortKey::BrewedAt,
@@ -778,10 +718,9 @@ mod purchase_and_brew_queries {
                  b.grind_setting AS b_grind_setting, b.rating AS b_rating, b.notes AS b_notes, \
                  b.created_at AS b_created_at, b.updated_at AS b_updated_at, \
                  b.favorited_at AS b_favorited_at, \
-                 {PURCHASE_COLUMNS}, {PRODUCT_COLUMNS}, {SHOP_COLUMNS} \
+                 {PURCHASE_COLUMNS}, {SHOP_COLUMNS} \
                  FROM brews AS b \
                  INNER JOIN purchases AS p ON p.id = b.purchase_id AND p.user_id = b.user_id \
-                 INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
                  LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id \
                  WHERE b.user_id = ? \
                  ORDER BY b.brewed_at DESC NULLS LAST, b.id ASC LIMIT ?"
@@ -806,10 +745,9 @@ mod purchase_and_brew_queries {
                  b.grind_setting AS b_grind_setting, b.rating AS b_rating, b.notes AS b_notes, \
                  b.created_at AS b_created_at, b.updated_at AS b_updated_at, \
                  b.favorited_at AS b_favorited_at, \
-                 {PURCHASE_COLUMNS}, {PRODUCT_COLUMNS}, {SHOP_COLUMNS} \
+                 {PURCHASE_COLUMNS}, {SHOP_COLUMNS} \
                  FROM brews AS b \
                  INNER JOIN purchases AS p ON p.id = b.purchase_id AND p.user_id = b.user_id \
-                 INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
                  LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id \
                  WHERE b.id = ? AND b.user_id = ?"
             )
@@ -824,19 +762,19 @@ mod purchase_and_brew_queries {
     }
 
     #[test]
-    fn a_purchase_find_query_joins_the_product_and_the_shop() {
+    fn a_purchase_find_query_joins_the_shop_without_the_products() {
         let statement = query::purchase_find(USER_ID, SHOP_ID);
         assert!(
-            statement
-                .sql
-                .contains("FROM purchases AS p INNER JOIN products AS pr ON pr.id = p.product_id"),
+            statement.sql.contains(
+                "FROM purchases AS p \
+                 LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id"
+            ),
             "{}",
             statement.sql
         );
+        assert!(!statement.sql.contains("products"), "{}", statement.sql);
         assert!(
-            statement
-                .sql
-                .contains("LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id"),
+            statement.sql.contains("p.name AS p_name"),
             "{}",
             statement.sql
         );
@@ -849,28 +787,30 @@ mod purchase_and_brew_queries {
 
     #[test]
     fn a_purchase_insert_and_update_carry_every_field() {
-        let insert = query::purchase_insert(
-            SHOP_ID,
-            USER_ID,
-            &purchase_values("product-1", Some("shop-1")),
-            AT,
-            AT,
-        )
-        .unwrap();
+        let insert =
+            query::purchase_insert(SHOP_ID, USER_ID, &purchase_values(Some("shop-1")), AT, AT)
+                .unwrap();
+        // 商品の項目 (商品名、Producer、Origin、Region、Process、Variety) は購入の列である (ADR-0022)。
         assert_eq!(
             insert.sql,
-            "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, \
-             roast_date, price_amount, price_currency, weight_grams, created_at, updated_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO purchases (id, user_id, shop_id, purchased_on, roast, roast_date, \
+             price_amount, price_currency, weight_grams, name, producer, origin, region, process, \
+             variety, created_at, updated_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
         assert_eq!(
             insert.params,
             vec![
                 Value::Text(SHOP_ID.to_owned()),
                 Value::Text(USER_ID.to_owned()),
-                Value::Text("product-1".to_owned()),
                 Value::Text("shop-1".to_owned()),
                 Value::Text("2026-09-21".to_owned()),
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::Null,
+                Value::Text("豆".to_owned()),
                 Value::Null,
                 Value::Null,
                 Value::Null,
@@ -880,23 +820,59 @@ mod purchase_and_brew_queries {
                 Value::Text(AT.to_owned()),
             ]
         );
-        let update =
-            query::purchase_update(SHOP_ID, USER_ID, &purchase_values("product-1", None), AT)
-                .unwrap();
+        let update = query::purchase_update(SHOP_ID, USER_ID, &purchase_values(None), AT).unwrap();
         assert_eq!(
             update.sql,
-            "UPDATE purchases SET product_id = ?, shop_id = ?, purchased_on = ?, roast = ?, \
-             roast_date = ?, price_amount = ?, price_currency = ?, weight_grams = ?, updated_at = ? \
+            "UPDATE purchases SET shop_id = ?, purchased_on = ?, roast = ?, roast_date = ?, \
+             price_amount = ?, price_currency = ?, weight_grams = ?, name = ?, producer = ?, \
+             origin = ?, region = ?, process = ?, variety = ?, updated_at = ? \
              WHERE id = ? AND user_id = ?"
         );
-        assert_eq!(update.params.len(), 11);
-        assert_eq!(update.params[1], Value::Null);
+        assert_eq!(update.params.len(), 16);
+        assert_eq!(update.params[0], Value::Null);
+        assert_eq!(update.params[7], Value::Text("豆".to_owned()));
+    }
+
+    #[test]
+    fn a_purchase_insert_and_update_carry_the_product_fields() {
+        let values = PurchaseValues {
+            name: "エチオピア イルガチェフェ",
+            producer: Some("生産者"),
+            origin: Some("エチオピア"),
+            region: Some("イルガチェフェ"),
+            process: Some("ウォッシュト"),
+            variety: Some("ヘアルーム"),
+            shop_id: None,
+            purchased_on: "2026-09-21",
+            roast: None,
+            roast_date: None,
+            price_amount: None,
+            price_currency: None,
+            weight_grams: None,
+        };
+        let expected = [
+            Value::Text("エチオピア イルガチェフェ".to_owned()),
+            Value::Text("生産者".to_owned()),
+            Value::Text("エチオピア".to_owned()),
+            Value::Text("イルガチェフェ".to_owned()),
+            Value::Text("ウォッシュト".to_owned()),
+            Value::Text("ヘアルーム".to_owned()),
+        ];
+        let insert = query::purchase_insert(SHOP_ID, USER_ID, &values, AT, AT).unwrap();
+        assert_eq!(&insert.params[9..15], &expected);
+        let update = query::purchase_update(SHOP_ID, USER_ID, &values, AT).unwrap();
+        assert_eq!(&update.params[7..13], &expected);
     }
 
     #[test]
     fn a_purchase_insert_carries_the_price_and_the_currency() {
         let values = PurchaseValues {
-            product_id: "product-1",
+            name: "豆",
+            producer: None,
+            origin: None,
+            region: None,
+            process: None,
+            variety: None,
             shop_id: None,
             purchased_on: "2026-09-21",
             roast: Some("中煎り"),
@@ -906,20 +882,14 @@ mod purchase_and_brew_queries {
             weight_grams: Some(200),
         };
         let statement = query::purchase_insert(SHOP_ID, USER_ID, &values, AT, AT).unwrap();
-        assert_eq!(statement.params[7], Value::Integer(1200));
-        assert_eq!(statement.params[8], Value::Text("JPY".to_owned()));
-        assert_eq!(statement.params[9], Value::Integer(200));
+        assert_eq!(statement.params[6], Value::Integer(1200));
+        assert_eq!(statement.params[7], Value::Text("JPY".to_owned()));
+        assert_eq!(statement.params[8], Value::Integer(200));
         // 価格が無いときは通貨コードも NULL にする (0007 の設計判断)。
-        let statement = query::purchase_insert(
-            SHOP_ID,
-            USER_ID,
-            &purchase_values("product-1", None),
-            AT,
-            AT,
-        )
-        .unwrap();
+        let statement =
+            query::purchase_insert(SHOP_ID, USER_ID, &purchase_values(None), AT, AT).unwrap();
+        assert_eq!(statement.params[6], Value::Null);
         assert_eq!(statement.params[7], Value::Null);
-        assert_eq!(statement.params[8], Value::Null);
     }
 
     #[test]
@@ -969,8 +939,8 @@ mod purchase_and_brew_queries {
 mod suggestions {
     //! サジェストのクエリ (FR-13) の単体テスト。
     //!
-    //! 8 つの項目名とテーブルと列の対応、値のまとめ方と並び順、`LIKE` のパターンのエスケープを
-    //! 確認する。エスケープが任意の値で往復することは PBT (`prop_query.rs`) が担う。
+    //! 8 つの項目名とテーブルと列の対応 (商品の項目は購入のテーブルから引く。ADR-0022)、
+    //! 値のまとめ方と並び順、`LIKE` のパターンのエスケープを確認する。エスケープが任意の値で往復することは PBT (`prop_query.rs`) が担う。
 
     use super::*;
     use brew_book_core::query::{
@@ -1020,11 +990,11 @@ mod suggestions {
     #[test]
     fn the_query_of_each_field_uses_its_table_and_column() {
         for (item, table, column) in [
-            (SuggestionItem::Producer, "products", "producer"),
-            (SuggestionItem::Origin, "products", "origin"),
-            (SuggestionItem::Region, "products", "region"),
-            (SuggestionItem::Process, "products", "process"),
-            (SuggestionItem::Variety, "products", "variety"),
+            (SuggestionItem::Producer, "purchases", "producer"),
+            (SuggestionItem::Origin, "purchases", "origin"),
+            (SuggestionItem::Region, "purchases", "region"),
+            (SuggestionItem::Process, "purchases", "process"),
+            (SuggestionItem::Variety, "purchases", "variety"),
             (SuggestionItem::Roast, "purchases", "roast"),
             (SuggestionItem::Method, "brews", "method"),
             (SuggestionItem::GrindSetting, "brews", "grind_setting"),
@@ -1047,7 +1017,7 @@ mod suggestions {
         let statement = query::suggestions(USER_ID, SuggestionItem::Producer, "エチ");
         assert_eq!(
             statement.sql,
-            "SELECT producer AS value FROM products WHERE user_id = ? \
+            "SELECT producer AS value FROM purchases WHERE user_id = ? \
              AND lower(producer) LIKE lower(?) || '%' ESCAPE '\\' GROUP BY producer \
              ORDER BY MAX(updated_at) DESC, value ASC LIMIT ?"
         );
@@ -1102,35 +1072,34 @@ mod export_queries {
     }
 
     #[test]
-    fn an_export_query_of_the_product_flavor_tags_orders_by_the_primary_key() {
+    fn an_export_query_of_the_purchase_flavor_tags_orders_by_the_primary_key() {
         let statement = query::export_rows(
-            query::PRODUCT_FLAVOR_TAGS_TABLE,
-            query::PRODUCT_FLAVOR_TAG_COLUMNS,
-            "product_id ASC, tag_id ASC",
+            query::PURCHASE_FLAVOR_TAGS_TABLE,
+            query::PURCHASE_FLAVOR_TAG_COLUMNS,
+            "purchase_id ASC, tag_id ASC",
             USER_ID,
         );
         assert_eq!(
             statement.sql,
-            "SELECT user_id, product_id, tag_id FROM product_flavor_tags \
-             WHERE user_id = ? ORDER BY product_id ASC, tag_id ASC"
+            "SELECT user_id, purchase_id, tag_id FROM purchase_flavor_tags \
+             WHERE user_id = ? ORDER BY purchase_id ASC, tag_id ASC"
         );
         assert_eq!(statement.params, vec![Value::Text(USER_ID.to_owned())]);
     }
 
     #[test]
-    fn every_export_query_of_the_six_tables_keeps_the_user_condition() {
+    fn every_export_query_of_the_five_tables_keeps_the_user_condition() {
         for (table, columns, order_by) in [
             (query::SHOPS_TABLE, query::SHOP_COLUMNS, "id ASC"),
-            (query::PRODUCTS_TABLE, query::PRODUCT_COLUMNS, "id ASC"),
             (
                 query::FLAVOR_TAGS_TABLE,
                 query::FLAVOR_TAG_COLUMNS,
                 "id ASC",
             ),
             (
-                query::PRODUCT_FLAVOR_TAGS_TABLE,
-                query::PRODUCT_FLAVOR_TAG_COLUMNS,
-                "product_id ASC, tag_id ASC",
+                query::PURCHASE_FLAVOR_TAGS_TABLE,
+                query::PURCHASE_FLAVOR_TAG_COLUMNS,
+                "purchase_id ASC, tag_id ASC",
             ),
             (query::PURCHASES_TABLE, query::PURCHASE_COLUMNS, "id ASC"),
             (query::BREWS_TABLE, query::BREW_COLUMNS, "id ASC"),
@@ -1168,11 +1137,6 @@ mod deletion_queries {
                 "shop",
                 query::shop_delete(USER_ID, SHOP_ID),
                 query::SHOPS_TABLE,
-            ),
-            (
-                "product",
-                query::product_delete(USER_ID, SHOP_ID),
-                query::PRODUCTS_TABLE,
             ),
             (
                 "purchase",
@@ -1225,53 +1189,32 @@ mod deletion_queries {
     }
 
     #[test]
-    fn the_product_delete_carries_the_children_and_the_photo_keys() {
-        let brews = query::product_brews_delete(USER_ID, SHOP_ID);
+    fn the_purchase_delete_carries_the_brews_and_the_flavor_tags() {
+        // 購入の削除 (0056) は、抽出と Flavor Notes のタグの対応を先に消す (ADR-0022)。
+        let brews = query::purchase_brews_delete(USER_ID, SHOP_ID);
         assert_eq!(
             brews.sql,
-            "DELETE FROM brews WHERE user_id = ? AND purchase_id IN \
-             (SELECT id FROM purchases WHERE product_id = ? AND user_id = ?)"
+            "DELETE FROM brews WHERE purchase_id = ? AND user_id = ?"
         );
         assert_eq!(
             brews.params,
             vec![
-                Value::Text(USER_ID.to_owned()),
                 Value::Text(SHOP_ID.to_owned()),
                 Value::Text(USER_ID.to_owned()),
             ]
         );
 
-        let purchases = query::product_purchases_delete(USER_ID, SHOP_ID);
+        let tags = query::delete_purchase_flavor_tags(USER_ID, SHOP_ID);
         assert_eq!(
-            purchases.sql,
-            "DELETE FROM purchases WHERE product_id = ? AND user_id = ?"
+            tags.sql,
+            "DELETE FROM purchase_flavor_tags WHERE purchase_id = ? AND user_id = ?"
         );
         assert_eq!(
-            purchases.params,
+            tags.params,
             vec![
                 Value::Text(SHOP_ID.to_owned()),
                 Value::Text(USER_ID.to_owned()),
             ]
-        );
-
-        let keys = query::product_purchase_photo_keys(USER_ID, SHOP_ID);
-        assert_eq!(
-            keys.sql,
-            "SELECT photo_key FROM purchases \
-             WHERE product_id = ? AND user_id = ? AND photo_key IS NOT NULL"
-        );
-        assert_eq!(
-            keys.params,
-            vec![
-                Value::Text(SHOP_ID.to_owned()),
-                Value::Text(USER_ID.to_owned()),
-            ]
-        );
-
-        let purchase_brews = query::purchase_brews_delete(USER_ID, SHOP_ID);
-        assert_eq!(
-            purchase_brews.sql,
-            "DELETE FROM brews WHERE purchase_id = ? AND user_id = ?"
         );
     }
 
@@ -1295,19 +1238,19 @@ mod deletion_queries {
             purchases.sql,
             "SELECT COUNT(*) AS count FROM brews WHERE purchase_id = ? AND user_id = ?"
         );
-
-        let products = query::product_delete_impact(USER_ID, SHOP_ID);
-        assert!(products.sql.contains("AS purchases"), "{}", products.sql);
-        assert!(products.sql.contains("AS brews"), "{}", products.sql);
-        assert_eq!(products.params.len(), 5);
-        let placeholders = products.sql.matches('?').count();
-        assert_eq!(placeholders, products.params.len());
+        assert_eq!(
+            purchases.params,
+            vec![
+                Value::Text(SHOP_ID.to_owned()),
+                Value::Text(USER_ID.to_owned()),
+            ]
+        );
     }
 }
 
 mod conditions {
     use super::*;
-    use brew_book_core::query::{self, BrewValues, ProductValues, PurchaseValues, ShopValues};
+    use brew_book_core::query::{self, BrewValues, PurchaseValues, ShopValues};
 
     /// 検査の対象にする文の種類。
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1342,403 +1285,311 @@ mod conditions {
 
     /// モジュールが組み立てる文の一覧。
     fn every_statement() -> Vec<Checked> {
-        let mut checked = Vec::new();
-        checked.push(Checked {
-            name: "shops list",
-            statement: query::shops_list(
-                USER_ID,
-                SortKey::CreatedAt,
-                SortOrder::Desc,
-                false,
-                None,
-                50,
-            )
-            .unwrap(),
-            kind: Kind::List,
-        });
-        checked.push(Checked {
-            name: "products list",
-            statement: query::products_list(
-                USER_ID,
-                SortKey::CreatedAt,
-                SortOrder::Desc,
-                false,
-                None,
-                50,
-                None,
-            )
-            .unwrap(),
-            kind: Kind::List,
-        });
-        checked.push(Checked {
-            name: "products list with a name and favorites",
-            statement: query::products_list(
-                USER_ID,
-                SortKey::Name,
-                SortOrder::Asc,
-                true,
-                None,
-                50,
-                Some("名前"),
-            )
-            .unwrap(),
-            kind: Kind::List,
-        });
         let cursor = CursorKey {
             sort: SortKey::CreatedAt,
             order: SortOrder::Desc,
             value: Some(CursorValue::Text(AT.to_owned())),
             id: SHOP_ID.to_owned(),
         };
-        checked.push(Checked {
-            name: "purchases list",
-            statement: query::purchases_list(
-                USER_ID,
-                SortKey::PurchasedOn,
-                SortOrder::Desc,
-                false,
-                None,
-                50,
-            )
-            .unwrap(),
-            kind: Kind::List,
-        });
-        checked.push(Checked {
-            name: "brews list",
-            statement: query::brews_list(
-                USER_ID,
-                SortKey::BrewedAt,
-                SortOrder::Desc,
-                false,
-                None,
-                50,
-            )
-            .unwrap(),
-            kind: Kind::List,
-        });
-        checked.push(Checked {
-            name: "purchases list with a date cursor",
-            statement: query::purchases_list(
-                USER_ID,
-                SortKey::PurchasedOn,
-                SortOrder::Desc,
-                false,
-                Some(CursorKey {
-                    sort: SortKey::PurchasedOn,
-                    order: SortOrder::Desc,
-                    value: Some(CursorValue::Text("2026-09-21".to_owned())),
-                    id: SHOP_ID.to_owned(),
-                }),
-                50,
-            )
-            .unwrap(),
-            kind: Kind::List,
-        });
-        checked.push(Checked {
-            name: "brews list with a cursor",
-            statement: query::brews_list(
-                USER_ID,
-                SortKey::BrewedAt,
-                SortOrder::Desc,
-                false,
-                Some(CursorKey {
-                    sort: SortKey::BrewedAt,
-                    order: SortOrder::Desc,
-                    value: Some(CursorValue::Text(AT.to_owned())),
-                    id: SHOP_ID.to_owned(),
-                }),
-                50,
-            )
-            .unwrap(),
-            kind: Kind::List,
-        });
-        checked.push(Checked {
-            name: "purchase find",
-            statement: query::purchase_find(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "brew find",
-            statement: query::brew_find(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "purchase insert",
-            statement: query::purchase_insert(
-                SHOP_ID,
-                USER_ID,
-                &PurchaseValues {
-                    product_id: "product-1",
-                    shop_id: None,
-                    purchased_on: "2026-09-21",
-                    roast: None,
-                    roast_date: None,
-                    price_amount: None,
-                    price_currency: None,
-                    weight_grams: None,
-                },
-                AT,
-                AT,
-            )
-            .unwrap(),
-            kind: Kind::Insert,
-        });
-        checked.push(Checked {
-            name: "purchase update",
-            statement: query::purchase_update(
-                SHOP_ID,
-                USER_ID,
-                &PurchaseValues {
-                    product_id: "product-1",
-                    shop_id: None,
-                    purchased_on: "2026-09-21",
-                    roast: None,
-                    roast_date: None,
-                    price_amount: None,
-                    price_currency: None,
-                    weight_grams: None,
-                },
-                AT,
-            )
-            .unwrap(),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "brew insert",
-            statement: query::brew_insert(
-                SHOP_ID,
-                USER_ID,
-                &BrewValues {
-                    purchase_id: "purchase-1",
-                    brewed_at: AT,
-                    dose_grams: Some(15.5),
-                    water_grams: None,
-                    water_temp_c: None,
-                    brew_time_seconds: None,
-                    method: None,
-                    grind_setting: None,
-                    rating: None,
-                    notes: None,
-                },
-                AT,
-                AT,
-            )
-            .unwrap(),
-            kind: Kind::Insert,
-        });
-        checked.push(Checked {
-            name: "brew update",
-            statement: query::brew_update(
-                SHOP_ID,
-                USER_ID,
-                &BrewValues {
-                    purchase_id: "purchase-1",
-                    brewed_at: AT,
-                    dose_grams: None,
-                    water_grams: None,
-                    water_temp_c: None,
-                    brew_time_seconds: None,
-                    method: None,
-                    grind_setting: None,
-                    rating: None,
-                    notes: None,
-                },
-                AT,
-            )
-            .unwrap(),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "shops list with a cursor",
-            statement: query::shops_list(
-                USER_ID,
-                SortKey::CreatedAt,
-                SortOrder::Desc,
-                false,
-                Some(cursor.clone()),
-                50,
-            )
-            .unwrap(),
-            kind: Kind::List,
-        });
-        checked.push(Checked {
-            name: "products list with a cursor",
-            statement: query::products_list(
-                USER_ID,
-                SortKey::CreatedAt,
-                SortOrder::Desc,
-                false,
-                Some(cursor),
-                50,
-                None,
-            )
-            .unwrap(),
-            kind: Kind::List,
-        });
-        checked.push(Checked {
-            name: "set the favorite",
-            statement: query::set_favorited_at(query::SHOPS_TABLE, SHOP_ID, USER_ID, Some(AT), AT),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "shop delete",
-            statement: query::shop_delete(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "shop clear purchases",
-            statement: query::shop_clear_purchases(USER_ID, SHOP_ID, AT),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "shop delete impact",
-            statement: query::shop_delete_impact(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "product delete",
-            statement: query::product_delete(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "product brews delete",
-            statement: query::product_brews_delete(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "product purchases delete",
-            statement: query::product_purchases_delete(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "product purchase photo keys",
-            statement: query::product_purchase_photo_keys(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "product delete impact",
-            statement: query::product_delete_impact(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "purchase delete",
-            statement: query::purchase_delete(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "purchase brews delete",
-            statement: query::purchase_brews_delete(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "purchase delete impact",
-            statement: query::purchase_delete_impact(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "brew delete",
-            statement: query::brew_delete(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "shop find",
-            statement: query::shop_find(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "product find",
-            statement: query::product_find(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "shop insert",
-            statement: query::shop_insert(
-                SHOP_ID,
-                USER_ID,
-                &ShopValues {
-                    name: "店",
-                    address: None,
-                },
-                AT,
-                AT,
-            )
-            .unwrap(),
-            kind: Kind::Insert,
-        });
-        checked.push(Checked {
-            name: "product insert",
-            statement: query::product_insert(
-                SHOP_ID,
-                USER_ID,
-                &ProductValues {
-                    name: "豆",
-                    producer: None,
-                    origin: None,
-                    region: None,
-                    process: None,
-                    variety: None,
-                },
-                AT,
-                AT,
-            )
-            .unwrap(),
-            kind: Kind::Insert,
-        });
-        checked.push(Checked {
-            name: "shop update",
-            statement: query::shop_update(
-                SHOP_ID,
-                USER_ID,
-                &ShopValues {
-                    name: "店",
-                    address: None,
-                },
-                AT,
-            )
-            .unwrap(),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "product update",
-            statement: query::product_update(
-                SHOP_ID,
-                USER_ID,
-                &ProductValues {
-                    name: "豆",
-                    producer: None,
-                    origin: None,
-                    region: None,
-                    process: None,
-                    variety: None,
-                },
-                AT,
-            )
-            .unwrap(),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "delete the product flavor tags",
-            statement: query::delete_product_flavor_tags(USER_ID, SHOP_ID),
-            kind: Kind::Row,
-        });
-        checked.push(Checked {
-            name: "insert a flavor tag",
-            statement: query::insert_flavor_tag(SHOP_ID, USER_ID, "チョコ"),
-            kind: Kind::Insert,
-        });
-        checked.push(Checked {
-            name: "insert a product flavor tag",
-            statement: query::insert_product_flavor_tag(USER_ID, SHOP_ID, "チョコ"),
-            kind: Kind::Insert,
-        });
-        checked.push(Checked {
-            name: "flavor tags list",
-            statement: query::flavor_tags_list(USER_ID),
-            kind: Kind::Row,
-        });
-        for statement in query::product_flavor_notes(USER_ID, &[SHOP_ID]) {
+        let mut checked = vec![
+            Checked {
+                name: "shops list",
+                statement: query::shops_list(
+                    USER_ID,
+                    SortKey::CreatedAt,
+                    SortOrder::Desc,
+                    false,
+                    None,
+                    50,
+                )
+                .unwrap(),
+                kind: Kind::List,
+            },
+            Checked {
+                name: "purchases list",
+                statement: query::purchases_list(
+                    USER_ID,
+                    SortKey::PurchasedOn,
+                    SortOrder::Desc,
+                    false,
+                    None,
+                    50,
+                )
+                .unwrap(),
+                kind: Kind::List,
+            },
+            Checked {
+                name: "brews list",
+                statement: query::brews_list(
+                    USER_ID,
+                    SortKey::BrewedAt,
+                    SortOrder::Desc,
+                    false,
+                    None,
+                    50,
+                )
+                .unwrap(),
+                kind: Kind::List,
+            },
+            Checked {
+                name: "purchases list with a date cursor",
+                statement: query::purchases_list(
+                    USER_ID,
+                    SortKey::PurchasedOn,
+                    SortOrder::Desc,
+                    false,
+                    Some(CursorKey {
+                        sort: SortKey::PurchasedOn,
+                        order: SortOrder::Desc,
+                        value: Some(CursorValue::Text("2026-09-21".to_owned())),
+                        id: SHOP_ID.to_owned(),
+                    }),
+                    50,
+                )
+                .unwrap(),
+                kind: Kind::List,
+            },
+            Checked {
+                name: "brews list with a cursor",
+                statement: query::brews_list(
+                    USER_ID,
+                    SortKey::BrewedAt,
+                    SortOrder::Desc,
+                    false,
+                    Some(CursorKey {
+                        sort: SortKey::BrewedAt,
+                        order: SortOrder::Desc,
+                        value: Some(CursorValue::Text(AT.to_owned())),
+                        id: SHOP_ID.to_owned(),
+                    }),
+                    50,
+                )
+                .unwrap(),
+                kind: Kind::List,
+            },
+            Checked {
+                name: "purchase find",
+                statement: query::purchase_find(USER_ID, SHOP_ID),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "brew find",
+                statement: query::brew_find(USER_ID, SHOP_ID),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "purchase insert",
+                statement: query::purchase_insert(
+                    SHOP_ID,
+                    USER_ID,
+                    &PurchaseValues {
+                        name: "豆",
+                        producer: None,
+                        origin: None,
+                        region: None,
+                        process: None,
+                        variety: None,
+                        shop_id: None,
+                        purchased_on: "2026-09-21",
+                        roast: None,
+                        roast_date: None,
+                        price_amount: None,
+                        price_currency: None,
+                        weight_grams: None,
+                    },
+                    AT,
+                    AT,
+                )
+                .unwrap(),
+                kind: Kind::Insert,
+            },
+            Checked {
+                name: "purchase update",
+                statement: query::purchase_update(
+                    SHOP_ID,
+                    USER_ID,
+                    &PurchaseValues {
+                        name: "豆",
+                        producer: None,
+                        origin: None,
+                        region: None,
+                        process: None,
+                        variety: None,
+                        shop_id: None,
+                        purchased_on: "2026-09-21",
+                        roast: None,
+                        roast_date: None,
+                        price_amount: None,
+                        price_currency: None,
+                        weight_grams: None,
+                    },
+                    AT,
+                )
+                .unwrap(),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "brew insert",
+                statement: query::brew_insert(
+                    SHOP_ID,
+                    USER_ID,
+                    &BrewValues {
+                        purchase_id: "purchase-1",
+                        brewed_at: AT,
+                        dose_grams: Some(15.5),
+                        water_grams: None,
+                        water_temp_c: None,
+                        brew_time_seconds: None,
+                        method: None,
+                        grind_setting: None,
+                        rating: None,
+                        notes: None,
+                    },
+                    AT,
+                    AT,
+                )
+                .unwrap(),
+                kind: Kind::Insert,
+            },
+            Checked {
+                name: "brew update",
+                statement: query::brew_update(
+                    SHOP_ID,
+                    USER_ID,
+                    &BrewValues {
+                        purchase_id: "purchase-1",
+                        brewed_at: AT,
+                        dose_grams: None,
+                        water_grams: None,
+                        water_temp_c: None,
+                        brew_time_seconds: None,
+                        method: None,
+                        grind_setting: None,
+                        rating: None,
+                        notes: None,
+                    },
+                    AT,
+                )
+                .unwrap(),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "shops list with a cursor",
+                statement: query::shops_list(
+                    USER_ID,
+                    SortKey::CreatedAt,
+                    SortOrder::Desc,
+                    false,
+                    Some(cursor),
+                    50,
+                )
+                .unwrap(),
+                kind: Kind::List,
+            },
+            Checked {
+                name: "set the favorite",
+                statement: query::set_favorited_at(
+                    query::SHOPS_TABLE,
+                    SHOP_ID,
+                    USER_ID,
+                    Some(AT),
+                    AT,
+                ),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "shop delete",
+                statement: query::shop_delete(USER_ID, SHOP_ID),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "shop clear purchases",
+                statement: query::shop_clear_purchases(USER_ID, SHOP_ID, AT),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "shop delete impact",
+                statement: query::shop_delete_impact(USER_ID, SHOP_ID),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "purchase delete",
+                statement: query::purchase_delete(USER_ID, SHOP_ID),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "purchase brews delete",
+                statement: query::purchase_brews_delete(USER_ID, SHOP_ID),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "purchase delete impact",
+                statement: query::purchase_delete_impact(USER_ID, SHOP_ID),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "brew delete",
+                statement: query::brew_delete(USER_ID, SHOP_ID),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "shop find",
+                statement: query::shop_find(USER_ID, SHOP_ID),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "shop insert",
+                statement: query::shop_insert(
+                    SHOP_ID,
+                    USER_ID,
+                    &ShopValues {
+                        name: "店",
+                        address: None,
+                    },
+                    AT,
+                    AT,
+                )
+                .unwrap(),
+                kind: Kind::Insert,
+            },
+            Checked {
+                name: "shop update",
+                statement: query::shop_update(
+                    SHOP_ID,
+                    USER_ID,
+                    &ShopValues {
+                        name: "店",
+                        address: None,
+                    },
+                    AT,
+                )
+                .unwrap(),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "delete the purchase flavor tags",
+                statement: query::delete_purchase_flavor_tags(USER_ID, SHOP_ID),
+                kind: Kind::Row,
+            },
+            Checked {
+                name: "insert a flavor tag",
+                statement: query::insert_flavor_tag(SHOP_ID, USER_ID, "チョコ"),
+                kind: Kind::Insert,
+            },
+            Checked {
+                name: "insert a purchase flavor tag",
+                statement: query::insert_purchase_flavor_tag(USER_ID, SHOP_ID, "チョコ"),
+                kind: Kind::Insert,
+            },
+            Checked {
+                name: "flavor tags list",
+                statement: query::flavor_tags_list(USER_ID),
+                kind: Kind::Row,
+            },
+        ];
+        for statement in query::purchase_flavor_notes(USER_ID, &[SHOP_ID]) {
             checked.push(Checked {
-                name: "product flavor notes",
+                name: "purchase flavor notes",
                 statement,
                 kind: Kind::Row,
             });
@@ -1748,18 +1599,12 @@ mod conditions {
             statement: query::suggestions(USER_ID, query::SuggestionItem::Producer, "エチ"),
             kind: Kind::List,
         });
-        // エクスポート (FR-14)。6 テーブルの全行を引く。
+        // エクスポート (FR-14)。5 テーブルの全行を引く (ADR-0022)。
         for (name, table, columns, order_by) in [
             (
                 "export the shops",
                 query::SHOPS_TABLE,
                 query::SHOP_COLUMNS,
-                "id ASC",
-            ),
-            (
-                "export the products",
-                query::PRODUCTS_TABLE,
-                query::PRODUCT_COLUMNS,
                 "id ASC",
             ),
             (
@@ -1769,10 +1614,10 @@ mod conditions {
                 "id ASC",
             ),
             (
-                "export the product flavor tags",
-                query::PRODUCT_FLAVOR_TAGS_TABLE,
-                query::PRODUCT_FLAVOR_TAG_COLUMNS,
-                "product_id ASC, tag_id ASC",
+                "export the purchase flavor tags",
+                query::PURCHASE_FLAVOR_TAGS_TABLE,
+                query::PURCHASE_FLAVOR_TAG_COLUMNS,
+                "purchase_id ASC, tag_id ASC",
             ),
             (
                 "export the purchases",

@@ -1,9 +1,9 @@
 //! 購入の登録と編集の画面 (FR-9、FR-10、FR-19)。
 //!
-//! 商品は必須で、店は省略できる。購入日は端末のタイムゾーンでの当日を既定値にする (FR-9)。
-//! 写真は選択した時点では変換と推測だけを行い、購入を保存した後にアップロードする
-//! (FR-10、ADR-0003)。推測は空の入力欄にだけ入れ、一致する商品が無いときは登録の導線を出す
-//! (FR-19)。
+//! 商品名は必須で、店は省略できる。商品の項目 (生産者、生産国、地域、精製方法、品種、
+//! Flavor Notes) も購入のフォームが持つ (ADR-0022)。購入日は端末のタイムゾーンでの当日を
+//! 既定値にする (FR-9)。写真は選択した時点では変換と推測だけを行い、購入を保存した後に
+//! アップロードする (FR-10、ADR-0003)。推測できた項目は入力済みの値も置き換える (FR-19)。
 
 use dioxus::prelude::*;
 use dioxus_router::navigator;
@@ -11,20 +11,20 @@ use dioxus_router::navigator;
 use crate::i18n::{current_language, t, Key};
 use crate::records::values::format_day;
 use crate::records::{
-    apply_purchase_suggestion, currency_option_label, currency_options,
-    product_match as decide_product_match, record_error_key, save_target, suggested_product_name,
-    validate_purchase_form, ConvertedImage, ListOptions, Product, ProductMatch, ProductSuggestion,
-    PurchaseFormErrors, PurchaseFormValues, RecordError, RecordServices, RecordsApi, SaveTarget,
-    Shop, DEFAULT_CURRENCY, MAX_PHOTO_BYTES, MAX_PHOTO_LONG_SIDE,
+    apply_purchase_suggestion, currency_option_label, currency_options, save_target,
+    validate_purchase_form, ConvertedImage, PurchaseFormErrors, PurchaseFormFields,
+    PurchaseFormValues, RecordError, RecordServices, RecordsApi, SaveTarget, Shop,
+    SuggestionTarget, DEFAULT_CURRENCY, MAX_PHOTO_BYTES, MAX_PHOTO_LONG_SIDE,
 };
 use crate::screens::ScreenAppBar;
 use crate::ui::{
-    Banner, Button, ButtonSize, ButtonVariant, Field, Icon, ListRow, TextField, TextFieldKind,
+    Banner, Button, ButtonSize, ButtonVariant, Chip, ChipVariant, Field, Icon, ListRow, TextField,
+    TextFieldKind,
 };
 
 use super::{
     clear_notice_after, mark_records_changed, photo_preview_url, retryable_banner, DiscardConfirm,
-    RecordLoader, RecordPickerSheet,
+    RecordLoader, RecordPickerSheet, SuggestionField,
 };
 
 /// 購入の登録 (FR-9)。
@@ -69,7 +69,14 @@ pub fn PurchaseForm(
 
     // 購入日は端末のタイムゾーンでの当日を既定値にする (FR-9)。
     let today = services.clock.now().date();
-    let mut product = use_signal(|| None::<Product>);
+    let mut name = use_signal(String::new);
+    let mut producer = use_signal(String::new);
+    let mut origin = use_signal(String::new);
+    let mut region = use_signal(String::new);
+    let mut process = use_signal(String::new);
+    let mut variety = use_signal(String::new);
+    let mut tags = use_signal(Vec::<String>::new);
+    let mut tag_input = use_signal(String::new);
     let mut shop = use_signal(|| None::<Shop>);
     let mut purchased_on = use_signal(|| format_day(today));
     let mut roast = use_signal(String::new);
@@ -86,24 +93,13 @@ pub fn PurchaseForm(
     let mut load_error = use_signal(|| None::<RecordError>);
     let mut loading = use_signal(|| id.is_some());
     let mut busy = use_signal(|| false);
-    let mut picker = use_signal(|| None::<PickerKind>);
+    let mut picker_open = use_signal(|| false);
     let mut suggesting = use_signal(|| false);
     let mut suggestion_failed = use_signal(|| false);
-    let mut unmatched_product = use_signal(|| None::<ProductSuggestion>);
     let mut suggestion_generation = use_signal(|| 0_u64);
     let mut created_id = use_signal(|| None::<String>);
     let mut dirty = use_signal(|| false);
     let mut discard_open = use_signal(|| false);
-    // 推測した内容で商品を登録する導線の入力 (FR-19)。
-    let mut register_open = use_signal(|| false);
-    let mut draft_name = use_signal(String::new);
-    let mut draft_producer = use_signal(String::new);
-    let mut draft_origin = use_signal(String::new);
-    let mut draft_region = use_signal(String::new);
-    let mut draft_process = use_signal(String::new);
-    let mut draft_variety = use_signal(String::new);
-    let mut draft_tags = use_signal(Vec::<String>::new);
-    let mut draft_error = use_signal(|| None::<RecordError>);
 
     // 編集のために現在の値を読み込む。再試行でも同じ処理を呼ぶ。
     let reload_services = services.clone();
@@ -118,7 +114,13 @@ pub fn PurchaseForm(
             load_error.set(None);
             match api.purchase(&id).await {
                 Ok(purchase) => {
-                    product.set(Some(purchase.product.clone()));
+                    name.set(purchase.name.clone());
+                    producer.set(purchase.producer.clone().unwrap_or_default());
+                    origin.set(purchase.origin.clone().unwrap_or_default());
+                    region.set(purchase.region.clone().unwrap_or_default());
+                    process.set(purchase.process.clone().unwrap_or_default());
+                    variety.set(purchase.variety.clone().unwrap_or_default());
+                    tags.set(purchase.flavor_notes.clone());
                     shop.set(purchase.shop.clone());
                     purchased_on.set(purchase.purchased_on.clone());
                     roast.set(purchase.roast.clone().unwrap_or_default());
@@ -158,7 +160,6 @@ pub fn PurchaseForm(
         // 写真を選び直した時点で世代を進め、飛んでいる古い応答を無効にする (FR-19)。
         let generation = suggestion_generation() + 1;
         suggestion_generation.set(generation);
-        unmatched_product.set(None);
         // 5 MB を超える写真では推測を呼ばない (FR-19)。
         if image.size() > MAX_PHOTO_BYTES {
             suggesting.set(false);
@@ -182,54 +183,45 @@ pub fn PurchaseForm(
             if suggestion_generation() != generation {
                 return;
             }
-            // 推測の反映は、商品の照合の成否と独立に行う (照合の失敗で推測を捨てない)。
+            // 推測できた項目は入力済みの値も置き換える (FR-19、ADR-0022)。
+            let mut name_value = name();
+            let mut producer_value = producer();
+            let mut origin_value = origin();
+            let mut region_value = region();
+            let mut process_value = process();
+            let mut variety_value = variety();
+            let mut tags_value = tags();
             let mut roast_value = roast();
             let mut roast_date_value = roast_date();
             let mut price_value = price();
             let mut weight_value = weight();
             apply_purchase_suggestion(
-                &mut roast_value,
-                &mut roast_date_value,
-                &mut price_value,
-                &mut weight_value,
+                PurchaseFormFields {
+                    name: &mut name_value,
+                    producer: &mut producer_value,
+                    origin: &mut origin_value,
+                    region: &mut region_value,
+                    process: &mut process_value,
+                    variety: &mut variety_value,
+                    flavor_notes: &mut tags_value,
+                    roast: &mut roast_value,
+                    roast_date: &mut roast_date_value,
+                    price: &mut price_value,
+                    weight: &mut weight_value,
+                },
                 &suggestion,
             );
+            name.set(name_value);
+            producer.set(producer_value);
+            origin.set(origin_value);
+            region.set(region_value);
+            process.set(process_value);
+            variety.set(variety_value);
+            tags.set(tags_value);
             roast.set(roast_value);
             roast_date.set(roast_date_value);
             price.set(price_value);
             weight.set(weight_value);
-
-            // 商品が未選択のときだけ、推測した商品名に一致する商品を探す (FR-19)。
-            let name = suggestion.product.as_ref().and_then(suggested_product_name);
-            if product().is_some() || name.is_none() {
-                suggesting.set(false);
-                unmatched_product.set(None);
-                return;
-            }
-            let matched = match api
-                .products(&ListOptions::default(), None, name.as_deref())
-                .await
-            {
-                Ok(page) => page.items.into_iter().next(),
-                Err(_) => {
-                    if suggestion_generation() == generation {
-                        suggesting.set(false);
-                        unmatched_product.set(None);
-                    }
-                    return;
-                }
-            };
-            if suggestion_generation() != generation {
-                return;
-            }
-            match decide_product_match(product().is_some(), &suggestion, matched) {
-                ProductMatch::Select(matched) => {
-                    product.set(Some(matched));
-                    unmatched_product.set(None);
-                }
-                ProductMatch::Register(suggested) => unmatched_product.set(Some(suggested)),
-                ProductMatch::None => unmatched_product.set(None),
-            }
             suggesting.set(false);
         });
     });
@@ -269,7 +261,6 @@ pub fn PurchaseForm(
         suggestion_generation.set(suggestion_generation() + 1);
         suggesting.set(false);
         suggestion_failed.set(false);
-        unmatched_product.set(None);
         picked.set(None);
         if photo_key().is_some() {
             remove_photo.set(true);
@@ -277,38 +268,19 @@ pub fn PurchaseForm(
         dirty.set(true);
     });
 
-    // 推測した内容で商品を登録する (FR-19)。
-    let register_services = services.clone();
-    let register_product = EventHandler::new(move |_| {
-        let input = match crate::records::validate_product_form(
-            &draft_name(),
-            &draft_producer(),
-            &draft_origin(),
-            &draft_region(),
-            &draft_process(),
-            &draft_variety(),
-            &draft_tags(),
-        ) {
-            Ok(input) => input,
-            Err(key) => {
-                draft_error.set(Some(RecordError::Validation(key)));
-                return;
-            }
-        };
-        let api = RecordsApi::new(register_services.api.clone());
-        draft_error.set(None);
-        spawn(async move {
-            match api.create_product(&input).await {
-                Ok(created) => {
-                    product.set(Some(created));
-                    unmatched_product.set(None);
-                    register_open.set(false);
-                    dirty.set(true);
-                    mark_records_changed(&mut revision);
-                }
-                Err(failure) => draft_error.set(Some(failure)),
-            }
-        });
+    // Flavor Notes のタグを足す (FR-8)。同じ名前は 1 つにまとめる。
+    let add_tag = EventHandler::new(move |_| {
+        let value = tag_input().trim().to_string();
+        if value.is_empty() {
+            return;
+        }
+        let mut current = tags();
+        if !current.contains(&value) {
+            current.push(value);
+            tags.set(current);
+            dirty.set(true);
+        }
+        tag_input.set(String::new());
     });
 
     let save_services = services.clone();
@@ -317,7 +289,13 @@ pub fn PurchaseForm(
         if busy() {
             return;
         }
-        let current_product = product();
+        let name_value = name();
+        let producer_value = producer();
+        let origin_value = origin();
+        let region_value = region();
+        let process_value = process();
+        let variety_value = variety();
+        let tags_value = tags();
         let current_shop = shop();
         let purchased_on_value = purchased_on();
         let roast_value = roast();
@@ -326,7 +304,13 @@ pub fn PurchaseForm(
         let currency_value = currency();
         let weight_value = weight();
         let input = match validate_purchase_form(PurchaseFormValues {
-            product: current_product.as_ref(),
+            name: &name_value,
+            producer: &producer_value,
+            origin: &origin_value,
+            region: &region_value,
+            process: &process_value,
+            variety: &variety_value,
+            flavor_notes: &tags_value,
             shop: current_shop.as_ref(),
             purchased_on: &purchased_on_value,
             roast: &roast_value,
@@ -399,37 +383,13 @@ pub fn PurchaseForm(
         });
     });
 
-    // 参照先の選択のシートの一覧 (FR-9)。
+    // 店の選択のシートの一覧 (FR-9)。
     let picker_services = services.clone();
-    let product_load = RecordLoader::new({
-        let services = picker_services.clone();
-        move |cursor, options| {
-            let api = RecordsApi::new(services.api.clone());
-            Box::pin(async move { api.products(&options, cursor.as_deref(), None).await })
-        }
-    });
     let shop_load = RecordLoader::new({
         let services = picker_services.clone();
         move |cursor, options| {
             let api = RecordsApi::new(services.api.clone());
             Box::pin(async move { api.shops(&options, cursor.as_deref()).await })
-        }
-    });
-    let product_row = Callback::new(move |choice: Product| {
-        let subtitle = choice.producer.clone().filter(|value| !value.is_empty());
-        let selected = choice.clone();
-        rsx! {
-            ListRow {
-                title: choice.name.clone(),
-                subtitle: subtitle.map(|text| rsx! { span { "{text}" } }),
-                on_click: Some(EventHandler::new(move |_| {
-                    product.set(Some(selected.clone()));
-                    unmatched_product.set(None);
-                    errors.set(PurchaseFormErrors::default());
-                    picker.set(None);
-                    dirty.set(true);
-                })),
-            }
         }
     });
     let shop_row = Callback::new(move |choice: Shop| {
@@ -441,7 +401,7 @@ pub fn PurchaseForm(
                 subtitle: subtitle.map(|text| rsx! { span { "{text}" } }),
                 on_click: Some(EventHandler::new(move |_| {
                     shop.set(Some(selected.clone()));
-                    picker.set(None);
+                    picker_open.set(false);
                     dirty.set(true);
                 })),
             }
@@ -475,11 +435,8 @@ pub fn PurchaseForm(
         services.api.base_path(),
         id.clone().or(created_id()).unwrap_or_default()
     );
-    let current_product = product();
     let current_shop = shop();
-    let unmatched = unmatched_product();
     let currencies = currency_options(Some(&currency()));
-    let register_failure = draft_error();
 
     rsx! {
         div { class: "screen",
@@ -511,55 +468,104 @@ pub fn PurchaseForm(
                         if errors().has_errors() {
                             Banner { message: t(Key::ErrorValidation).to_string() }
                         }
-                        div {
-                            class: "picker",
-                            role: "button",
-                            tabindex: "0",
-                            onclick: move |_| picker.set(Some(PickerKind::Product)),
-                            div { class: "main",
-                                div { class: "k",
-                                    "{t(Key::ProductLabel)}"
-                                    span { class: "req", "{t(Key::RequiredLabel)}" }
-                                }
-                                div { class: "n",
-                                    if let Some(product) = current_product.clone() {
-                                        "{product.name}"
-                                    } else {
-                                        span { class: "faint", "{t(Key::SelectProductTitle)}" }
-                                    }
-                                }
-                            }
-                            Icon { name: "chevron_right".to_string(), muted: true }
-                        }
-                        if let Some(key) = errors().product {
-                            div { class: "field-error", "{t(key)}" }
-                        }
-                        if let Some(suggested) = unmatched.clone() {
-                            Button {
-                                label: t(Key::SuggestionRegisterProductButton).to_string(),
-                                variant: ButtonVariant::Secondary,
-                                size: crate::ui::ButtonSize::Sm,
-                                disabled: busy() || suggesting(),
-                                onclick: move |_| {
-                                    draft_name.set(suggested.name.clone().unwrap_or_default());
-                                    draft_producer.set(suggested.producer.clone().unwrap_or_default());
-                                    draft_origin.set(suggested.origin.clone().unwrap_or_default());
-                                    draft_region.set(suggested.region.clone().unwrap_or_default());
-                                    draft_process.set(suggested.process.clone().unwrap_or_default());
-                                    draft_variety.set(suggested.variety.clone().unwrap_or_default());
-                                    // 推測した Flavor Notes も引き継ぐ (Flutter と同じ。
-                                    // 0041 のレビューの指摘)。
-                                    draft_tags.set(suggested.flavor_notes.clone());
-                                    draft_error.set(None);
-                                    register_open.set(true);
+                        Field {
+                            label: t(Key::ProductNameLabel).to_string(),
+                            required: true,
+                            error: errors().name.map(|key| t(key).to_string()),
+                            disabled: busy(),
+                            TextField {
+                                value: name(),
+                                disabled: busy(),
+                                oninput: move |event: FormEvent| {
+                                    name.set(event.value());
+                                    dirty.set(true);
                                 },
                             }
                         }
+                        SuggestionField {
+                            api: RecordsApi::new(services.api.clone()),
+                            target: SuggestionTarget::Producer,
+                            label: t(Key::Producer).to_string(),
+                            value: producer,
+                            disabled: busy(),
+                            on_change: move |_| dirty.set(true),
+                        }
+                        div { class: "grid2",
+                            SuggestionField {
+                                api: RecordsApi::new(services.api.clone()),
+                                target: SuggestionTarget::Origin,
+                                label: t(Key::Origin).to_string(),
+                                value: origin,
+                                disabled: busy(),
+                                on_change: move |_| dirty.set(true),
+                            }
+                            SuggestionField {
+                                api: RecordsApi::new(services.api.clone()),
+                                target: SuggestionTarget::Region,
+                                label: t(Key::Region).to_string(),
+                                value: region,
+                                disabled: busy(),
+                                on_change: move |_| dirty.set(true),
+                            }
+                        }
+                        div { class: "grid2",
+                            SuggestionField {
+                                api: RecordsApi::new(services.api.clone()),
+                                target: SuggestionTarget::Process,
+                                label: t(Key::Process).to_string(),
+                                value: process,
+                                disabled: busy(),
+                                on_change: move |_| dirty.set(true),
+                            }
+                            SuggestionField {
+                                api: RecordsApi::new(services.api.clone()),
+                                target: SuggestionTarget::Variety,
+                                label: t(Key::Variety).to_string(),
+                                value: variety,
+                                disabled: busy(),
+                                on_change: move |_| dirty.set(true),
+                            }
+                        }
+                        Field { label: t(Key::FlavorNotes).to_string(), disabled: busy(),
+                            div { class: "chips",
+                                for note in tags() {
+                                    Chip {
+                                        label: note.clone(),
+                                        variant: ChipVariant::Tag,
+                                        on_remove: Some(EventHandler::new(move |_| {
+                                            let removed = note.clone();
+                                            tags.set(
+                                                tags().into_iter().filter(|tag| tag != &removed).collect(),
+                                            );
+                                            dirty.set(true);
+                                        })),
+                                    }
+                                }
+                            }
+                            div { class: "tag-add",
+                                TextField {
+                                    value: tag_input(),
+                                    placeholder: Some(t(Key::TagInputHint).to_string()),
+                                    disabled: busy(),
+                                    oninput: move |event: FormEvent| {
+                                        tag_input.set(event.value());
+                                        dirty.set(true);
+                                    },
+                                }
+                                Button {
+                                    label: t(Key::AddButton).to_string(),
+                                    variant: ButtonVariant::Secondary,
+                                    size: ButtonSize::Sm,
+                                    disabled: busy(),
+                                    onclick: move |_| add_tag.call(()),
+                                }
+                            }
+                        }
                         div {
                             class: "picker",
                             role: "button",
                             tabindex: "0",
-                            onclick: move |_| picker.set(Some(PickerKind::Shop)),
+                            onclick: move |_| picker_open.set(true),
                             div { class: "main",
                                 div { class: "k", "{t(Key::ShopLabel)}" }
                                 div { class: "n",
@@ -589,9 +595,9 @@ pub fn PurchaseForm(
                                 },
                             }
                         }
-                        super::SuggestionField {
+                        SuggestionField {
                             api: RecordsApi::new(services.api.clone()),
-                            target: crate::records::SuggestionTarget::Roast,
+                            target: SuggestionTarget::Roast,
                             label: t(Key::Roast).to_string(),
                             value: roast,
                             disabled: busy(),
@@ -711,106 +717,22 @@ pub fn PurchaseForm(
                 }
             }
         }
-        if let Some(kind) = picker() {
-            if kind == PickerKind::Product {
-                RecordPickerSheet::<Product> {
-                    title: t(Key::SelectProductTitle).to_string(),
-                    load: product_load,
-                    row: product_row,
-                    on_close: EventHandler::new(move |_| picker.set(None)),
-                }
-            } else {
-                RecordPickerSheet::<Shop> {
-                    title: t(Key::SelectShopTitle).to_string(),
-                    load: shop_load,
-                    row: shop_row,
-                    clear_label: Some(t(Key::ShopNoneLabel).to_string()),
-                    on_clear: EventHandler::new(move |_| {
-                        shop.set(None);
-                        picker.set(None);
-                        dirty.set(true);
-                    }),
-                    on_close: EventHandler::new(move |_| picker.set(None)),
-                }
+        if picker_open() {
+            RecordPickerSheet::<Shop> {
+                title: t(Key::SelectShopTitle).to_string(),
+                load: shop_load,
+                row: shop_row,
+                clear_label: Some(t(Key::ShopNoneLabel).to_string()),
+                on_clear: EventHandler::new(move |_| {
+                    shop.set(None);
+                    picker_open.set(false);
+                    dirty.set(true);
+                }),
+                on_close: EventHandler::new(move |_| picker_open.set(false)),
             }
         }
         if discard_open() {
             DiscardConfirm { open: discard_open, on_discard: confirm_discard }
-        }
-        if register_open() {
-            div { class: "sheet-scrim",
-                div { class: "sheet",
-                    div { class: "ttl", "{t(Key::SuggestionRegisterProductButton)}" }
-                    div { class: "body",
-                        div { class: "form",
-                            if let Some(failure) = register_failure {
-                                Banner { message: t(record_error_key(&failure)).to_string() }
-                            }
-                            Field {
-                                label: t(Key::ProductNameLabel).to_string(),
-                                required: true,
-                                disabled: busy(),
-                                TextField {
-                                    value: draft_name(),
-                                    disabled: busy(),
-                                    oninput: move |event: FormEvent| draft_name.set(event.value()),
-                                }
-                            }
-                            Field { label: t(Key::Producer).to_string(), disabled: busy(),
-                                TextField {
-                                    value: draft_producer(),
-                                    disabled: busy(),
-                                    oninput: move |event: FormEvent| draft_producer.set(event.value()),
-                                }
-                            }
-                            div { class: "grid2",
-                                Field { label: t(Key::Origin).to_string(), disabled: busy(),
-                                    TextField {
-                                        value: draft_origin(),
-                                        disabled: busy(),
-                                        oninput: move |event: FormEvent| draft_origin.set(event.value()),
-                                    }
-                                }
-                                Field { label: t(Key::Region).to_string(), disabled: busy(),
-                                    TextField {
-                                        value: draft_region(),
-                                        disabled: busy(),
-                                        oninput: move |event: FormEvent| draft_region.set(event.value()),
-                                    }
-                                }
-                            }
-                            div { class: "grid2",
-                                Field { label: t(Key::Process).to_string(), disabled: busy(),
-                                    TextField {
-                                        value: draft_process(),
-                                        disabled: busy(),
-                                        oninput: move |event: FormEvent| draft_process.set(event.value()),
-                                    }
-                                }
-                                Field { label: t(Key::Variety).to_string(), disabled: busy(),
-                                    TextField {
-                                        value: draft_variety(),
-                                        disabled: busy(),
-                                        oninput: move |event: FormEvent| draft_variety.set(event.value()),
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    div { class: "acts",
-                        Button {
-                            label: t(Key::CancelButton).to_string(),
-                            variant: ButtonVariant::Text,
-                            onclick: move |_| register_open.set(false),
-                        }
-                        Button {
-                            label: t(Key::SaveButton).to_string(),
-                            disabled: busy(),
-                            onclick: move |_| register_product.call(()),
-                        }
-                    }
-                }
-            }
         }
         if let Some(message) = notice() {
             {clear_notice_after(notice)}
@@ -819,13 +741,4 @@ pub fn PurchaseForm(
             }
         }
     }
-}
-
-/// 参照先の選択のシートの種類。
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum PickerKind {
-    /// 商品の選択 (FR-9)。
-    Product,
-    /// 店の選択 (FR-9)。
-    Shop,
 }

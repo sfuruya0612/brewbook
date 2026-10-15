@@ -92,7 +92,7 @@ a { color: var(--link); }
 .ledger .v .u { font-family: var(--font-sans); font-size: 12px; color: var(--ink-muted); margin-left: var(--space-1); }
 .ledger .v.unset { color: var(--ink-faint); font-family: var(--font-sans); }
 
-/* 参照先のタイル (購入、商品、店をたどる) */
+/* 参照先のタイル (購入、店をたどる) */
 .tile { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--roast-soft); color: var(--ink); }
 .tile .k { font-size: 12px; line-height: 16px; color: var(--ink-muted); font-weight: 500; letter-spacing: 0.02em; }
 .tile .n { font-size: 15px; line-height: 22px; font-weight: 600; }

@@ -6,8 +6,8 @@
 
 use brew_book_core::datetime::is_valid_date;
 use brew_book_core::suggestion::{
-    output_text, parse_response, ProductSuggestion, PurchaseSuggestion, MAX_FLAVOR_NOTES,
-    MAX_NAME_CHARS, MAX_TEXT_CHARS,
+    output_text, parse_response, PurchaseSuggestion, MAX_FLAVOR_NOTES, MAX_NAME_CHARS,
+    MAX_TEXT_CHARS,
 };
 use proptest::prelude::*;
 
@@ -21,34 +21,28 @@ fn assert_valid(suggestion: &PurchaseSuggestion) {
             !text.trim().is_empty() && text.chars().count() <= max_chars && text == text.trim()
         })
     };
-    if let Some(product) = &suggestion.product {
+    assert!(
+        text_is_valid(&suggestion.name, MAX_NAME_CHARS),
+        "{suggestion:?}"
+    );
+    for text in [
+        &suggestion.producer,
+        &suggestion.origin,
+        &suggestion.region,
+        &suggestion.process,
+        &suggestion.variety,
+    ] {
+        assert!(text_is_valid(text, MAX_TEXT_CHARS), "{suggestion:?}");
+    }
+    assert!(
+        suggestion.flavor_notes.len() <= MAX_FLAVOR_NOTES,
+        "{suggestion:?}"
+    );
+    for note in &suggestion.flavor_notes {
         assert!(
-            !product.is_empty(),
-            "an empty product must become null: {suggestion:?}"
+            !note.trim().is_empty() && note.chars().count() <= MAX_TEXT_CHARS,
+            "a flavor note must be a short non-empty string: {suggestion:?}"
         );
-        assert!(
-            text_is_valid(&product.name, MAX_NAME_CHARS),
-            "{suggestion:?}"
-        );
-        for text in [
-            &product.producer,
-            &product.origin,
-            &product.region,
-            &product.process,
-            &product.variety,
-        ] {
-            assert!(text_is_valid(text, MAX_TEXT_CHARS), "{suggestion:?}");
-        }
-        assert!(
-            product.flavor_notes.len() <= MAX_FLAVOR_NOTES,
-            "{suggestion:?}"
-        );
-        for note in &product.flavor_notes {
-            assert!(
-                !note.trim().is_empty() && note.chars().count() <= MAX_TEXT_CHARS,
-                "a flavor note must be a short non-empty string: {suggestion:?}"
-            );
-        }
     }
     assert!(
         text_is_valid(&suggestion.roast, MAX_TEXT_CHARS),
@@ -84,46 +78,30 @@ fn json_fragment() -> impl Strategy<Value = String> {
     ]
 }
 
-/// 応答の JSON を、値の型の組み合わせとして作る。
+/// 応答の JSON を、値の型の組み合わせとして作る。商品の項目も平坦に並べる (ADR-0022)。
 fn response_json() -> impl Strategy<Value = String> {
     (
+        proptest::collection::vec(json_fragment(), 6),
         proptest::collection::vec(json_fragment(), 0..4),
-        json_fragment(),
-        json_fragment(),
-        json_fragment(),
-        json_fragment(),
-        json_fragment(),
+        proptest::collection::vec(json_fragment(), 5),
     )
-        .prop_map(|(product, roast, roast_date, price, weight, extra)| {
+        .prop_map(|(texts, flavor_notes, rest)| {
             format!(
-                r#"{{"product": [{}], "roast": {roast}, "roast_date": {roast_date}, "price_amount": {price}, "weight_grams": {weight}, "confidence": {extra}}}"#,
-                product.join(", ")
+                r#"{{"name": {}, "producer": {}, "origin": {}, "region": {}, "process": {}, "variety": {}, "flavor_notes": [{}], "roast": {}, "roast_date": {}, "price_amount": {}, "weight_grams": {}, "confidence": {}}}"#,
+                texts[0],
+                texts[1],
+                texts[2],
+                texts[3],
+                texts[4],
+                texts[5],
+                flavor_notes.join(", "),
+                rest[0],
+                rest[1],
+                rest[2],
+                rest[3],
+                rest[4],
             )
         })
-}
-
-/// 検証を通る商品の候補を作る。名前を必ず持つため、空にならない。
-fn valid_product() -> impl Strategy<Value = ProductSuggestion> {
-    (
-        clean_text(30),
-        prop::option::of(clean_text(30)),
-        prop::option::of(clean_text(30)),
-        prop::option::of(clean_text(30)),
-        prop::option::of(clean_text(30)),
-        prop::option::of(clean_text(30)),
-        proptest::collection::vec(clean_text(20), 0..=MAX_FLAVOR_NOTES),
-    )
-        .prop_map(
-            |(name, producer, origin, region, process, variety, flavor_notes)| ProductSuggestion {
-                name: Some(name),
-                producer,
-                origin,
-                region,
-                process,
-                variety,
-                flavor_notes,
-            },
-        )
 }
 
 /// 実在する日付 (`YYYY-MM-DD`) を作る。日は 28 日までにして、どの月でも実在するようにする。
@@ -135,21 +113,41 @@ fn valid_date() -> impl Strategy<Value = String> {
 /// 検証を通る応答を作る。
 fn valid_suggestion() -> impl Strategy<Value = PurchaseSuggestion> {
     (
-        prop::option::of(valid_product()),
+        (
+            prop::option::of(clean_text(30)),
+            prop::option::of(clean_text(30)),
+            prop::option::of(clean_text(30)),
+            prop::option::of(clean_text(30)),
+            prop::option::of(clean_text(30)),
+            prop::option::of(clean_text(30)),
+            proptest::collection::vec(clean_text(20), 0..=MAX_FLAVOR_NOTES),
+        ),
         prop::option::of(clean_text(30)),
         prop::option::of(valid_date()),
         prop::option::of(0i64..=i64::from(i32::MAX)),
         prop::option::of(0i64..=i64::from(i32::MAX)),
     )
-        .prop_map(|(product, roast, roast_date, price_amount, weight_grams)| {
-            PurchaseSuggestion {
-                product,
+        .prop_map(
+            |(
+                (name, producer, origin, region, process, variety, flavor_notes),
                 roast,
                 roast_date,
                 price_amount,
                 weight_grams,
-            }
-        })
+            )| PurchaseSuggestion {
+                name,
+                producer,
+                origin,
+                region,
+                process,
+                variety,
+                flavor_notes,
+                roast,
+                roast_date,
+                price_amount,
+                weight_grams,
+            },
+        )
 }
 
 /// 応答を、モデルが返すのと同じ形の JSON のテキストにする。
@@ -160,32 +158,24 @@ fn to_json(suggestion: &PurchaseSuggestion) -> String {
         Some(text) => format!("\"{text}\""),
         None => "null".to_owned(),
     };
-    let product = match &suggestion.product {
-        None => "null".to_owned(),
-        Some(product) => {
-            let notes: Vec<String> = product
-                .flavor_notes
-                .iter()
-                .map(|note| format!("\"{note}\""))
-                .collect();
-            format!(
-                r#"{{"name": {}, "producer": {}, "origin": {}, "region": {}, "process": {}, "variety": {}, "flavor_notes": [{}]}}"#,
-                text(&product.name),
-                text(&product.producer),
-                text(&product.origin),
-                text(&product.region),
-                text(&product.process),
-                text(&product.variety),
-                notes.join(", ")
-            )
-        }
-    };
+    let notes: Vec<String> = suggestion
+        .flavor_notes
+        .iter()
+        .map(|note| format!("\"{note}\""))
+        .collect();
     let number = |value: Option<i64>| match value {
         Some(value) => value.to_string(),
         None => "null".to_owned(),
     };
     format!(
-        r#"{{"product": {product}, "roast": {}, "roast_date": {}, "price_amount": {}, "weight_grams": {}}}"#,
+        r#"{{"name": {}, "producer": {}, "origin": {}, "region": {}, "process": {}, "variety": {}, "flavor_notes": [{}], "roast": {}, "roast_date": {}, "price_amount": {}, "weight_grams": {}}}"#,
+        text(&suggestion.name),
+        text(&suggestion.producer),
+        text(&suggestion.origin),
+        text(&suggestion.region),
+        text(&suggestion.process),
+        text(&suggestion.variety),
+        notes.join(", "),
         text(&suggestion.roast),
         text(&suggestion.roast_date),
         number(suggestion.price_amount),

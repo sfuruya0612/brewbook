@@ -2,7 +2,11 @@
 
 Created: 2026-10-03
 Model: DeepSeek V4.1 Flash
-Status: Accepted
+Status: Partially superseded by ADR-0022 (2026-10-14)
+
+ADR-0022 (商品を購入に統合する) が「追記: お気に入り」の最終スキーマの表のうち products、product_flavor_tags、purchases の行と、
+products のインデックスを置き換えた (2026-10-14)。アーカイブの廃止とお気に入りの決定は残る。
+表の商品の行は決定の履歴として残す。
 
 ## 背景
 

@@ -31,22 +31,21 @@ pub use api::{ListOptions, RecordsApi, SortOrder, SuggestionTarget, PAGE_SIZE};
 pub use clock::Clock;
 pub use currencies::{currency_name, currency_option_label, currency_options, DEFAULT_CURRENCY};
 pub use display::{
-    brew_reference_tiles, brew_row_subtitle, count_text, number_text, product_row_subtitle,
-    purchase_price_text, purchase_reference_tiles, purchase_row_subtitle, purchase_tile_name,
-    purchase_weight_text, rating_text, shop_row_subtitle,
+    brew_reference_tiles, brew_row_subtitle, count_text, number_text, purchase_price_text,
+    purchase_reference_tiles, purchase_row_subtitle, purchase_tile_name, purchase_weight_text,
+    rating_text, shop_row_subtitle,
 };
 pub use forms::{
-    apply_purchase_suggestion, optional_text, product_match, save_target, suggested_product_name,
-    validate_brew_form, validate_product_form, validate_purchase_form, validate_shop_form,
-    BrewFormErrors, BrewFormValues, ProductMatch, PurchaseFormErrors, PurchaseFormValues,
-    SaveTarget,
+    apply_purchase_suggestion, dedup_tags, optional_text, save_target, validate_brew_form,
+    validate_purchase_form, validate_shop_form, BrewFormErrors, BrewFormValues, PurchaseFormErrors,
+    PurchaseFormFields, PurchaseFormValues, SaveTarget,
 };
-pub use inputs::{BrewInput, ProductInput, PurchaseInput, ShopInput};
+pub use inputs::{BrewInput, PurchaseInput, ShopInput};
 pub use list::{PageRequest, RecordList, LOAD_MORE_THRESHOLD};
 pub use maps::map_embed_url;
 pub use models::{
-    Brew, DeleteImpact, PhotoUploadTarget, PlaceCandidate, Product, ProductSuggestion, Purchase,
-    PurchaseSuggestion, RecordPage, Shop,
+    Brew, DeleteImpact, PhotoUploadTarget, PlaceCandidate, Purchase, PurchaseSuggestion,
+    RecordPage, Shop,
 };
 #[cfg(target_arch = "wasm32")]
 pub use photo::{create_image_converter, create_photo_picker};

@@ -17,7 +17,7 @@ use brew_book_core::datetime::format_epoch_millis;
 use reqwest::blocking::Response;
 use serde_json::{json, Value};
 use support::http::{error_code, read, ApiClient};
-use support::seed::{user_id, BrewTexts, ProductTexts, Seed};
+use support::seed::{user_id, BrewTexts, PurchaseTexts, Seed};
 use support::ServerLease;
 
 /// 下ごしらえに使う更新日時。値の並び順を決める。
@@ -103,215 +103,252 @@ fn build_data() -> TestData {
     let created = "2026-09-01T00:00:00.000Z";
     let mut seed = Seed::new();
 
-    // サジェストの利用者。商品、購入、抽出に自由記述の値を持たせる。
+    // サジェストの利用者。購入と抽出に自由記述の値を持たせる。
     let user = user_id(1);
     seed.user(&user, "suggestion user", created);
     let session = seed.session(&user, future, created);
 
-    // 商品。Producer、Origin、Region、Process、Variety の候補の検査に使う。
-    seed.product_with_texts(
+    // 購入。Producer、Origin、Region、Process、Variety の候補の検査に使う (ADR-0022)。
+    seed.purchase_with_texts(
         &user,
         "モカの豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("エチオピア モカ"),
             origin: Some("エチオピア"),
             region: Some("イルガチェフェ"),
             process: Some("ウォッシュド"),
             variety: Some("ティピカ"),
+            ..PurchaseTexts::default()
         },
         T21,
         T21,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "シダモの豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("エチオピア シダモ"),
             origin: Some("エチオピア"),
             region: Some("シダモ"),
             variety: Some("ブルボン"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T20,
         T20,
     );
     // 大文字と小文字を区別しない前方一致の検査に使う。
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "エチオピアの豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("Ethiopia"),
             origin: Some("Ethiopia"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T19,
         T19,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "ゲイシャの豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             variety: Some("ゲイシャ"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T19,
         T19,
     );
     // 同じ値の 2 件目が新しいとき、まとめた値は新しい方の更新日時を持つ (FR-13)。
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "もう一つのブルボンの豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             variety: Some("ブルボン"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T22,
         T22,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "別の産地の豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("グアテマラ"),
             origin: Some("グアテマラ"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T18,
         T18,
     );
-    // 自由記述の値が無い商品は候補に出ない。
-    let plain_product = seed.product(&user, "値の無い豆", T17, T17);
     // `%` と `_` と `\` を文字として扱うことの検査に使う。
     // ワイルドカードとして扱われると、先頭が一致するだけの値 (100X アラビカ、abc ロット) や
     // 全ての値が混ざる。
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "百分率の豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("100% アラビカ"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T16,
         T16,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "紛らわしい豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("100X アラビカ"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T16,
         T16,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "百分率から始まる豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("%入りの生産者"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T16,
         T16,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "下線の豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("a_b ロット"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T15,
         T15,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "下線でない豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("abc ロット"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T15,
         T15,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "下線から始まる豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("_入りの生産者"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T15,
         T15,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "円記号の豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("C:\\豆"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T14,
         T14,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "紛らわしい円記号の豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("CX豆"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T14,
         T14,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "円記号から始まる豆",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("\\入りの生産者"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T14,
         T14,
     );
     // 同じ値の重複は 1 つにまとめる (FR-13)。
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "重複の豆 1",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("重複候補"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T21,
         T21,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "重複の豆 2",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("重複候補"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T20,
         T20,
     );
     // 更新日時が同じときは値の昇順 (Unicode コードポイント) で並べる (FR-13)。
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "並びの豆 B",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("並び B"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T13,
         T13,
     );
-    seed.product_with_texts(
+    seed.purchase_with_texts(
         &user,
         "並びの豆 A",
-        ProductTexts {
+        None,
+        D21,
+        PurchaseTexts {
             producer: Some("並び A"),
-            ..ProductTexts::default()
+            ..PurchaseTexts::default()
         },
         T13,
         T13,
@@ -320,50 +357,42 @@ fn build_data() -> TestData {
     for index in 0..OVER_LIMIT_COUNT {
         let producer = format!("順序 {index:02}");
         let updated_at = over_limit_timestamp(index);
-        seed.product_with_texts(
+        seed.purchase_with_texts(
             &user,
             &format!("並び順の豆 {index:02}"),
-            ProductTexts {
+            None,
+            D21,
+            PurchaseTexts {
                 producer: Some(&producer),
-                ..ProductTexts::default()
+                ..PurchaseTexts::default()
             },
             &updated_at,
             &updated_at,
         );
     }
 
-    // 購入。Roast の候補の検査に使う。
-    seed.purchase_with_roast(
-        &user,
-        &plain_product.id,
-        None,
-        D21,
-        Some("中煎り"),
-        T21,
-        T21,
-    );
-    seed.purchase_with_roast(
-        &user,
-        &plain_product.id,
-        None,
-        D21,
-        Some("中深煎り"),
-        T20,
-        T20,
-    );
-    seed.purchase_with_roast(&user, &plain_product.id, None, D21, Some("City"), T19, T19);
+    // Roast の候補の検査に使う購入。
+    for (roast, purchased_on, updated_at) in [
+        ("中煎り", D21, T21),
+        ("中深煎り", D21, T20),
+        ("City", D21, T19),
+        ("深煎り", D17, T17),
+    ] {
+        seed.purchase_with_texts(
+            &user,
+            "ローストの豆",
+            None,
+            purchased_on,
+            PurchaseTexts {
+                roast: Some(roast),
+                ..PurchaseTexts::default()
+            },
+            updated_at,
+            updated_at,
+        );
+    }
     // 自由記述の値が無い購入は候補に出ない。
-    let plain_purchase =
-        seed.purchase_with_roast(&user, &plain_product.id, None, D18, None, T18, T18);
-    seed.purchase_with_roast(
-        &user,
-        &plain_product.id,
-        None,
-        D17,
-        Some("深煎り"),
-        T17,
-        T17,
-    );
+    let plain_purchase = seed.purchase(&user, "値の無い豆", None, D18, T18, T18);
 
     // 抽出。抽出方法と挽き目の候補の検査に使う。
     seed.brew_with_texts(
@@ -413,23 +442,17 @@ fn build_data() -> TestData {
     let other_user = user_id(2);
     seed.user(&other_user, "other user", created);
     let other_session = seed.session(&other_user, future, created);
-    let other_product = seed.product_with_texts(
+    let other_purchase = seed.purchase_with_texts(
         &other_user,
         "他人の豆",
-        ProductTexts {
-            producer: Some("他人の生産者"),
-            origin: Some("他人の産地"),
-            ..ProductTexts::default()
-        },
-        T21,
-        T21,
-    );
-    let other_purchase = seed.purchase_with_roast(
-        &other_user,
-        &other_product.id,
         None,
         D21,
-        Some("他人のロースト"),
+        PurchaseTexts {
+            producer: Some("他人の生産者"),
+            origin: Some("他人の産地"),
+            roast: Some("他人のロースト"),
+            ..PurchaseTexts::default()
+        },
         T21,
         T21,
     );
@@ -686,8 +709,8 @@ mod suggestions {
         // 候補に無い値でも登録でき、次のサジェストの候補になる (FR-13)。
         assert_status(
             client.post_json(
-                "/api/products",
-                &json!({ "name": "自由入力の豆", "producer": "はじめての生産者" }),
+                "/api/purchases",
+                &json!({ "name": "自由入力の豆", "purchased_on": D21, "producer": "はじめての生産者" }),
             ),
             200,
         );
@@ -704,8 +727,8 @@ mod suggestions {
         // 空白だけの自由記述は空文字として保存される (0006 の規則)。空文字も候補に含める (乖離 4)。
         assert_status(
             client.post_json(
-                "/api/products",
-                &json!({ "name": "空文字の豆", "producer": "  " }),
+                "/api/purchases",
+                &json!({ "name": "空文字の豆", "purchased_on": D21, "producer": "  " }),
             ),
             200,
         );

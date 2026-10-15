@@ -103,7 +103,7 @@ a { color: var(--link); }
 .ledger .v .u { font-family: var(--font-sans); font-size: 12px; color: var(--ink-muted); margin-left: var(--space-1); }
 .ledger .v.unset { color: var(--ink-faint); font-family: var(--font-sans); }
 
-/* 参照先のタイル (購入、商品、店をたどる) */
+/* 参照先のタイル (購入、店をたどる) */
 .tile { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--roast-soft); color: var(--ink); }
 .tile .k { font-size: 12px; line-height: 16px; color: var(--ink-muted); font-weight: 500; letter-spacing: 0.02em; }
 .tile .n { font-size: 15px; line-height: 22px; font-weight: 600; }
@@ -238,7 +238,7 @@ a { color: var(--link); }
 </head>
 <body>
 <div class="stage" style="padding:24px"><div class="wide"><div style="display:flex;min-height:640px">
-  <div class="drawer standard"><div class="head"><span class="mk"><svg viewBox="100 106 312 368" class="mark" aria-hidden="true"><g fill="var(--roast)"><rect x="118" y="124" width="276" height="34" rx="17"/><path d="M148 158 H364 L298 286 H214 Z" stroke="var(--roast)" stroke-width="8" stroke-linejoin="round"/><path d="M256 298 C256 298 228 332 228 352 A28 28 0 0 0 284 352 C284 332 256 298 256 298 Z"/><rect x="118" y="386" width="276" height="26" rx="13"/><rect x="118" y="430" width="168" height="26" rx="13"/></g></svg></span><span class="wm">brewbook</span></div><div class="item on"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/></svg><span>抽出</span></div><div class="item"><svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg><span>購入</span></div><div class="item"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="6" ry="8" transform="rotate(-30 12 12)"/><path d="M9 7c2 2 2 8 6 10" /></svg><span>商品</span></div><div class="item"><svg viewBox="0 0 24 24"><path d="M4 10l1-5h14l1 5M5 10v10h14V10M10 20v-6h4v6"/></svg><span>店</span></div><div class="item"><svg viewBox="0 0 24 24"><path d="M4 20h16M7 16v-5M12 16V8M17 16v-3"/></svg><span>統計</span></div><div class="item"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg><span>設定</span></div><div class="sep"></div><div class="item foot"><svg viewBox="0 0 24 24"><path d="M10 4H5v16h5M14 8l4 4-4 4M8 12h10"/></svg><span>ログアウト</span></div></div>
+  <div class="drawer standard"><div class="head"><span class="mk"><svg viewBox="100 106 312 368" class="mark" aria-hidden="true"><g fill="var(--roast)"><rect x="118" y="124" width="276" height="34" rx="17"/><path d="M148 158 H364 L298 286 H214 Z" stroke="var(--roast)" stroke-width="8" stroke-linejoin="round"/><path d="M256 298 C256 298 228 332 228 352 A28 28 0 0 0 284 352 C284 332 256 298 256 298 Z"/><rect x="118" y="386" width="276" height="26" rx="13"/><rect x="118" y="430" width="168" height="26" rx="13"/></g></svg></span><span class="wm">brewbook</span></div><div class="item on"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h9"/></svg><span>抽出</span></div><div class="item"><svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 016 0v2"/></svg><span>購入</span></div><div class="item"><svg viewBox="0 0 24 24"><path d="M4 10l1-5h14l1 5M5 10v10h14V10M10 20v-6h4v6"/></svg><span>店</span></div><div class="item"><svg viewBox="0 0 24 24"><path d="M4 20h16M7 16v-5M12 16V8M17 16v-3"/></svg><span>統計</span></div><div class="item"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg><span>設定</span></div><div class="sep"></div><div class="item foot"><svg viewBox="0 0 24 24"><path d="M10 4H5v16h5M14 8l4 4-4 4M8 12h10"/></svg><span>ログアウト</span></div></div>
   <div style="flex:1;min-width:0;display:flex">
     <div style="width:400px;flex:none;border-right:1px solid var(--line);position:relative;display:flex;flex-direction:column">
       <div class="appbar"><span class="lead"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span><span class="ttl">抽出</span></div>
@@ -260,7 +260,6 @@ a { color: var(--link); }
         </div>
         <div class="chain">
           <div class="tile"><div class="main"><div class="k">購入</div><div class="n">2026-09-14 / 200 g</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
-          <div class="tile"><div class="main"><div class="k">商品</div><div class="n">Ethiopia Guji Natural</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
           <div class="tile"><div class="main"><div class="k">店</div><div class="n">Kaido Coffee Roasters</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
         </div>
         <div style="grid-column:1 / -1"><div class="sec" style="padding-top:0">感想</div><p class="t-body" style="margin-top:var(--space-1)">酸が明るく、冷めると桃のような甘さ。次は湯温を 90 ℃ に下げる。</p></div>

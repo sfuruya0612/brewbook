@@ -1,38 +1,27 @@
 //! `records::forms` の単体テスト (0041)。
 //!
 //! フォームの検証と、推測の適用 (FR-19。完了条件 6)、自由記述の項目のサジェストの状態
-//! (FR-13。完了条件 7) を確かめる。
+//! (FR-13。完了条件 7) を確かめる。商品の項目は購入のフォームが持つ (ADR-0022)。
 
 use brew_book_frontend::i18n::Key;
 use brew_book_frontend::records::{
-    product_match, suggested_product_name, validate_brew_form, validate_product_form,
-    validate_purchase_form, validate_shop_form, BrewFormValues, Product, ProductMatch,
-    ProductSuggestion, Purchase, PurchaseFormValues, PurchaseSuggestion, SuggestionState,
+    apply_purchase_suggestion, dedup_tags, validate_brew_form, validate_purchase_form,
+    validate_shop_form, BrewFormValues, Purchase, PurchaseFormFields, PurchaseFormValues,
+    PurchaseSuggestion, SuggestionState,
 };
 
-/// 商品を作る。
-fn product(id: &str, name: &str) -> Product {
-    Product {
+/// 購入を作る。
+fn purchase(id: &str) -> Purchase {
+    Purchase {
         id: id.to_string(),
-        name: name.to_string(),
+        shop_id: None,
+        name: "豆".to_string(),
         producer: None,
         origin: None,
         region: None,
         process: None,
         variety: None,
         flavor_notes: Vec::new(),
-        created_at: "2026-10-01T00:00:00.000Z".to_string(),
-        updated_at: "2026-10-01T00:00:00.000Z".to_string(),
-        favorited_at: None,
-    }
-}
-
-/// 購入を作る。
-fn purchase(id: &str) -> Purchase {
-    Purchase {
-        id: id.to_string(),
-        product_id: "p1".to_string(),
-        shop_id: None,
         purchased_on: "2026-10-01".to_string(),
         roast: None,
         roast_date: None,
@@ -43,8 +32,27 @@ fn purchase(id: &str) -> Purchase {
         created_at: "2026-10-01T00:00:00.000Z".to_string(),
         updated_at: "2026-10-01T00:00:00.000Z".to_string(),
         favorited_at: None,
-        product: product("p1", "豆"),
         shop: None,
+    }
+}
+
+/// 購入のフォームの入力 (商品名と購入日だけを持ち、他は空)。
+fn purchase_values<'a>(name: &'a str, purchased_on: &'a str) -> PurchaseFormValues<'a> {
+    PurchaseFormValues {
+        name,
+        producer: "",
+        origin: "",
+        region: "",
+        process: "",
+        variety: "",
+        flavor_notes: &[],
+        shop: None,
+        purchased_on,
+        roast: "",
+        roast_date: "",
+        price: "",
+        currency: "JPY",
+        weight: "",
     }
 }
 
@@ -59,53 +67,21 @@ fn the_shop_form_requires_a_name() {
 }
 
 #[test]
-fn the_product_form_requires_a_name_and_normalizes_the_tags() {
-    assert_eq!(
-        validate_product_form("", "", "", "", "", "", &[]),
-        Err(Key::ValidationRequired)
-    );
-    let input = validate_product_form(
-        " 豆 ",
-        " 生産者 ",
-        "",
-        "",
-        "",
-        "",
-        &[
-            " 甘い ".to_string(),
-            "甘い".to_string(),
-            "  ".to_string(),
-            "酸っぱい".to_string(),
-        ],
-    )
-    .expect("the input must be valid");
-    assert_eq!(input.name, "豆");
-    assert_eq!(input.producer.as_deref(), Some("生産者"));
-    assert_eq!(
-        input.flavor_notes,
-        vec!["甘い".to_string(), "酸っぱい".to_string()]
-    );
-}
-
-#[test]
-fn the_purchase_form_requires_a_product_and_a_valid_day() {
-    let errors = validate_purchase_form(PurchaseFormValues {
-        product: None,
-        shop: None,
-        purchased_on: "2026-02-30",
-        roast: "",
-        roast_date: "",
-        price: "",
-        currency: "JPY",
-        weight: "",
-    })
-    .expect_err("the form must be rejected");
-    assert_eq!(errors.product, Some(Key::ValidationProduct));
+fn the_purchase_form_requires_a_name_and_a_valid_day() {
+    let errors = validate_purchase_form(purchase_values("  ", "2026-02-30"))
+        .expect_err("the form must be rejected");
+    assert_eq!(errors.name, Some(Key::ValidationRequired));
     assert_eq!(errors.purchased_on, Some(Key::ValidationDay));
     assert!(errors.has_errors());
 
     let input = validate_purchase_form(PurchaseFormValues {
-        product: Some(&product("p1", "豆")),
+        name: " 豆 ",
+        producer: " 生産者 ",
+        origin: "",
+        region: " イルガチェフェ ",
+        process: "",
+        variety: "",
+        flavor_notes: &[],
         shop: None,
         purchased_on: "2026-10-01",
         roast: " 中煎り ",
@@ -115,24 +91,60 @@ fn the_purchase_form_requires_a_product_and_a_valid_day() {
         weight: "200",
     })
     .expect("the form must be accepted");
-    assert_eq!(input.product_id, "p1");
+    assert_eq!(input.name, "豆");
+    assert_eq!(input.producer.as_deref(), Some("生産者"));
+    assert_eq!(input.origin, None);
+    assert_eq!(input.region.as_deref(), Some("イルガチェフェ"));
+    assert_eq!(input.process, None);
+    assert_eq!(input.variety, None);
+    assert!(input.flavor_notes.is_empty());
     assert_eq!(input.roast.as_deref(), Some("中煎り"));
     assert_eq!(input.price_amount, Some(1200));
     assert_eq!(input.price_currency.as_deref(), Some("JPY"));
     assert_eq!(input.weight_grams, Some(200));
 }
 
+/// タグは前後の空白を除き、空のタグを落とし、同じ名前を 1 つにまとめる (FR-8)。
+#[test]
+fn the_purchase_form_normalizes_the_tags() {
+    let tags = [
+        " 甘い ".to_string(),
+        "甘い".to_string(),
+        "  ".to_string(),
+        "酸っぱい".to_string(),
+    ];
+    assert_eq!(
+        dedup_tags(&tags),
+        vec!["甘い".to_string(), "酸っぱい".to_string()]
+    );
+    let input = validate_purchase_form(PurchaseFormValues {
+        flavor_notes: &tags,
+        ..purchase_values("豆", "2026-10-01")
+    })
+    .expect("the form must be accepted");
+    assert_eq!(
+        input.flavor_notes,
+        vec!["甘い".to_string(), "酸っぱい".to_string()]
+    );
+    // 空の配列も入力として送る (全て外す操作を表す)。
+    let json = input.to_json();
+    assert_eq!(
+        json["flavor_notes"],
+        serde_json::json!(["甘い", "酸っぱい"])
+    );
+    let empty = validate_purchase_form(purchase_values("豆", "2026-10-01"))
+        .expect("the form must be accepted");
+    assert_eq!(empty.to_json()["flavor_notes"], serde_json::json!([]));
+    assert!(empty.to_json().get("product_id").is_none());
+}
+
 #[test]
 fn the_purchase_form_rejects_broken_optional_fields() {
     let errors = validate_purchase_form(PurchaseFormValues {
-        product: Some(&product("p1", "豆")),
-        shop: None,
-        purchased_on: "2026-10-01",
-        roast: "",
         roast_date: "2026-13-01",
         price: "-1",
-        currency: "JPY",
         weight: "1.5",
+        ..purchase_values("豆", "2026-10-01")
     })
     .expect_err("the form must be rejected");
     assert_eq!(errors.roast_date, Some(Key::ValidationDay));
@@ -140,17 +152,8 @@ fn the_purchase_form_rejects_broken_optional_fields() {
     assert_eq!(errors.weight, Some(Key::ValidationNumber));
 
     // 価格が無いときは通貨コードを送らない (API は組で扱う。FR-9)。
-    let input = validate_purchase_form(PurchaseFormValues {
-        product: Some(&product("p1", "豆")),
-        shop: None,
-        purchased_on: "2026-10-01",
-        roast: "",
-        roast_date: "",
-        price: "",
-        currency: "JPY",
-        weight: "",
-    })
-    .expect("the form must be accepted");
+    let input = validate_purchase_form(purchase_values("豆", "2026-10-01"))
+        .expect("the form must be accepted");
     assert_eq!(input.price_amount, None);
     assert_eq!(input.price_currency, None);
 }
@@ -226,17 +229,8 @@ fn the_brew_form_rejects_broken_numbers() {
 /// したときの保存の検証を確かめる。
 #[test]
 fn an_empty_day_or_time_is_a_required_error() {
-    let errors = validate_purchase_form(PurchaseFormValues {
-        product: Some(&product("p1", "豆")),
-        shop: None,
-        purchased_on: "",
-        roast: "",
-        roast_date: "",
-        price: "",
-        currency: "JPY",
-        weight: "",
-    })
-    .expect_err("the form must be rejected");
+    let errors =
+        validate_purchase_form(purchase_values("豆", "")).expect_err("the form must be rejected");
     assert_eq!(errors.purchased_on, Some(Key::ValidationDay));
 
     let errors = validate_brew_form(BrewFormValues {
@@ -274,45 +268,96 @@ fn an_empty_day_or_time_is_a_required_error() {
     assert_eq!(errors.time, Some(Key::ValidationTime));
 }
 
-#[test]
-fn the_product_match_selects_only_when_no_product_is_selected() {
-    let suggestion = PurchaseSuggestion {
-        product: Some(ProductSuggestion {
-            name: Some(" 豆 ".to_string()),
-            ..ProductSuggestion::default()
-        }),
-        ..PurchaseSuggestion::default()
-    };
-    assert_eq!(
-        suggested_product_name(suggestion.product.as_ref().expect("a product must exist"))
-            .as_deref(),
-        Some("豆")
-    );
+/// 推測の適用の入力欄。
+struct Fields {
+    name: String,
+    producer: String,
+    origin: String,
+    region: String,
+    process: String,
+    variety: String,
+    flavor_notes: Vec<String>,
+    roast: String,
+    roast_date: String,
+    price: String,
+    weight: String,
+}
 
-    // 一致する商品があるときは、商品が未選択のときだけ選ぶ (FR-19)。
-    match product_match(false, &suggestion, Some(product("p1", "豆"))) {
-        ProductMatch::Select(selected) => assert_eq!(selected.id, "p1"),
-        other => panic!("the product must be selected: {other:?}"),
-    }
-    assert_eq!(
-        product_match(true, &suggestion, Some(product("p1", "豆"))),
-        ProductMatch::None
-    );
-
-    // 一致が無いときは、推測値を引き継いだ登録の導線を出す (FR-19)。
-    match product_match(false, &suggestion, None) {
-        ProductMatch::Register(suggested) => {
-            assert_eq!(suggested.name.as_deref(), Some(" 豆 "));
+impl Fields {
+    /// 全ての入力欄に値が入った状態。
+    fn filled() -> Self {
+        Self {
+            name: "入力した豆".to_string(),
+            producer: "入力した生産者".to_string(),
+            origin: "入力した生産国".to_string(),
+            region: "入力した地域".to_string(),
+            process: "入力した精製方法".to_string(),
+            variety: "入力した品種".to_string(),
+            flavor_notes: vec!["入力したタグ".to_string()],
+            roast: "入力した焙煎度".to_string(),
+            roast_date: "2026-09-01".to_string(),
+            price: "100".to_string(),
+            weight: "50".to_string(),
         }
-        other => panic!("the register affordance must be shown: {other:?}"),
     }
 
-    // 推測した商品名が無いときは何もしない。
-    let empty = PurchaseSuggestion {
-        product: Some(ProductSuggestion::default()),
-        ..PurchaseSuggestion::default()
+    /// 推測を入れる。
+    fn apply(&mut self, suggestion: &PurchaseSuggestion) {
+        apply_purchase_suggestion(
+            PurchaseFormFields {
+                name: &mut self.name,
+                producer: &mut self.producer,
+                origin: &mut self.origin,
+                region: &mut self.region,
+                process: &mut self.process,
+                variety: &mut self.variety,
+                flavor_notes: &mut self.flavor_notes,
+                roast: &mut self.roast,
+                roast_date: &mut self.roast_date,
+                price: &mut self.price,
+                weight: &mut self.weight,
+            },
+            suggestion,
+        );
+    }
+}
+
+/// 推測できた項目は入力済みの値も置き換え、推測できなかった項目は残す (FR-19、ADR-0022)。
+#[test]
+fn the_suggestion_overwrites_the_filled_fields_and_keeps_the_unsuggested_ones() {
+    let suggestion = PurchaseSuggestion {
+        name: Some("推測した豆".to_string()),
+        producer: None,
+        origin: Some("エチオピア".to_string()),
+        region: None,
+        process: Some("ウォッシュド".to_string()),
+        variety: None,
+        flavor_notes: vec![" フローラル ".to_string(), "フローラル".to_string()],
+        roast: Some("中煎り".to_string()),
+        roast_date: None,
+        price_amount: Some(1200),
+        weight_grams: None,
     };
-    assert_eq!(product_match(false, &empty, None), ProductMatch::None);
+    let mut fields = Fields::filled();
+    fields.apply(&suggestion);
+    assert_eq!(fields.name, "推測した豆");
+    assert_eq!(fields.producer, "入力した生産者");
+    assert_eq!(fields.origin, "エチオピア");
+    assert_eq!(fields.region, "入力した地域");
+    assert_eq!(fields.process, "ウォッシュド");
+    assert_eq!(fields.variety, "入力した品種");
+    assert_eq!(fields.flavor_notes, vec!["フローラル".to_string()]);
+    assert_eq!(fields.roast, "中煎り");
+    assert_eq!(fields.roast_date, "2026-09-01");
+    assert_eq!(fields.price, "1200");
+    assert_eq!(fields.weight, "50");
+
+    // 空の推測は何も変えない (空の Flavor Notes も入力したタグを残す)。
+    let mut fields = Fields::filled();
+    fields.apply(&PurchaseSuggestion::default());
+    assert_eq!(fields.name, "入力した豆");
+    assert_eq!(fields.flavor_notes, vec!["入力したタグ".to_string()]);
+    assert_eq!(fields.weight, "50");
 }
 
 #[test]

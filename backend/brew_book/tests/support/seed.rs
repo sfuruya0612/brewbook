@@ -39,22 +39,13 @@ pub struct SeededShop {
     pub name: String,
 }
 
-/// 下ごしらえした商品。
-#[derive(Debug, Clone)]
-pub struct SeededProduct {
-    /// `products.id`。API のパスで指定する ID。
-    pub id: String,
-    /// 商品名。
-    pub name: String,
-}
-
 /// 下ごしらえした購入。
 #[derive(Debug, Clone)]
 pub struct SeededPurchase {
     /// `purchases.id`。API のパスで指定する ID。
     pub id: String,
-    /// 参照する商品の ID。
-    pub product_id: String,
+    /// 商品名。
+    pub name: String,
     /// 購入日。
     pub purchased_on: String,
 }
@@ -70,9 +61,9 @@ pub struct SeededBrew {
     pub brewed_at: String,
 }
 
-/// 商品の自由記述の値 (下ごしらえ用)。`None` は NULL にする。
+/// 購入の自由記述の値 (下ごしらえ用)。`None` は NULL にする。
 #[derive(Debug, Default, Clone, Copy)]
-pub struct ProductTexts<'a> {
+pub struct PurchaseTexts<'a> {
     /// Producer。
     pub producer: Option<&'a str>,
     /// Origin。
@@ -83,6 +74,8 @@ pub struct ProductTexts<'a> {
     pub process: Option<&'a str>,
     /// Variety。
     pub variety: Option<&'a str>,
+    /// Roast。
+    pub roast: Option<&'a str>,
 }
 
 /// 抽出の自由記述の値 (下ごしらえ用)。`None` は NULL にする。
@@ -264,54 +257,6 @@ impl Seed {
         }
     }
 
-    /// 商品の行を入れる。商品名以外の項目は NULL にする。
-    pub fn product(
-        &mut self,
-        user_id: &str,
-        name: &str,
-        created_at: &str,
-        updated_at: &str,
-    ) -> SeededProduct {
-        self.product_with_texts(
-            user_id,
-            name,
-            ProductTexts::default(),
-            created_at,
-            updated_at,
-        )
-    }
-
-    /// 商品の行を入れる。Producer、Origin、Region、Process、Variety を指定できる
-    /// (サジェストの下ごしらえに使う)。
-    pub fn product_with_texts(
-        &mut self,
-        user_id: &str,
-        name: &str,
-        texts: ProductTexts<'_>,
-        created_at: &str,
-        updated_at: &str,
-    ) -> SeededProduct {
-        let id = self.next_id();
-        self.push(format!(
-            "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
-             created_at, updated_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
-            literal(&id),
-            literal(user_id),
-            literal(name),
-            texts.producer.map_or_else(|| "NULL".to_owned(), literal),
-            texts.origin.map_or_else(|| "NULL".to_owned(), literal),
-            texts.region.map_or_else(|| "NULL".to_owned(), literal),
-            texts.process.map_or_else(|| "NULL".to_owned(), literal),
-            texts.variety.map_or_else(|| "NULL".to_owned(), literal),
-            literal(created_at),
-            literal(updated_at)
-        ));
-        SeededProduct {
-            id,
-            name: name.to_owned(),
-        }
-    }
-
     /// Flavor Notes のタグの行を入れる。タグの ID を返す。
     pub fn flavor_tag(&mut self, user_id: &str, name: &str) -> String {
         let id = self.next_id();
@@ -324,69 +269,74 @@ impl Seed {
         id
     }
 
-    /// 商品とタグの対応の行を入れる。
-    pub fn product_flavor_tag(&mut self, user_id: &str, product_id: &str, tag_id: &str) {
+    /// 購入とタグの対応の行を入れる。
+    pub fn purchase_flavor_tag(&mut self, user_id: &str, purchase_id: &str, tag_id: &str) {
         self.push(format!(
-            "INSERT INTO product_flavor_tags (user_id, product_id, tag_id) VALUES ({}, {}, {})",
+            "INSERT INTO purchase_flavor_tags (user_id, purchase_id, tag_id) VALUES ({}, {}, {})",
             literal(user_id),
-            literal(product_id),
+            literal(purchase_id),
             literal(tag_id)
         ));
     }
 
-    /// 購入の行を入れる。店、価格、通貨コード、重量、写真、Roast は任意。
-    // 下ごしらえの引数はテーブルの列をそのまま受ける (テストが列を選んで投入できるようにする)。
-    #[allow(clippy::too_many_arguments)]
+    /// 購入の行を入れる。商品名以外の商品の項目、店、価格、通貨コード、重量、写真、Roast は
+    /// NULL にする (ADR-0022)。
     pub fn purchase(
         &mut self,
         user_id: &str,
-        product_id: &str,
+        name: &str,
         shop_id: Option<&str>,
         purchased_on: &str,
         created_at: &str,
         updated_at: &str,
     ) -> SeededPurchase {
-        self.purchase_with_roast(
+        self.purchase_with_texts(
             user_id,
-            product_id,
+            name,
             shop_id,
             purchased_on,
-            None,
+            PurchaseTexts::default(),
             created_at,
             updated_at,
         )
     }
 
-    /// 購入の行を入れる。Roast を指定できる (サジェストの下ごしらえに使う)。
+    /// 購入の行を入れる。Producer、Origin、Region、Process、Variety、Roast を指定できる
+    /// (サジェストの下ごしらえに使う)。
+    // 下ごしらえの引数はテーブルの列をそのまま受ける (テストが列を選んで投入できるようにする)。
     #[allow(clippy::too_many_arguments)]
-    pub fn purchase_with_roast(
+    pub fn purchase_with_texts(
         &mut self,
         user_id: &str,
-        product_id: &str,
+        name: &str,
         shop_id: Option<&str>,
         purchased_on: &str,
-        roast: Option<&str>,
+        texts: PurchaseTexts<'_>,
         created_at: &str,
         updated_at: &str,
     ) -> SeededPurchase {
         let id = self.next_id();
-        let shop = shop_id.map_or_else(|| "NULL".to_owned(), literal);
-        let roast = roast.map_or_else(|| "NULL".to_owned(), literal);
         self.push(format!(
-            "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, \
-             created_at, updated_at) VALUES ({}, {}, {}, {}, {}, {}, {}, {})",
+            "INSERT INTO purchases (id, user_id, shop_id, purchased_on, roast, name, producer, \
+             origin, region, process, variety, created_at, updated_at) \
+             VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
             literal(&id),
             literal(user_id),
-            literal(product_id),
-            shop,
+            shop_id.map_or_else(|| "NULL".to_owned(), literal),
             literal(purchased_on),
-            roast,
+            texts.roast.map_or_else(|| "NULL".to_owned(), literal),
+            literal(name),
+            texts.producer.map_or_else(|| "NULL".to_owned(), literal),
+            texts.origin.map_or_else(|| "NULL".to_owned(), literal),
+            texts.region.map_or_else(|| "NULL".to_owned(), literal),
+            texts.process.map_or_else(|| "NULL".to_owned(), literal),
+            texts.variety.map_or_else(|| "NULL".to_owned(), literal),
             literal(created_at),
             literal(updated_at)
         ));
         SeededPurchase {
             id,
-            product_id: product_id.to_owned(),
+            name: name.to_owned(),
             purchased_on: purchased_on.to_owned(),
         }
     }
@@ -489,7 +439,7 @@ impl Seed {
     pub fn purchase_with_numbers(
         &mut self,
         user_id: &str,
-        product_id: &str,
+        name: &str,
         shop_id: Option<&str>,
         purchased_on: &str,
         price_amount: Option<i64>,
@@ -500,14 +450,14 @@ impl Seed {
     ) -> SeededPurchase {
         let id = self.next_id();
         self.push(format!(
-            "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, \
+            "INSERT INTO purchases (id, user_id, shop_id, purchased_on, name, \
              price_amount, price_currency, weight_grams, created_at, updated_at) \
              VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
             literal(&id),
             literal(user_id),
-            literal(product_id),
             shop_id.map_or_else(|| "NULL".to_owned(), literal),
             literal(purchased_on),
+            literal(name),
             count(price_amount),
             price_currency.map_or_else(|| "NULL".to_owned(), literal),
             count(weight_grams),
@@ -516,7 +466,7 @@ impl Seed {
         ));
         SeededPurchase {
             id,
-            product_id: product_id.to_owned(),
+            name: name.to_owned(),
             purchased_on: purchased_on.to_owned(),
         }
     }

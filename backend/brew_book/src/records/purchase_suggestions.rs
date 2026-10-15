@@ -1,4 +1,4 @@
-//! 写真から購入と商品の項目を推測する API (FR-19、ADR-0016)。
+//! 写真から購入の項目を推測する API (FR-19、ADR-0016、ADR-0022)。
 //!
 //! 入力はクライアントが変換した後の JPEG の本体とする (Content-Type、本体が空でないこと、
 //! 5 MB の上限を検証し、合わない入力は AI を呼ばずに 400 を返す)。推測は Workers AI の
@@ -64,7 +64,7 @@ struct AiImageUrl {
     url: String,
 }
 
-/// 写真から購入と商品の項目を推測する。認証が必要 (FR-19)。
+/// 写真から購入の項目を推測する。認証が必要 (FR-19)。
 pub async fn create(req: &mut Request, env: &Env, _session: &Session) -> Result<Response> {
     // Content-Type とサイズを先に検証し、合わない入力では AI を呼ばない (FR-19)。
     if !is_jpeg(req.headers().get("Content-Type")?.as_deref()) {

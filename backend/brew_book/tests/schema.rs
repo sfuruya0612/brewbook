@@ -1,16 +1,19 @@
 //! マイグレーションの SQL と、ADR-0018 が定める最終スキーマの照合。
 //!
-//! 0001、0002、0003、0004 を順に適用した最終スキーマを読み、次を確認する。
+//! 0001、0002、0003、0004、0005 を順に適用した最終スキーマを読み、次を確認する。
 //!
-//! - 11 テーブルの列が ADR-0018 の表と一致する (過不足のどちらも許さない)。
+//! - 10 テーブルの列が ADR-0018 の表 (ADR-0022 による商品の統合を反映したもの) と一致する
+//!   (過不足のどちらも許さない)。
 //! - ADR-0006 の参照 (外部キー) がある。
 //! - 設計判断の UNIQUE 制約 (利用者ごとのタグ名、全利用者で一意の credential_id) がある。
 //! - 複合インデックス (利用者 ID、並び順のキー、ID) があり、`archived_at` を含まない。
-//! - 店、商品、購入、抽出の 4 テーブルに `archived_at` が無く、`favorited_at` がある
+//! - 店、購入、抽出の 3 テーブルに `archived_at` が無く、`favorited_at` がある
 //!   (ADR-0018、FR-21)。
+//! - `products` と `product_flavor_tags` が無い (ADR-0022)。
 //!
 //! 期待値は issue 本文と ADR の一覧を写したテストデータとして、SQL の解析結果と突き合わせる。
 //! 列の比較は並び順を問わない (0002 と 0003 と 0004 の `ALTER TABLE` が列の位置を変えるため)。
+//! インデックスの比較も並び順を問わない (0005 が purchases のインデックスを作り直すため)。
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -21,9 +24,10 @@ const MIGRATIONS: &[&str] = &[
     "migrations/0002_purchases_price_currency_nullable.sql",
     "migrations/0003_remove_archive.sql",
     "migrations/0004_add_favorites.sql",
+    "migrations/0005_merge_products_into_purchases.sql",
 ];
 
-/// ADR-0018 の 11 テーブルと列。列の順は ADR-0018 の表に合わせる。
+/// ADR-0018 の 10 テーブルと列 (ADR-0022 の統合の後)。列の順は ADR-0018 の表に合わせる。
 const EXPECTED_TABLES: &[(&str, &[&str])] = &[
     ("users", &["id", "display_name", "created_at"]),
     (
@@ -63,30 +67,16 @@ const EXPECTED_TABLES: &[(&str, &[&str])] = &[
             "favorited_at",
         ],
     ),
-    (
-        "products",
-        &[
-            "id",
-            "user_id",
-            "name",
-            "producer",
-            "origin",
-            "region",
-            "process",
-            "variety",
-            "created_at",
-            "updated_at",
-            "favorited_at",
-        ],
-    ),
     ("flavor_tags", &["id", "user_id", "name"]),
-    ("product_flavor_tags", &["user_id", "product_id", "tag_id"]),
+    (
+        "purchase_flavor_tags",
+        &["user_id", "purchase_id", "tag_id"],
+    ),
     (
         "purchases",
         &[
             "id",
             "user_id",
-            "product_id",
             "shop_id",
             "purchased_on",
             "roast",
@@ -95,6 +85,12 @@ const EXPECTED_TABLES: &[(&str, &[&str])] = &[
             "price_currency",
             "weight_grams",
             "photo_key",
+            "name",
+            "producer",
+            "origin",
+            "region",
+            "process",
+            "variety",
             "created_at",
             "updated_at",
             "favorited_at",
@@ -122,8 +118,8 @@ const EXPECTED_TABLES: &[(&str, &[&str])] = &[
     ),
 ];
 
-/// `archived_at` を持たない 4 テーブル (ADR-0018)。
-const TABLES_WITHOUT_ARCHIVED_AT: &[&str] = &["shops", "products", "purchases", "brews"];
+/// `archived_at` を持たない 3 テーブル (ADR-0018、ADR-0022)。
+const TABLES_WITHOUT_ARCHIVED_AT: &[&str] = &["shops", "purchases", "brews"];
 
 /// 本 issue の設計判断の UNIQUE 制約。
 const EXPECTED_UNIQUE: &[(&str, &[&[&str]])] = &[
@@ -134,15 +130,11 @@ const EXPECTED_UNIQUE: &[(&str, &[&[&str]])] = &[
 ];
 
 /// ADR-0018 の複合インデックス (利用者 ID、並び順のキー)。0004 の分も含む (FR-20、FR-21)。
+/// 商品のインデックスは 0005 が消す (ADR-0022)。
 const EXPECTED_INDEXES: &[(&str, &str, &[&str])] = &[
     (
         "idx_shops_user_created_at",
         "shops",
-        &["user_id", "created_at DESC", "id"],
-    ),
-    (
-        "idx_products_user_created_at",
-        "products",
         &["user_id", "created_at DESC", "id"],
     ),
     (
@@ -159,11 +151,6 @@ const EXPECTED_INDEXES: &[(&str, &str, &[&str])] = &[
     (
         "idx_shops_user_favorited_at",
         "shops",
-        &["user_id", "favorited_at"],
-    ),
-    (
-        "idx_products_user_favorited_at",
-        "products",
         &["user_id", "favorited_at"],
     ),
     (
@@ -188,16 +175,6 @@ const EXPECTED_INDEXES: &[(&str, &str, &[&str])] = &[
         &["user_id", "updated_at DESC", "id"],
     ),
     (
-        "idx_products_user_name",
-        "products",
-        &["user_id", "name COLLATE NOCASE"],
-    ),
-    (
-        "idx_products_user_updated_at",
-        "products",
-        &["user_id", "updated_at DESC", "id"],
-    ),
-    (
         "idx_purchases_user_price_amount",
         "purchases",
         &["user_id", "price_amount"],
@@ -216,7 +193,7 @@ const EXPECTED_INDEXES: &[(&str, &str, &[&str])] = &[
 ];
 
 #[test]
-fn the_final_schema_has_the_eleven_tables_with_the_adr_columns() {
+fn the_final_schema_has_the_ten_tables_with_the_adr_columns() {
     let parsed = apply_migrations(&read_migrations());
     let expected: Vec<(&str, &[&str])> = EXPECTED_TABLES.to_vec();
     let actual: Vec<(&str, Vec<String>)> = parsed
@@ -266,8 +243,8 @@ fn the_final_schema_has_no_archived_column() {
     }
 }
 
-/// 店、商品、購入、抽出の 4 テーブルが `favorited_at` を持つ (FR-21)。
-const TABLES_WITH_FAVORITED_AT: &[&str] = &["shops", "products", "purchases", "brews"];
+/// 店、購入、抽出の 3 テーブルが `favorited_at` を持つ (FR-21、ADR-0022)。
+const TABLES_WITH_FAVORITED_AT: &[&str] = &["shops", "purchases", "brews"];
 
 #[test]
 fn the_final_schema_has_the_favorited_column_in_the_four_record_tables() {
@@ -284,7 +261,7 @@ fn the_final_schema_has_the_favorited_column_in_the_four_record_tables() {
         );
     }
     // タグの 2 テーブルはお気に入りを持たない (0051 の設計判断)。
-    for name in ["flavor_tags", "product_flavor_tags"] {
+    for name in ["flavor_tags", "purchase_flavor_tags"] {
         let table = parsed
             .tables
             .iter()
@@ -313,9 +290,9 @@ fn the_final_schema_indexes_do_not_contain_the_archived_column() {
 fn the_migration_keeps_the_primary_keys() {
     let parsed = apply_migrations(&read_migrations());
     for table in &parsed.tables {
-        // product_flavor_tags は id 列を持たないため、列の組を主キーにする。
-        let expected: Vec<String> = if table.name == "product_flavor_tags" {
-            vec!["product_id".to_owned(), "tag_id".to_owned()]
+        // purchase_flavor_tags は id 列を持たないため、列の組を主キーにする。
+        let expected: Vec<String> = if table.name == "purchase_flavor_tags" {
+            vec!["purchase_id".to_owned(), "tag_id".to_owned()]
         } else {
             vec!["id".to_owned()]
         };
@@ -334,13 +311,11 @@ const EXPECTED_FOREIGN_KEYS: &[(&str, &str, &str, &str)] = &[
     ("webauthn_challenges", "user_id", "users", "id"),
     ("sessions", "user_id", "users", "id"),
     ("shops", "user_id", "users", "id"),
-    ("products", "user_id", "users", "id"),
     ("flavor_tags", "user_id", "users", "id"),
-    ("product_flavor_tags", "user_id", "users", "id"),
-    ("product_flavor_tags", "product_id", "products", "id"),
-    ("product_flavor_tags", "tag_id", "flavor_tags", "id"),
+    ("purchase_flavor_tags", "user_id", "users", "id"),
+    ("purchase_flavor_tags", "purchase_id", "purchases", "id"),
+    ("purchase_flavor_tags", "tag_id", "flavor_tags", "id"),
     ("purchases", "user_id", "users", "id"),
-    ("purchases", "product_id", "products", "id"),
     ("purchases", "shop_id", "shops", "id"),
     ("brews", "user_id", "users", "id"),
     ("brews", "purchase_id", "purchases", "id"),
@@ -420,7 +395,7 @@ fn the_migration_has_the_foreign_keys_of_the_adr() {
 #[test]
 fn the_final_schema_has_the_composite_indexes_for_lists_and_suggestions_and_stats() {
     let parsed = apply_migrations(&read_migrations());
-    let expected: Vec<(String, String, Vec<String>)> = EXPECTED_INDEXES
+    let mut expected: Vec<(String, String, Vec<String>)> = EXPECTED_INDEXES
         .iter()
         .map(|(name, table, columns)| {
             (
@@ -430,7 +405,7 @@ fn the_final_schema_has_the_composite_indexes_for_lists_and_suggestions_and_stat
             )
         })
         .collect();
-    let actual: Vec<(String, String, Vec<String>)> = parsed
+    let mut actual: Vec<(String, String, Vec<String>)> = parsed
         .indexes
         .iter()
         .map(|index| {
@@ -441,9 +416,50 @@ fn the_final_schema_has_the_composite_indexes_for_lists_and_suggestions_and_stat
             )
         })
         .collect();
+    // 0005 が purchases のインデックスを作り直して並びを変えるため、名前順で比べる。
+    expected.sort();
+    actual.sort();
     assert_eq!(
         actual, expected,
         "the composite indexes must match the design decisions"
+    );
+}
+
+/// パーサが `ALTER TABLE ... RENAME TO` でテーブルとそのインデックスの名前を付け替えることを
+/// 確かめる (0005 はこの文を使わないため、文だけを与えて検査する。0057)。
+#[test]
+fn the_parser_renames_a_table_and_its_indexes_with_rename_to() {
+    let migrations = [
+        "CREATE TABLE old_name (id TEXT PRIMARY KEY, user_id TEXT NOT NULL);\n\
+         CREATE INDEX idx_old_name_user ON old_name (user_id);\n\
+         CREATE TABLE other (id TEXT PRIMARY KEY);\n\
+         CREATE INDEX idx_other ON other (id);"
+            .to_owned(),
+        "ALTER TABLE old_name RENAME TO new_name;".to_owned(),
+    ];
+    let parsed = apply_migrations(&migrations);
+    let tables: Vec<&str> = parsed
+        .tables
+        .iter()
+        .map(|table| table.name.as_str())
+        .collect();
+    assert_eq!(tables, ["new_name", "other"], "{parsed:?}");
+    let renamed = parsed
+        .tables
+        .iter()
+        .find(|table| table.name == "new_name")
+        .expect("the renamed table");
+    assert_eq!(renamed.columns, ["id", "user_id"], "{parsed:?}");
+    assert_eq!(renamed.primary, ["id"], "{parsed:?}");
+    let indexes: Vec<(&str, &str)> = parsed
+        .indexes
+        .iter()
+        .map(|index| (index.name.as_str(), index.table.as_str()))
+        .collect();
+    assert_eq!(
+        indexes,
+        [("idx_old_name_user", "new_name"), ("idx_other", "other")],
+        "{parsed:?}"
     );
 }
 
@@ -462,8 +478,9 @@ fn read_migrations() -> Vec<String> {
 /// マイグレーションを順に適用し、最終スキーマを解析する。
 ///
 /// SQLite を起動せずにスキーマの変化を追うため、このテストが使う DDL
-/// (`CREATE TABLE`、`CREATE [UNIQUE] INDEX`、`DROP INDEX`、`ALTER TABLE ... DROP COLUMN`、
-/// `ALTER TABLE ... ADD COLUMN`) だけを解釈する。
+/// (`CREATE TABLE`、`CREATE [UNIQUE] INDEX`、`DROP INDEX`、`DROP TABLE`、
+/// `ALTER TABLE ... DROP COLUMN`、`ALTER TABLE ... ADD COLUMN`、`ALTER TABLE ... RENAME TO`)
+/// だけを解釈する。スキーマを変えない `PRAGMA` と `INSERT ... SELECT` は読み飛ばす (0005)。
 fn apply_migrations(migrations: &[String]) -> ParsedMigration {
     let mut parsed = ParsedMigration::default();
     for migration in migrations {
@@ -478,8 +495,21 @@ fn apply_migrations(migrations: &[String]) -> ParsedMigration {
             } else if let Some(rest) = strip_prefix_ignoring_case(&statement, "DROP INDEX") {
                 let name = rest.trim();
                 parsed.indexes.retain(|index| index.name != name);
+            } else if let Some(rest) = strip_prefix_ignoring_case(&statement, "DROP TABLE") {
+                // SQLite はテーブルと一緒にそのインデックスも消す。
+                let name = rest.trim();
+                assert!(
+                    parsed.tables.iter().any(|table| table.name == name),
+                    "the DROP TABLE target {name} must exist"
+                );
+                parsed.tables.retain(|table| table.name != name);
+                parsed.indexes.retain(|index| index.table != name);
             } else if let Some(rest) = strip_prefix_ignoring_case(&statement, "ALTER TABLE") {
                 apply_alter_table(&mut parsed, rest);
+            } else if strip_prefix_ignoring_case(&statement, "PRAGMA").is_some()
+                || strip_prefix_ignoring_case(&statement, "INSERT INTO").is_some()
+            {
+                // スキーマを変えないため読み飛ばす。
             } else {
                 panic!("the migration has an unsupported statement: {statement}");
             }
@@ -488,23 +518,43 @@ fn apply_migrations(migrations: &[String]) -> ParsedMigration {
     parsed
 }
 
-/// `ALTER TABLE` の `DROP COLUMN` と `ADD COLUMN` を適用する。
+/// `ALTER TABLE` の `DROP COLUMN`、`ADD COLUMN`、`RENAME TO` を適用する。
 fn apply_alter_table(parsed: &mut ParsedMigration, rest: &str) {
     let mut words = rest.split_whitespace();
     let table_name = words
         .next()
         .expect("an ALTER TABLE statement names the table");
-    let table = parsed
-        .tables
-        .iter_mut()
-        .find(|table| table.name == table_name)
-        .unwrap_or_else(|| panic!("the ALTER TABLE target {table_name} must exist"));
+    assert!(
+        parsed.tables.iter().any(|table| table.name == table_name),
+        "the ALTER TABLE target {table_name} must exist"
+    );
     let action = words
         .next()
         .expect("an ALTER TABLE statement has an action");
     let keyword = words
         .next()
         .expect("an ALTER TABLE statement names the action's keyword");
+    if action.eq_ignore_ascii_case("RENAME") {
+        assert!(
+            keyword.eq_ignore_ascii_case("TO"),
+            "the ALTER TABLE action must be RENAME TO but was RENAME {keyword}"
+        );
+        let new_name = words
+            .next()
+            .expect("an ALTER TABLE ... RENAME TO statement names the new table name");
+        // SQLite はテーブルを参照するインデックスの定義も新しい名前に付け替える。
+        for table in &mut parsed.tables {
+            if table.name == table_name {
+                table.name = new_name.to_owned();
+            }
+        }
+        for index in &mut parsed.indexes {
+            if index.table == table_name {
+                index.table = new_name.to_owned();
+            }
+        }
+        return;
+    }
     assert!(
         keyword.eq_ignore_ascii_case("COLUMN"),
         "the ALTER TABLE action must be {action} COLUMN but was {action} {keyword}"
@@ -513,12 +563,19 @@ fn apply_alter_table(parsed: &mut ParsedMigration, rest: &str) {
         .next()
         .expect("an ALTER TABLE statement names the column")
         .to_owned();
+    let table = parsed
+        .tables
+        .iter_mut()
+        .find(|table| table.name == table_name)
+        .expect("the ALTER TABLE target exists");
     if action.eq_ignore_ascii_case("DROP") {
         table.columns.retain(|existing| *existing != column);
     } else if action.eq_ignore_ascii_case("ADD") {
         table.columns.push(column);
     } else {
-        panic!("the ALTER TABLE action must be ADD COLUMN or DROP COLUMN but was {action}");
+        panic!(
+            "the ALTER TABLE action must be ADD COLUMN, DROP COLUMN or RENAME TO but was {action}"
+        );
     }
 }
 

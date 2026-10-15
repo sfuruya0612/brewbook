@@ -2,11 +2,12 @@
 //!
 //! 移行前の Flutter 版の ARB (`frontend/lib/l10n/app_ja.arb` と `app_en.arb`。0045 で削除) の
 //! 221 キーから作る (0051 で並び替えとお気に入りの 8 キー、0054 で抽出方法の例と破棄の確認の
-//! 4 キー、0055 で住所の検索と地図の 4 キー、0056 で記録の削除の 13 キーを足した)。表
+//! 4 キー、0055 で住所の検索と地図の 4 キー、0056 で記録の削除の 13 キーを足し、0057 で
+//! 商品の 13 キーを消した)。表
 //! ([`super::ja`] と [`super::en`]) はこの添字で引く。キーの順序は ARB と同じにしていた。
 
 /// キーの数。
-pub const KEY_COUNT: usize = 250;
+pub const KEY_COUNT: usize = 237;
 
 /// 翻訳のキー (FR-16)。
 ///
@@ -107,14 +108,6 @@ pub enum Key {
     PurchaseEditTitle,
     /// `purchaseDetailTitle`。
     PurchaseDetailTitle,
-    /// `productsTitle`。
-    ProductsTitle,
-    /// `newProductButton`。
-    NewProductButton,
-    /// `productNewTitle`。
-    ProductNewTitle,
-    /// `productEditTitle`。
-    ProductEditTitle,
     /// `shopsTitle`。
     ShopsTitle,
     /// `newShopButton`。
@@ -235,8 +228,6 @@ pub enum Key {
     RatingLabel,
     /// `notesLabel`。
     NotesLabel,
-    /// `productLabel`。
-    ProductLabel,
     /// `shopLabel`。
     ShopLabel,
     /// `purchaseLabel`。
@@ -263,8 +254,6 @@ pub enum Key {
     RatingHistoryTitle,
     /// `selectPurchaseTitle`。
     SelectPurchaseTitle,
-    /// `selectProductTitle`。
-    SelectProductTitle,
     /// `selectShopTitle`。
     SelectShopTitle,
     /// `shopNoneLabel`。
@@ -279,8 +268,6 @@ pub enum Key {
     ValidationDay,
     /// `validationTime`。
     ValidationTime,
-    /// `validationProduct`。
-    ValidationProduct,
     /// `validationPurchase`。
     ValidationPurchase,
     /// `brewRowSubtitle`。
@@ -405,8 +392,6 @@ pub enum Key {
     HomeEmptyHint,
     /// `purchasesEmptyHint`。
     PurchasesEmptyHint,
-    /// `productsEmptyHint`。
-    ProductsEmptyHint,
     /// `shopsEmptyHint`。
     ShopsEmptyHint,
     /// `purchasePickPlaceholder`。
@@ -421,8 +406,6 @@ pub enum Key {
     SuggestionLoadingLabel,
     /// `suggestionFailedMessage`。
     SuggestionFailedMessage,
-    /// `suggestionRegisterProductButton`。
-    SuggestionRegisterProductButton,
     /// `loginRegisterHint`。
     LoginRegisterHint,
     /// `registerTokenGuidance`。
@@ -497,14 +480,6 @@ pub enum Key {
     DeletePurchaseConfirmMessage,
     /// `deletePurchaseConfirmMessageWithBrews`。
     DeletePurchaseConfirmMessageWithBrews,
-    /// `deleteProductConfirmTitle`。
-    DeleteProductConfirmTitle,
-    /// `deleteProductConfirmMessage`。
-    DeleteProductConfirmMessage,
-    /// `deleteProductConfirmMessageWithPurchases`。
-    DeleteProductConfirmMessageWithPurchases,
-    /// `deleteProductConfirmMessageWithCascades`。
-    DeleteProductConfirmMessageWithCascades,
     /// `deleteShopConfirmTitle`。
     DeleteShopConfirmTitle,
     /// `deleteShopConfirmMessage`。
@@ -565,10 +540,6 @@ impl Key {
         Key::PurchaseNewTitle,
         Key::PurchaseEditTitle,
         Key::PurchaseDetailTitle,
-        Key::ProductsTitle,
-        Key::NewProductButton,
-        Key::ProductNewTitle,
-        Key::ProductEditTitle,
         Key::ShopsTitle,
         Key::NewShopButton,
         Key::ShopNewTitle,
@@ -629,7 +600,6 @@ impl Key {
         Key::GrindSettingLabel,
         Key::RatingLabel,
         Key::NotesLabel,
-        Key::ProductLabel,
         Key::ShopLabel,
         Key::PurchaseLabel,
         Key::TagInputHint,
@@ -643,7 +613,6 @@ impl Key {
         Key::PhotoNoneLabel,
         Key::RatingHistoryTitle,
         Key::SelectPurchaseTitle,
-        Key::SelectProductTitle,
         Key::SelectShopTitle,
         Key::ShopNoneLabel,
         Key::ValidationRequired,
@@ -651,7 +620,6 @@ impl Key {
         Key::ValidationDecimal,
         Key::ValidationDay,
         Key::ValidationTime,
-        Key::ValidationProduct,
         Key::ValidationPurchase,
         Key::BrewRowSubtitle,
         Key::BrewRowSubtitleNoShop,
@@ -714,7 +682,6 @@ impl Key {
         Key::RatingNone,
         Key::HomeEmptyHint,
         Key::PurchasesEmptyHint,
-        Key::ProductsEmptyHint,
         Key::ShopsEmptyHint,
         Key::PurchasePickPlaceholder,
         Key::GrindSettingHint,
@@ -722,7 +689,6 @@ impl Key {
         Key::UploadingLabel,
         Key::SuggestionLoadingLabel,
         Key::SuggestionFailedMessage,
-        Key::SuggestionRegisterProductButton,
         Key::LoginRegisterHint,
         Key::RegisterTokenGuidance,
         Key::StatsRangePrefix,
@@ -760,10 +726,6 @@ impl Key {
         Key::DeletePurchaseConfirmTitle,
         Key::DeletePurchaseConfirmMessage,
         Key::DeletePurchaseConfirmMessageWithBrews,
-        Key::DeleteProductConfirmTitle,
-        Key::DeleteProductConfirmMessage,
-        Key::DeleteProductConfirmMessageWithPurchases,
-        Key::DeleteProductConfirmMessageWithCascades,
         Key::DeleteShopConfirmTitle,
         Key::DeleteShopConfirmMessage,
         Key::DeleteShopConfirmMessageWithPurchases,

@@ -349,7 +349,7 @@ pub fn SettingsScreen() -> Element {
 
     rsx! {
         WidePage {
-            rail: rsx! { NavigationRail { items: rail_items(navigator, 5) } },
+            rail: rsx! { NavigationRail { items: rail_items(navigator, 4) } },
             div { class: "screen",
                 ScreenAppBar { title: t(Key::SettingsTitle).to_string(), brand: true }
                 div { class: "body",

@@ -41,8 +41,8 @@ fn AppNavProbe() -> Element {
     }
 }
 
-/// ハンバーガーボタンでメニューが開き、ハンバーガーの下に左寄せで 6 項目とログアウトが
-/// 出ることを検査する (0047)。
+/// ハンバーガーボタンでメニューが開き、ハンバーガーの下に左寄せで 5 項目とログアウトが
+/// 出ることを検査する (0047、0057)。
 #[wasm_bindgen_test]
 async fn the_app_nav_opens_the_menu_under_the_hamburger() {
     install_styles();
@@ -60,7 +60,7 @@ async fn the_app_nav_opens_the_menu_under_the_hamburger() {
     assert_eq!(count(&root, ".menu"), 1);
     // 区切りの div は 1 つで、ログアウトは区切りの後の項目として並ぶ (原本と同じ組み方)。
     assert_eq!(count(&root, ".menu > div.sep"), 1);
-    // 抽出、購入、商品、店、統計、設定の 6 項目とログアウトが並ぶ (区切りは除く)。
+    // 抽出、購入、店、統計、設定の 5 項目とログアウトが並ぶ (区切りは除く。ADR-0022)。
     let nodes = root
         .query_selector_all(".menu > div")
         .expect("the selector must be valid");
@@ -77,7 +77,6 @@ async fn the_app_nav_opens_the_menu_under_the_hamburger() {
         [
             "Brews",
             "Purchases",
-            "Products",
             "Shops",
             "Stats",
             "Settings",
@@ -96,11 +95,11 @@ async fn the_app_nav_opens_the_menu_under_the_hamburger() {
         "the menu must open under the hamburger: menu={menu:?} button={button:?}"
     );
     // 項目を押すとメニューが閉じる。
-    let products = (0..nodes.length())
+    let shops = (0..nodes.length())
         .filter_map(|index| nodes.item(index))
-        .find(|node| node.text_content().as_deref() == Some("Products"))
-        .expect("the Products item must be in the menu");
-    products.unchecked_ref::<web_sys::HtmlElement>().click();
+        .find(|node| node.text_content().as_deref() == Some("Shops"))
+        .expect("the Shops item must be in the menu");
+    shops.unchecked_ref::<web_sys::HtmlElement>().click();
     for _ in 0..5 {
         tick().await;
     }

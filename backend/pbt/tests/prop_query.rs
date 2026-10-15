@@ -10,14 +10,13 @@ use proptest::prelude::*;
 /// 検査に使う利用者 ID。
 const USER_ID: &str = "9f8f1f2e-6b1a-4a3c-8d0e-1b2c3d4e5f60";
 
-/// アカウント削除 (FR-15) が対象にする 11 テーブルと、利用者を指す列の名前 (ADR-0006)。
+/// アカウント削除 (FR-15) が対象にする 10 テーブルと、利用者を指す列の名前 (ADR-0006、ADR-0022)。
 /// 外部キーの参照元から先に消す順に並べる。`users` だけは主キーの `id` で引く。
 const ACCOUNT_DELETE_TABLES: &[(&str, &str)] = &[
-    ("product_flavor_tags", "user_id"),
+    ("purchase_flavor_tags", "user_id"),
     ("brews", "user_id"),
     ("purchases", "user_id"),
     ("flavor_tags", "user_id"),
-    ("products", "user_id"),
     ("shops", "user_id"),
     ("sessions", "user_id"),
     ("passkey_credentials", "user_id"),
@@ -92,7 +91,7 @@ proptest! {
         prop_assert!(!has_unescaped_wildcard(&pattern), "unexpected pattern {pattern:?}");
     }
 
-    /// アカウント削除 (FR-15) の文は、利用者に属する行を持つ 11 テーブルを参照元から先の順に
+    /// アカウント削除 (FR-15) の文は、利用者に属する行を持つ 10 テーブルを参照元から先の順に
     /// 覆い、どれも与えられた利用者 ID だけを束縛する。
     #[test]
     fn the_account_delete_statements_cover_every_table_in_dependency_order(user in identifier()) {

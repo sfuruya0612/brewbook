@@ -216,8 +216,14 @@ fn type_value(element: &web_sys::Element, value: &str) {
 fn purchase_json() -> serde_json::Value {
     json!({
         "id": "p1",
-        "product_id": "pr1",
         "shop_id": null,
+        "name": "豆",
+        "producer": null,
+        "origin": null,
+        "region": null,
+        "process": null,
+        "variety": null,
+        "flavor_notes": [],
         "purchased_on": "2026-10-01",
         "roast": null,
         "roast_date": "2026-09-20",
@@ -227,18 +233,6 @@ fn purchase_json() -> serde_json::Value {
         "photo_key": null,
         "created_at": "2026-10-01T00:00:00.000Z",
         "updated_at": "2026-10-01T00:00:00.000Z",
-        "product": {
-            "id": "pr1",
-            "name": "豆",
-            "producer": null,
-            "origin": null,
-            "region": null,
-            "process": null,
-            "variety": null,
-            "flavor_notes": [],
-            "created_at": "2026-10-01T00:00:00.000Z",
-            "updated_at": "2026-10-01T00:00:00.000Z",
-        },
         "shop": null,
     })
 }

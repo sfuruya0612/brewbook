@@ -85,10 +85,9 @@ fn build_data() -> TestData {
     let stats_user = user_id(1);
     seed.user(&stats_user, "stats user", CREATED);
     let stats_session = seed.session(&stats_user, FUTURE, CREATED);
-    let stats_product = seed.product(&stats_user, "統計の豆", CREATED, CREATED);
     let stats_purchase_a = seed.purchase_with_numbers(
         &stats_user,
-        &stats_product.id,
+        "統計の豆",
         None,
         "2026-09-15",
         Some(1200),
@@ -99,7 +98,7 @@ fn build_data() -> TestData {
     );
     let stats_purchase_b = seed.purchase_with_numbers(
         &stats_user,
-        &stats_product.id,
+        "統計の豆",
         None,
         "2026-09-15",
         Some(800),
@@ -110,7 +109,7 @@ fn build_data() -> TestData {
     );
     let stats_brew_i_purchase = seed.purchase_with_numbers(
         &stats_user,
-        &stats_product.id,
+        "統計の豆",
         None,
         "2026-09-15",
         None,
@@ -209,10 +208,9 @@ fn build_data() -> TestData {
     let purchase_user = user_id(2);
     seed.user(&purchase_user, "purchase stats user", CREATED);
     let purchase_session = seed.session(&purchase_user, FUTURE, CREATED);
-    let purchase_product = seed.product(&purchase_user, "購入統計の豆", CREATED, CREATED);
     let purchase_jpy = seed.purchase_with_numbers(
         &purchase_user,
-        &purchase_product.id,
+        "購入統計の豆",
         None,
         "2026-09-21",
         Some(1200),
@@ -223,7 +221,7 @@ fn build_data() -> TestData {
     );
     seed.purchase_with_numbers(
         &purchase_user,
-        &purchase_product.id,
+        "購入統計の豆",
         None,
         "2026-09-21",
         Some(800),
@@ -234,7 +232,7 @@ fn build_data() -> TestData {
     );
     seed.purchase_with_numbers(
         &purchase_user,
-        &purchase_product.id,
+        "購入統計の豆",
         None,
         "2026-09-21",
         None,
@@ -245,7 +243,7 @@ fn build_data() -> TestData {
     );
     seed.purchase_with_numbers(
         &purchase_user,
-        &purchase_product.id,
+        "購入統計の豆",
         None,
         "2026-09-22",
         Some(500),
@@ -256,7 +254,7 @@ fn build_data() -> TestData {
     );
     seed.purchase_with_numbers(
         &purchase_user,
-        &purchase_product.id,
+        "購入統計の豆",
         None,
         "2026-09-22",
         None,
@@ -267,7 +265,7 @@ fn build_data() -> TestData {
     );
     seed.purchase_with_numbers(
         &purchase_user,
-        &purchase_product.id,
+        "購入統計の豆",
         None,
         "2026-09-20",
         Some(1000),
@@ -278,7 +276,7 @@ fn build_data() -> TestData {
     );
     seed.purchase_with_numbers(
         &purchase_user,
-        &purchase_product.id,
+        "購入統計の豆",
         None,
         "2026-10-01",
         Some(2000),
@@ -292,10 +290,9 @@ fn build_data() -> TestData {
     let other_user = user_id(3);
     seed.user(&other_user, "other user", CREATED);
     let other_session = seed.session(&other_user, FUTURE, CREATED);
-    let other_product = seed.product(&other_user, "他人の豆", CREATED, CREATED);
     let other_purchase = seed.purchase_with_numbers(
         &other_user,
-        &other_product.id,
+        "他人の豆",
         None,
         "2026-09-21",
         Some(5000),
@@ -326,10 +323,9 @@ fn build_data() -> TestData {
     let rounding_user = user_id(5);
     seed.user(&rounding_user, "rounding user", CREATED);
     let rounding_session = seed.session(&rounding_user, FUTURE, CREATED);
-    let rounding_product = seed.product(&rounding_user, "丸めの豆", CREATED, CREATED);
     let rounding_purchase = seed.purchase_with_numbers(
         &rounding_user,
-        &rounding_product.id,
+        "丸めの豆",
         None,
         "2026-09-15",
         None,

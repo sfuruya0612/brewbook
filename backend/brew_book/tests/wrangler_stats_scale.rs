@@ -24,8 +24,6 @@ use support::seed::{user_id, Seed};
 const USER_COUNT: usize = 20;
 /// 1 利用者あたりの店の件数 (想定規模)。
 const SHOP_COUNT: usize = 100;
-/// 1 利用者あたりの商品の件数 (想定規模)。
-const PRODUCT_COUNT: usize = 1_000;
 /// 1 利用者あたりの購入の件数 (想定規模)。
 const PURCHASE_COUNT: usize = 3_000;
 /// 1 利用者あたりの抽出の件数 (想定規模)。
@@ -166,9 +164,9 @@ fn wrangler_stats_scale_of_the_full_period_aggregation() {
     });
 
     println!(
-        "the measurements of the assumed scale ({} users, {} shops, {} products, {} purchases, \
+        "the measurements of the assumed scale ({} users, {} shops, {} purchases, \
          {} brews per user):",
-        USER_COUNT, SHOP_COUNT, PRODUCT_COUNT, PURCHASE_COUNT, BREW_COUNT
+        USER_COUNT, SHOP_COUNT, PURCHASE_COUNT, BREW_COUNT
     );
     report("brews stats (day, all)", &brews_day);
     report("brews stats (month, all)", &brews_month);
@@ -227,36 +225,21 @@ impl ScaleData {
                     .collect(),
             ));
             bulk_sql.extend(chunked_insert(
-                "INSERT INTO products (id, user_id, name, producer, origin, region, process, \
-                 variety, created_at, updated_at)",
-                (0..PRODUCT_COUNT)
-                    .map(|product| {
-                        format!(
-                            "({}, {}, {}, NULL, NULL, NULL, NULL, NULL, {}, {})",
-                            literal(&row_id("product", product, index)),
-                            literal(&user_id),
-                            literal(&format!("一覧の商品 {product}")),
-                            literal(&timestamp(base, product as i64 * MILLIS_PER_MINUTE)),
-                            literal(&timestamp(base, product as i64 * MILLIS_PER_MINUTE))
-                        )
-                    })
-                    .collect(),
-            ));
-            bulk_sql.extend(chunked_insert(
-                "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, \
-                 roast_date, price_amount, price_currency, weight_grams, photo_key, created_at, \
-                 updated_at)",
+                "INSERT INTO purchases (id, user_id, shop_id, purchased_on, roast, roast_date, \
+                 price_amount, price_currency, weight_grams, photo_key, name, producer, origin, \
+                 region, process, variety, created_at, updated_at)",
                 (0..PURCHASE_COUNT)
                     .map(|purchase| {
                         format!(
-                            "({}, {}, {}, NULL, {}, NULL, NULL, {}, {}, {}, NULL, {}, {})",
+                            "({}, {}, NULL, {}, NULL, NULL, {}, {}, {}, NULL, {}, NULL, NULL, \
+                             NULL, NULL, NULL, {}, {})",
                             literal(&row_id("purchase", purchase, index)),
                             literal(&user_id),
-                            literal(&row_id("product", purchase % PRODUCT_COUNT, index)),
                             literal(&purchase_day(purchases_base, purchase % PURCHASE_DAYS)),
                             literal(&(100 + (purchase % 900)).to_string()),
                             literal(if purchase % 2 == 0 { "JPY" } else { "USD" }),
                             literal(&weight_grams()),
+                            literal(&format!("一覧の購入 {purchase}")),
                             literal(&timestamp(
                                 purchases_base,
                                 purchase as i64 * MILLIS_PER_MINUTE

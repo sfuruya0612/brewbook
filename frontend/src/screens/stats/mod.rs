@@ -280,7 +280,7 @@ pub fn StatsScreen() -> Element {
 
     rsx! {
         WidePage {
-            rail: rsx! { NavigationRail { items: rail_items(navigator, 4) } },
+            rail: rsx! { NavigationRail { items: rail_items(navigator, 3) } },
             {content}
         }
         if let Some(message) = notice() {

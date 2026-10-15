@@ -31,33 +31,6 @@ fn statements() -> Vec<String> {
             .sql,
     );
     statements.push(
-        query::products_list(
-            USER,
-            SortKey::CreatedAt,
-            SortOrder::Desc,
-            false,
-            None,
-            20,
-            None,
-        )
-        .expect("the products list must be built")
-        .sql,
-    );
-    // 名前の絞り込み (FR-19) を付けた商品の一覧も、同じ検査の対象にする。
-    statements.push(
-        query::products_list(
-            USER,
-            SortKey::Name,
-            SortOrder::Asc,
-            true,
-            None,
-            20,
-            Some("名前"),
-        )
-        .expect("the products list with a name must be built")
-        .sql,
-    );
-    statements.push(
         query::purchases_list(USER, SortKey::PurchasedOn, SortOrder::Desc, false, None, 20)
             .expect("the purchases list must be built")
             .sql,
@@ -68,7 +41,6 @@ fn statements() -> Vec<String> {
             .sql,
     );
     statements.push(query::shop_find(USER, ID).sql);
-    statements.push(query::product_find(USER, ID).sql);
     statements.push(query::purchase_find(USER, ID).sql);
     statements.push(query::brew_find(USER, ID).sql);
     // お気に入りの付け外しの UPDATE (FR-21)。
@@ -89,12 +61,7 @@ fn statements() -> Vec<String> {
         query::shop_delete(USER, ID),
         query::shop_clear_purchases(USER, ID, "2026-09-21T00:00:00.000Z"),
         query::shop_delete_impact(USER, ID),
-        query::product_delete(USER, ID),
-        query::product_brews_delete(USER, ID),
-        query::product_purchases_delete(USER, ID),
-        query::product_purchase_photo_keys(USER, ID),
-        query::product_delete_impact(USER, ID),
-        query::delete_product_flavor_tags(USER, ID),
+        query::delete_purchase_flavor_tags(USER, ID),
         query::purchase_delete(USER, ID),
         query::purchase_brews_delete(USER, ID),
         query::purchase_delete_impact(USER, ID),
@@ -105,14 +72,13 @@ fn statements() -> Vec<String> {
     statements.push(query::flavor_tags_list(USER).sql);
     statements.push(query::suggestions(USER, SuggestionItem::Producer, "q").sql);
 
-    // エクスポート (FR-14) は 6 つのテーブルの全行を読む。
+    // エクスポート (FR-14) は 5 つのテーブルの全行を読む (ADR-0022)。
     for (table, columns) in [
         (query::SHOPS_TABLE, query::SHOP_COLUMNS),
-        (query::PRODUCTS_TABLE, query::PRODUCT_COLUMNS),
         (query::FLAVOR_TAGS_TABLE, query::FLAVOR_TAG_COLUMNS),
         (
-            query::PRODUCT_FLAVOR_TAGS_TABLE,
-            query::PRODUCT_FLAVOR_TAG_COLUMNS,
+            query::PURCHASE_FLAVOR_TAGS_TABLE,
+            query::PURCHASE_FLAVOR_TAG_COLUMNS,
         ),
         (query::PURCHASES_TABLE, query::PURCHASE_COLUMNS),
         (query::BREWS_TABLE, query::BREW_COLUMNS),
@@ -127,10 +93,13 @@ fn statements() -> Vec<String> {
             .map(|statement| statement.sql),
     );
     statements.extend(
-        query::product_flavor_notes(USER, &[ID])
+        query::purchase_flavor_notes(USER, &[ID])
             .into_iter()
             .map(|statement| statement.sql),
     );
+    // 購入の Flavor Notes の置き換え (FR-8、ADR-0022)。
+    statements.push(query::insert_flavor_tag(ID, USER, "citrus").sql);
+    statements.push(query::insert_purchase_flavor_tag(USER, ID, "citrus").sql);
 
     // 統計 (FR-18)。
     let period = stats::parse_period(Some("2026-09-01"), Some("2026-09-30"))
@@ -192,11 +161,10 @@ fn the_ledger_covers_the_columns_of_every_exported_table() {
     // エクスポートが読む列の並びは、表示名を持たない (FR-17)。
     for columns in [
         query::SHOP_COLUMNS,
-        query::PRODUCT_COLUMNS,
         query::PURCHASE_COLUMNS,
         query::BREW_COLUMNS,
         query::FLAVOR_TAG_COLUMNS,
-        query::PRODUCT_FLAVOR_TAG_COLUMNS,
+        query::PURCHASE_FLAVOR_TAG_COLUMNS,
     ] {
         assert!(
             !columns.to_ascii_lowercase().contains("display_name"),

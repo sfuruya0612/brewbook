@@ -1,6 +1,6 @@
 //! 記録の画面 (0041)。
 //!
-//! ホーム (抽出の一覧)、抽出の詳細と入力、購入の一覧と詳細と入力、商品の一覧と入力、店の一覧と
+//! ホーム (抽出の一覧)、抽出の詳細と入力、購入の一覧と詳細と入力、店の一覧と
 //! 入力の画面を持つ。画面の状態は Dioxus の signal で持ち、フォームの入力の検証と推測の適用は
 //! [`crate::records`] の純粋なモジュールに置く (ADR-0013)。画面数の成功指標を守るため、抽出の
 //! 入力は 1 画面に収め、参照先の選択はボトムシートで行う (docs/design/README.md)。
@@ -8,8 +8,6 @@
 pub mod brew_detail;
 pub mod brew_form;
 pub mod home;
-pub mod product_form;
-pub mod product_list;
 pub mod purchase_detail;
 pub mod purchase_form;
 pub mod purchase_list;
@@ -34,12 +32,12 @@ pub use suggestion_field::SuggestionField;
 
 /// ヘッダーのメニューとナビゲーションレールに並べる行き先 (0047)。
 ///
-/// 抽出、購入、商品、店、統計、設定の 6 項目。並びの添字が [`rail_items`] の `active` に
-/// 対応する。ホームのラベルは画面名ではなく「抽出」([`Key::BrewsLabel`]) にする。
-pub const NAV_ENTRIES: [(Key, &str, Route); 6] = [
+/// 抽出、購入、店、統計、設定の 5 項目 (商品は購入に統合した。ADR-0022)。並びの添字が
+/// [`rail_items`] の `active` に対応する。ホームのラベルは画面名ではなく「抽出」
+/// ([`Key::BrewsLabel`]) にする。
+pub const NAV_ENTRIES: [(Key, &str, Route); 5] = [
     (Key::BrewsLabel, "format_list_bulleted", Route::Home {}),
     (Key::PurchasesTitle, "shopping_bag", Route::Purchases {}),
-    (Key::ProductsTitle, "spa", Route::Products {}),
     (Key::ShopsTitle, "storefront", Route::Shops {}),
     (Key::StatsTitle, "bar_chart", Route::Stats {}),
     (Key::SettingsTitle, "settings", Route::Settings {}),
@@ -47,7 +45,7 @@ pub const NAV_ENTRIES: [(Key, &str, Route); 6] = [
 
 /// 広い画面のナビゲーションレールの項目を組む (docs/design/components/WideLayout)。
 ///
-/// `active` は選択中の項目の位置 (ホーム 0、購入 1、商品 2、店 3、統計 4、設定 5)。
+/// `active` は選択中の項目の位置 (ホーム 0、購入 1、店 2、統計 3、設定 4)。
 pub fn rail_items(navigator: Navigator, active: usize) -> Vec<RailItem> {
     NAV_ENTRIES
         .into_iter()

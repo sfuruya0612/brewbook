@@ -81,7 +81,7 @@ pub fn PurchaseListScreen() -> Element {
                 leading: Some(rsx! {
                     ListThumb { src: photo, alt: t(Key::PhotoLabel).to_string() }
                 }),
-                title: purchase.product.name.clone(),
+                title: purchase.name.clone(),
                 subtitle: Some(rsx! { span { RowValue { text: subtitle } } }),
                 trailing: Some(rsx! {
                     div { class: "trail",

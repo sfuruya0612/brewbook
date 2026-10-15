@@ -46,14 +46,13 @@ const REGISTRATION_CHALLENGE: &str = "registration-challenge-marker-4e2a";
 /// ログイン用のチャレンジの値 (利用者を持たない行が削除されないことの確認に使う)。
 const LOGIN_CHALLENGE: &str = "login-challenge-marker-7c3d";
 
-/// アカウント削除で行を消す 11 テーブルと、利用者を指す列の名前 (ADR-0006)。
+/// アカウント削除で行を消す 10 テーブルと、利用者を指す列の名前 (ADR-0006、ADR-0022)。
 /// 外部キーの参照元から先に消す順に並べる。テストは実装と独立にこの一覧を持つ。
 const DELETED_TABLES: &[(&str, &str)] = &[
-    ("product_flavor_tags", "user_id"),
+    ("purchase_flavor_tags", "user_id"),
     ("brews", "user_id"),
     ("purchases", "user_id"),
     ("flavor_tags", "user_id"),
-    ("products", "user_id"),
     ("shops", "user_id"),
     ("sessions", "user_id"),
     ("passkey_credentials", "user_id"),
@@ -63,13 +62,7 @@ const DELETED_TABLES: &[(&str, &str)] = &[
 ];
 
 /// 他の利用者が行を持つテーブル (削除されないことの確認に使う)。
-const OTHER_USER_TABLES: &[&str] = &[
-    "users",
-    "sessions",
-    "passkey_credentials",
-    "products",
-    "purchases",
-];
+const OTHER_USER_TABLES: &[&str] = &["users", "sessions", "passkey_credentials", "purchases"];
 
 /// 想定規模の購入の件数 (PRD の想定規模)。
 const SCALE_PURCHASE_COUNT: usize = 3_000;
@@ -94,8 +87,6 @@ const PUT_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 
 /// 正常系のテストの購入の ID。
 const OK_PURCHASE_ID: &str = "ok-purchase-00000";
-/// 想定規模のテストの商品の ID。
-const SCALE_PRODUCT_ID: &str = "scale-product-00000";
 
 /// 正常系のテストの利用者の紐づけ済みのキー (ADR-0003 のキーの形)。
 fn ok_photo_key(user: &str, index: usize) -> String {
@@ -175,7 +166,7 @@ fn server() -> ServerLease {
 fn build_data() -> TestData {
     let mut seed = Seed::new();
 
-    // 正常系のテストの利用者。11 テーブルすべてに行を持つ。
+    // 正常系のテストの利用者。10 テーブルすべてに行を持つ。
     let user = user_id(1);
     seed.user(&user, "削除する利用者", CREATED);
     let session = seed.session(&user, FUTURE, CREATED);
@@ -191,19 +182,19 @@ fn build_data() -> TestData {
     // ログイン用のチャレンジの行は user_id を持たない (ADR-0006)。削除の対象外であることを検査する。
     seed.challenge(None, KIND_AUTHENTICATION, LOGIN_CHALLENGE, FUTURE);
     let shop = seed.shop(&user, "削除する店", Some("削除する住所"), CREATED, CREATED);
-    let product = seed.product(&user, "削除する豆", CREATED, CREATED);
     let tag = seed.flavor_tag(&user, "削除するタグ");
-    seed.product_flavor_tag(&user, &product.id, &tag);
     let photo_keys = vec![ok_photo_key(&user, 0), ok_photo_key(&user, 1)];
     let pending_keys = vec![ok_pending_key(&user, 0), ok_pending_key(&user, 1)];
-    // 購入は写真のキーを持ち、抽出はその購入を参照する。
+    // 購入は写真のキーと商品の項目を持ち、抽出とタグの対応はその購入を参照する (ADR-0022)。
     seed.raw(&format!(
-        "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, roast_date, \
-         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at) \
-         VALUES ('{OK_PURCHASE_ID}', '{user}', '{}', '{}', '{D21}', NULL, NULL, 1200, 'JPY', 200, \
-         '{}', '{CREATED}', '{CREATED}')",
-        product.id, shop.id, photo_keys[0]
+        "INSERT INTO purchases (id, user_id, shop_id, purchased_on, roast, roast_date, \
+         price_amount, price_currency, weight_grams, photo_key, name, producer, origin, region, \
+         process, variety, created_at, updated_at) \
+         VALUES ('{OK_PURCHASE_ID}', '{user}', '{}', '{D21}', NULL, NULL, 1200, 'JPY', 200, \
+         '{}', '削除する豆', NULL, NULL, NULL, NULL, NULL, '{CREATED}', '{CREATED}')",
+        shop.id, photo_keys[0]
     ));
+    seed.purchase_flavor_tag(&user, OK_PURCHASE_ID, &tag);
     seed.brew(&user, OK_PURCHASE_ID, B21, CREATED, CREATED);
 
     // 他の利用者。行と R2 のオブジェクトが削除されないことを検査する。
@@ -211,8 +202,7 @@ fn build_data() -> TestData {
     seed.user(&other_user, "残る利用者", CREATED);
     let other_session = seed.session(&other_user, FUTURE, CREATED);
     seed.passkey(&other_user, "残るパスキー", CREATED, None);
-    let other_product = seed.product(&other_user, "残る豆", CREATED, CREATED);
-    seed.purchase(&other_user, &other_product.id, None, D21, CREATED, CREATED);
+    seed.purchase(&other_user, "残る豆", None, D21, CREATED, CREATED);
     let other_photo = other_photo_key(&other_user);
     let other_pending = other_pending_key(&other_user);
 
@@ -238,31 +228,26 @@ fn build_data() -> TestData {
     }
 }
 
-/// 想定規模の行 (商品 1 件、購入 3,000 件) を入れる SQL を組み立てる。
+/// 想定規模の行 (購入 3,000 件) を入れる SQL を組み立てる。
 ///
 /// 購入の `photo_key` には、下ごしらえの経路が R2 に置くのと同じ鍵 (`<利用者>/purchases/...`) を入れる。
 fn scale_statements(user: &str) -> Vec<String> {
-    let mut statements = vec![format!(
-        "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
-         created_at, updated_at) VALUES ('{SCALE_PRODUCT_ID}', '{user}', '想定規模の豆', \
-         NULL, NULL, NULL, NULL, NULL, '{CREATED}', '{CREATED}')"
-    )];
-    statements.extend(chunked_insert(
-        "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, roast_date, \
-         price_amount, price_currency, weight_grams, photo_key, created_at, updated_at)",
+    chunked_insert(
+        "INSERT INTO purchases (id, user_id, shop_id, purchased_on, roast, roast_date, \
+         price_amount, price_currency, weight_grams, photo_key, name, producer, origin, region, \
+         process, variety, created_at, updated_at)",
         (0..SCALE_PURCHASE_COUNT)
             .map(|index| {
                 let index = index as i64;
                 format!(
-                    "('{}', '{user}', '{SCALE_PRODUCT_ID}', NULL, '{D21}', NULL, NULL, NULL, NULL, \
-                     NULL, '{}', '{CREATED}', '{CREATED}')",
+                    "('{}', '{user}', NULL, '{D21}', NULL, NULL, NULL, NULL, NULL, '{}', \
+                     '想定規模の豆', NULL, NULL, NULL, NULL, NULL, '{CREATED}', '{CREATED}')",
                     brew_book::r2_check::photo_purchase_id(index),
                     brew_book::r2_check::object_key(user, index)
                 )
             })
             .collect(),
-    ));
-    statements
+    )
 }
 
 /// 行を `ROWS_PER_STATEMENT` 件ずつの INSERT 文にする。
@@ -308,7 +293,7 @@ fn count_rows(server: &DevServer, table: &str, column: &str, value: &str) -> i64
         .unwrap_or_else(|error| panic!("the {table} count must be readable: {error}"))
 }
 
-/// 利用者に属する行数を、削除の対象の 11 テーブルについて数える。
+/// 利用者に属する行数を、削除の対象の 10 テーブルについて数える。
 fn counts(server: &DevServer, user: &str) -> Vec<(&'static str, i64)> {
     DELETED_TABLES
         .iter()
@@ -513,7 +498,7 @@ fn wrangler_account_delete_ok() {
                 .expect("the object of the other user must be placed");
         }
     });
-    // 検査が空振りしないよう、利用者の行が 11 テーブルすべてにあることを先に確かめる。
+    // 検査が空振りしないよう、利用者の行が 10 テーブルすべてにあることを先に確かめる。
     lease.use_server(|server| {
         for (table, count) in counts(server, &data.user) {
             assert!(count > 0, "the test data must have the {table} row");

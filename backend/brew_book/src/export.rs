@@ -1,7 +1,7 @@
 //! 全記録のエクスポート (FR-14)。
 //!
-//! ADR-0006 の利用者データの 6 テーブル (shops、products、flavor_tags、product_flavor_tags、
-//! purchases、brews) の全行と全列を 1 つの JSON にまとめる。
+//! 利用者データの 5 テーブル (shops、flavor_tags、purchase_flavor_tags、purchases、brews) の
+//! 全行と全列を 1 つの JSON にまとめる (ADR-0006、ADR-0022)。
 //! パスキー、セッション、チャレンジ、登録用トークンは含めない。
 //! 購入の行は `photo_key` に加えて写真取得 API のパスを `photo_path` として持ち、写真の実体と
 //! 署名付き GET URL は含めない (ADR-0003)。
@@ -34,23 +34,6 @@ struct ShopRow {
     favorited_at: Option<String>,
 }
 
-/// 商品の行。列は products テーブルと同じ。
-#[derive(Debug, Serialize, Deserialize)]
-struct ProductRow {
-    id: String,
-    user_id: String,
-    name: String,
-    producer: Option<String>,
-    origin: Option<String>,
-    region: Option<String>,
-    process: Option<String>,
-    variety: Option<String>,
-    created_at: String,
-    updated_at: String,
-    /// お気に入りにした日時。未設定のときは null (FR-21)。
-    favorited_at: Option<String>,
-}
-
 /// Flavor Notes のタグの行。列は flavor_tags テーブルと同じ。
 #[derive(Debug, Serialize, Deserialize)]
 struct FlavorTagRow {
@@ -59,11 +42,11 @@ struct FlavorTagRow {
     name: String,
 }
 
-/// 商品と Flavor Notes のタグの対応の行。列は product_flavor_tags テーブルと同じ。
+/// 購入と Flavor Notes のタグの対応の行。列は purchase_flavor_tags テーブルと同じ。
 #[derive(Debug, Serialize, Deserialize)]
-struct ProductFlavorTagRow {
+struct PurchaseFlavorTagRow {
     user_id: String,
-    product_id: String,
+    purchase_id: String,
     tag_id: String,
 }
 
@@ -72,7 +55,6 @@ struct ProductFlavorTagRow {
 struct PurchaseRow {
     id: String,
     user_id: String,
-    product_id: String,
     shop_id: Option<String>,
     purchased_on: String,
     roast: Option<String>,
@@ -81,6 +63,12 @@ struct PurchaseRow {
     price_currency: Option<String>,
     weight_grams: Option<i64>,
     photo_key: Option<String>,
+    name: String,
+    producer: Option<String>,
+    origin: Option<String>,
+    region: Option<String>,
+    process: Option<String>,
+    variety: Option<String>,
     created_at: String,
     updated_at: String,
     /// お気に入りにした日時。未設定のときは null (FR-21)。
@@ -125,13 +113,12 @@ struct BrewRow {
     favorited_at: Option<String>,
 }
 
-/// `GET /api/export` の応答。トップレベルに 6 テーブルの名前を持つ配列を並べる (FR-14)。
+/// `GET /api/export` の応答。トップレベルに 5 テーブルの名前を持つ配列を並べる (FR-14)。
 #[derive(Debug, Serialize)]
 struct ExportResponse {
     shops: Vec<ShopRow>,
-    products: Vec<ProductRow>,
     flavor_tags: Vec<FlavorTagRow>,
-    product_flavor_tags: Vec<ProductFlavorTagRow>,
+    purchase_flavor_tags: Vec<PurchaseFlavorTagRow>,
     purchases: Vec<PurchaseExportRow>,
     brews: Vec<BrewRow>,
 }
@@ -140,7 +127,7 @@ struct ExportResponse {
 pub async fn get(env: &Env, session: &Session) -> Result<Response> {
     let d1 = db::database(env)?;
     let user_id = &session.user_id;
-    // 6 つの SELECT を 1 つの batch (1 トランザクション) で実行し、単一の時点の記録を返す
+    // 5 つの SELECT を 1 つの batch (1 トランザクション) で実行し、単一の時点の記録を返す
     // (別々に読むと、親の無い抽出を含む復元できない JSON になり得る)。
     // 全行を読むため、応答は利用者の記録の大きさだけメモリに載る。想定規模 (抽出 30,000 件) で
     // 収まることは結合テスト (wrangler_records_scale) が確認する。
@@ -148,15 +135,6 @@ pub async fn get(env: &Env, session: &Session) -> Result<Response> {
         db::prepared(
             &d1,
             &query::export_rows(query::SHOPS_TABLE, query::SHOP_COLUMNS, "id ASC", user_id),
-        )?,
-        db::prepared(
-            &d1,
-            &query::export_rows(
-                query::PRODUCTS_TABLE,
-                query::PRODUCT_COLUMNS,
-                "id ASC",
-                user_id,
-            ),
         )?,
         db::prepared(
             &d1,
@@ -170,9 +148,9 @@ pub async fn get(env: &Env, session: &Session) -> Result<Response> {
         db::prepared(
             &d1,
             &query::export_rows(
-                query::PRODUCT_FLAVOR_TAGS_TABLE,
-                query::PRODUCT_FLAVOR_TAG_COLUMNS,
-                "product_id ASC, tag_id ASC",
+                query::PURCHASE_FLAVOR_TAGS_TABLE,
+                query::PURCHASE_FLAVOR_TAG_COLUMNS,
+                "purchase_id ASC, tag_id ASC",
                 user_id,
             ),
         )?,
@@ -192,18 +170,16 @@ pub async fn get(env: &Env, session: &Session) -> Result<Response> {
     ];
     let mut results = d1.batch(statements).await?.into_iter();
     let shops: Vec<ShopRow> = take_rows(&mut results, query::SHOPS_TABLE)?;
-    let products: Vec<ProductRow> = take_rows(&mut results, query::PRODUCTS_TABLE)?;
     let flavor_tags: Vec<FlavorTagRow> = take_rows(&mut results, query::FLAVOR_TAGS_TABLE)?;
-    let product_flavor_tags: Vec<ProductFlavorTagRow> =
-        take_rows(&mut results, query::PRODUCT_FLAVOR_TAGS_TABLE)?;
+    let purchase_flavor_tags: Vec<PurchaseFlavorTagRow> =
+        take_rows(&mut results, query::PURCHASE_FLAVOR_TAGS_TABLE)?;
     let purchases: Vec<PurchaseRow> = take_rows(&mut results, query::PURCHASES_TABLE)?;
     let brews: Vec<BrewRow> = take_rows(&mut results, query::BREWS_TABLE)?;
     respond::json_attachment(
         &ExportResponse {
             shops,
-            products,
             flavor_tags,
-            product_flavor_tags,
+            purchase_flavor_tags,
             purchases: purchases.into_iter().map(PurchaseExportRow::new).collect(),
             brews,
         },

@@ -1,6 +1,6 @@
 //! 抽出の詳細の画面 (FR-11、UC-6)。
 //!
-//! 使った購入をたどり、その中の商品と店 (登録している場合) もたどれるようにする。幅 840 px
+//! 使った購入をたどり、その店 (登録している場合) もたどれるようにする。幅 840 px
 //! 以上の 2 段組では `embedded` を true にし、右の面に出す。
 
 use dioxus::prelude::*;
@@ -177,7 +177,7 @@ pub fn BrewDetail(
                 if let Some(brew) = current {
                     div { class: "detail",
                         div { class: "detail-head",
-                            div { class: "name", "{brew.purchase.product.name}" }
+                            div { class: "name", "{brew.purchase.name}" }
                             div { class: "t-value muted",
                                 {crate::records::values::parse_utc_to_local(&brew.brewed_at, offset)
                                     .map(|datetime| crate::records::values::display_timestamp(datetime, language))
@@ -236,9 +236,6 @@ pub fn BrewDetail(
                                     let route = match kind {
                                         Key::PurchaseLabel => Some(Route::PurchaseDetail {
                                             id: brew.purchase.id.clone(),
-                                        }),
-                                        Key::ProductLabel => Some(Route::ProductEdit {
-                                            id: brew.purchase.product.id.clone(),
                                         }),
                                         _ => brew.purchase.shop.as_ref().map(|shop| Route::ShopEdit {
                                             id: shop.id.clone(),

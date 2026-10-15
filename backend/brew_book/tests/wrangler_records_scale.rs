@@ -1,4 +1,4 @@
-//! 想定規模 (1 利用者あたり店 100 件、商品 1,000 件、購入 3,000 件、抽出 30,000 件) のデータでの
+//! 想定規模 (1 利用者あたり店 100 件、購入 3,000 件、抽出 30,000 件) のデータでの
 //! 一覧と単件の取得と、全記録のエクスポートの処理時間を測る。
 //!
 //! 応答時間の目標 (p95 200 ms) の合否は、リリース後に本番の Workers Logs の `duration_ms` の
@@ -19,8 +19,6 @@ use support::seed::{user_id, Seed};
 
 /// 店の件数 (想定規模)。
 const SHOP_COUNT: usize = 100;
-/// 商品の件数 (想定規模)。
-const PRODUCT_COUNT: usize = 1_000;
 /// 購入の件数 (想定規模)。
 const PURCHASE_COUNT: usize = 3_000;
 /// 抽出の件数 (想定規模)。
@@ -54,37 +52,6 @@ fn wrangler_records_scale_of_the_list_the_single_fetch_and_the_export() {
     });
 
     // 一覧 (既定の 50 件)、一覧 (上限の 200 件)、単件の取得を測る。
-    let list_50 = measure(MEASUREMENTS, || {
-        let body = get_json(&client, "/api/products");
-        let products = body["products"].as_array().expect("products");
-        assert_eq!(products.len(), 50, "the default page size is 50");
-        // 作成日時の降順で返る。
-        assert_eq!(
-            products[0]["name"],
-            format!("一覧の商品 {}", PRODUCT_COUNT - 1)
-        );
-        (body["next_cursor"].is_string(), 50)
-    });
-    let list_200 = measure(MEASUREMENTS, || {
-        let body = get_json(&client, &format!("/api/products?limit={MAX_PAGE_SIZE}"));
-        let products = body["products"].as_array().expect("products");
-        assert_eq!(products.len(), MAX_PAGE_SIZE, "the page size must be 200");
-        (true, MAX_PAGE_SIZE)
-    });
-    // 作成日時は添字とともに進むため、添字 0 が最も古く、最後の添字が最も新しい。
-    let single_oldest = measure(MEASUREMENTS, || {
-        let body = get_json(&client, &format!("/api/products/{}", row_id("product", 0)));
-        assert_eq!(body["name"], "一覧の商品 0");
-        (body["id"].is_string(), 1)
-    });
-    let single_newest = measure(MEASUREMENTS, || {
-        let body = get_json(
-            &client,
-            &format!("/api/products/{}", row_id("product", PRODUCT_COUNT - 1)),
-        );
-        assert_eq!(body["name"], format!("一覧の商品 {}", PRODUCT_COUNT - 1));
-        (body["id"].is_string(), 1)
-    });
     let shops = measure(MEASUREMENTS, || {
         let body = get_json(&client, &format!("/api/shops?limit={MAX_PAGE_SIZE}"));
         let shops = body["shops"].as_array().expect("shops");
@@ -103,8 +70,11 @@ fn wrangler_records_scale_of_the_list_the_single_fetch_and_the_export() {
         let purchases = body["purchases"].as_array().expect("purchases");
         assert_eq!(purchases.len(), 50, "the default page size is 50");
         assert_eq!(purchases[0]["id"], row_id("purchase", PURCHASE_COUNT - 1));
-        // 応答には商品と店がネストする (結合の結果)。
-        assert!(purchases[0]["product"]["id"].is_string(), "{body}");
+        // 応答は商品の項目を平坦に持つ (ADR-0022)。
+        assert_eq!(
+            purchases[0]["name"],
+            format!("一覧の購入 {}", PURCHASE_COUNT - 1)
+        );
         (body["next_cursor"].is_string(), 50)
     });
     let purchases_list_200 = measure(MEASUREMENTS, || {
@@ -119,6 +89,7 @@ fn wrangler_records_scale_of_the_list_the_single_fetch_and_the_export() {
             &format!("/api/purchases/{}", row_id("purchase", 0)),
         );
         assert_eq!(body["purchased_on"], day(0));
+        assert_eq!(body["name"], "一覧の購入 0");
         (body["id"].is_string(), 1)
     });
     let purchase_newest = measure(MEASUREMENTS, || {
@@ -135,8 +106,8 @@ fn wrangler_records_scale_of_the_list_the_single_fetch_and_the_export() {
         let brews = body["brews"].as_array().expect("brews");
         assert_eq!(brews.len(), 50, "the default page size is 50");
         assert_eq!(brews[0]["id"], row_id("brew", BREW_COUNT - 1));
-        // 応答には購入と、その中の商品と店がネストする (結合の結果)。
-        assert!(brews[0]["purchase"]["product"]["id"].is_string(), "{body}");
+        // 応答には購入と、その中の店がネストする (結合の結果)。商品の項目は購入が持つ (ADR-0022)。
+        assert!(brews[0]["purchase"]["name"].is_string(), "{body}");
         (body["next_cursor"].is_string(), 50)
     });
     let brews_list_200 = measure(MEASUREMENTS, || {
@@ -169,11 +140,6 @@ fn wrangler_records_scale_of_the_list_the_single_fetch_and_the_export() {
             "the export must carry every shop"
         );
         assert_eq!(
-            body["products"].as_array().map(Vec::len),
-            Some(PRODUCT_COUNT),
-            "the export must carry every product"
-        );
-        assert_eq!(
             body["purchases"].as_array().map(Vec::len),
             Some(PURCHASE_COUNT),
             "the export must carry every purchase"
@@ -183,10 +149,7 @@ fn wrangler_records_scale_of_the_list_the_single_fetch_and_the_export() {
             Some(BREW_COUNT),
             "the export must carry every brew"
         );
-        (
-            true,
-            SHOP_COUNT + PRODUCT_COUNT + PURCHASE_COUNT + BREW_COUNT,
-        )
+        (true, SHOP_COUNT + PURCHASE_COUNT + BREW_COUNT)
     });
     // 応答の JSON の大きさ。Worker が載せるメモリの見積もりの根拠にする。
     let export_bytes = serde_json::to_string(&get_json(&client, "/api/export"))
@@ -194,13 +157,9 @@ fn wrangler_records_scale_of_the_list_the_single_fetch_and_the_export() {
         .len();
 
     println!(
-        "the measurements of the assumed scale ({} shops, {} products, {} purchases, {} brews):",
-        SHOP_COUNT, PRODUCT_COUNT, PURCHASE_COUNT, BREW_COUNT
+        "the measurements of the assumed scale ({} shops, {} purchases, {} brews):",
+        SHOP_COUNT, PURCHASE_COUNT, BREW_COUNT
     );
-    report("products list (limit 50)", &list_50);
-    report("products list (limit 200)", &list_200);
-    report("products single (the oldest)", &single_oldest);
-    report("products single (the newest)", &single_newest);
     report("shops list (100 shops)", &shops);
     report("shops single (1 shop)", &single_shop);
     report("purchases list (limit 50)", &purchases_list);
@@ -251,36 +210,20 @@ impl ScaleData {
                 })
                 .collect(),
         ));
-        // 商品 1,000 件。作成日時は 1 分ずつ進める。
+        // 購入 3,000 件。購入日は基準の日から 1 日ずつ進める。商品の項目は購入が持つ (ADR-0022)。
         bulk_sql.extend(chunked_insert(
-            "INSERT INTO products (id, user_id, name, producer, origin, region, process, variety, \
-             created_at, updated_at)",
-            (0..PRODUCT_COUNT)
-                .map(|index| {
-                    format!(
-                        "({}, {}, {}, NULL, NULL, NULL, NULL, NULL, {}, {})",
-                        literal(&row_id("product", index)),
-                        literal(&user),
-                        literal(&format!("一覧の商品 {index}")),
-                        literal(&timestamp(index)),
-                        literal(&timestamp(index))
-                    )
-                })
-                .collect(),
-        ));
-        // 購入 3,000 件。購入日は基準の日から 1 日ずつ進める。
-        bulk_sql.extend(chunked_insert(
-            "INSERT INTO purchases (id, user_id, product_id, shop_id, purchased_on, roast, \
-             roast_date, price_amount, price_currency, weight_grams, photo_key, created_at, \
-             updated_at)",
+            "INSERT INTO purchases (id, user_id, shop_id, purchased_on, roast, roast_date, \
+             price_amount, price_currency, weight_grams, photo_key, name, producer, origin, \
+             region, process, variety, created_at, updated_at)",
             (0..PURCHASE_COUNT)
                 .map(|index| {
                     format!(
-                        "({}, {}, {}, NULL, {}, NULL, NULL, NULL, NULL, NULL, NULL, {}, {})",
+                        "({}, {}, NULL, {}, NULL, NULL, NULL, NULL, NULL, NULL, {}, NULL, NULL, \
+                         NULL, NULL, NULL, {}, {})",
                         literal(&row_id("purchase", index)),
                         literal(&user),
-                        literal(&row_id("product", index % PRODUCT_COUNT)),
                         literal(&day(index)),
+                        literal(&format!("一覧の購入 {index}")),
                         literal(&timestamp(index)),
                         literal(&timestamp(index))
                     )

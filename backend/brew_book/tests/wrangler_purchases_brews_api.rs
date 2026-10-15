@@ -1,7 +1,8 @@
 //! 購入と抽出の API の結合テスト (HTTP)。
 //!
 //! 一覧と単件の取得、登録、更新、入力の検証、参照先の 404、
-//! 他の利用者の記録の 404、ネストした商品と店 (店が無い購入の null を含む)、カーソルの
+//! 他の利用者の記録の 404、購入が直下に持つ商品の項目と Flavor Notes、ネストした店
+//! (店が無い購入の null を含む)、カーソルの
 //! 並び順を検査する。子から親をたどれることも確認する。
 //!
 //! テスト名の `wrangler_` は、`wrangler dev` を起動するテストを `backend:test` が名前で除外するための規約。
@@ -16,7 +17,7 @@ use std::time::Duration;
 use reqwest::blocking::Response;
 use serde_json::{json, Value};
 use support::http::{error_code, read, ApiClient};
-use support::seed::{user_id, Seed, SeededBrew, SeededProduct, SeededPurchase, SeededShop};
+use support::seed::{user_id, Seed, SeededBrew, SeededPurchase, SeededShop};
 use support::ServerLease;
 
 /// 下ごしらえに使う時刻 (ISO 8601 UTC の固定長)。
@@ -39,19 +40,16 @@ struct TestData {
     /// 購入の一覧のテストの利用者 (同じ購入日の 2 件、店が無い 1 件、古い 1 件)。
     purchase_list_user: String,
     purchase_list_session: String,
-    purchase_list_products: Vec<SeededProduct>,
     purchase_list_shop: SeededShop,
     purchase_list_purchases: Vec<SeededPurchase>,
     purchase_list_old_purchase: SeededPurchase,
     /// 購入の書き換えのテストの利用者。
     purchase_write_user: String,
     purchase_write_session: String,
-    purchase_write_product: SeededProduct,
     purchase_write_shop: SeededShop,
     /// 抽出の一覧のテストの利用者 (同じ抽出日時の 2 件、古い 1 件)。
     brew_list_user: String,
     brew_list_session: String,
-    brew_list_product: SeededProduct,
     brew_list_shop: SeededShop,
     brew_list_purchases: Vec<SeededPurchase>,
     brew_list_brews: Vec<SeededBrew>,
@@ -63,15 +61,16 @@ struct TestData {
     /// 他の利用者 (404 の検査に使う)。
     other_user: String,
     other_session: String,
-    other_product: SeededProduct,
     other_shop: SeededShop,
     other_purchase: SeededPurchase,
     other_brew: SeededBrew,
     /// 記録が無い利用者のセッション。
     empty_session: String,
-    /// 購入の削除のテストの利用者 (0056)。写真つきの購入 1 件と抽出 2 件を持つ。
+    /// 購入の削除のテストの利用者 (0056)。写真つきの購入 1 件と抽出 2 件と、
+    /// 同じタグを共有する購入 1 件を持つ (ADR-0022)。
     delete_purchase_session: String,
     delete_purchase_purchase: SeededPurchase,
+    delete_purchase_other_purchase: SeededPurchase,
     delete_purchase_brews: Vec<SeededBrew>,
     /// 購入に付けた写真のオブジェクトキー (R2 の検査に使う)。
     delete_purchase_photo_key: String,
@@ -105,39 +104,28 @@ fn build_data() -> TestData {
     let purchase_list_user = user_id(1);
     seed.user(&purchase_list_user, "purchase list user", created);
     let purchase_list_session = seed.session(&purchase_list_user, future, created);
-    let purchase_list_products = vec![
-        seed.product(&purchase_list_user, "一覧の豆", T21, T21),
-        seed.product(&purchase_list_user, "古い豆", T20, T20),
-    ];
-    // ネストした商品の Flavor Notes の検査のためのタグ (乖離 2)。
+    // 購入の Flavor Notes の検査のためのタグ (乖離 2、ADR-0022)。
     let purchase_list_tag = seed.flavor_tag(&purchase_list_user, "購入のタグ");
-    seed.product_flavor_tag(
-        &purchase_list_user,
-        &purchase_list_products[0].id,
-        &purchase_list_tag,
-    );
     let purchase_list_shop = seed.shop(&purchase_list_user, "一覧の店", Some("東京都"), T21, T21);
     let purchase_list_purchases = vec![
         seed.purchase(
             &purchase_list_user,
-            &purchase_list_products[0].id,
+            "一覧の豆",
             Some(&purchase_list_shop.id),
             D21,
             T21,
             T21,
         ),
-        seed.purchase(
-            &purchase_list_user,
-            &purchase_list_products[0].id,
-            None,
-            D21,
-            T21,
-            T21,
-        ),
+        seed.purchase(&purchase_list_user, "一覧の豆", None, D21, T21, T21),
     ];
+    seed.purchase_flavor_tag(
+        &purchase_list_user,
+        &purchase_list_purchases[0].id,
+        &purchase_list_tag,
+    );
     let purchase_list_old_purchase = seed.purchase(
         &purchase_list_user,
-        &purchase_list_products[1].id,
+        "古い豆",
         Some(&purchase_list_shop.id),
         D20,
         T20,
@@ -148,37 +136,40 @@ fn build_data() -> TestData {
     let purchase_write_user = user_id(2);
     seed.user(&purchase_write_user, "purchase write user", created);
     let purchase_write_session = seed.session(&purchase_write_user, future, created);
-    let purchase_write_product = seed.product(&purchase_write_user, "書き換えの豆", T21, T21);
     let purchase_write_shop = seed.shop(&purchase_write_user, "書き換えの店", None, T21, T21);
 
     // 抽出の一覧のテストの利用者。同じ抽出日時の 2 件は、先に作った方の ID が小さい。
     let brew_list_user = user_id(4);
     seed.user(&brew_list_user, "brew list user", created);
     let brew_list_session = seed.session(&brew_list_user, future, created);
-    let brew_list_product = seed.product(&brew_list_user, "抽出の豆", T21, T21);
-    // ネストした商品の Flavor Notes の検査のためのタグ (乖離 2)。
+    // ネストした購入の Flavor Notes の検査のためのタグ (乖離 2、ADR-0022)。
     let brew_list_tag = seed.flavor_tag(&brew_list_user, "抽出のタグ");
-    seed.product_flavor_tag(&brew_list_user, &brew_list_product.id, &brew_list_tag);
     let brew_list_shop = seed.shop(&brew_list_user, "抽出の店", None, T21, T21);
     let brew_list_purchases = vec![
         seed.purchase(
             &brew_list_user,
-            &brew_list_product.id,
+            "抽出の豆",
             Some(&brew_list_shop.id),
             D21,
             T21,
             T21,
         ),
-        seed.purchase(&brew_list_user, &brew_list_product.id, None, D21, T21, T21),
+        seed.purchase(&brew_list_user, "抽出の豆", None, D21, T21, T21),
     ];
     let brew_list_old_purchase = seed.purchase(
         &brew_list_user,
-        &brew_list_product.id,
+        "抽出の豆",
         Some(&brew_list_shop.id),
         D20,
         T20,
         T20,
     );
+    for purchase in brew_list_purchases
+        .iter()
+        .chain(std::iter::once(&brew_list_old_purchase))
+    {
+        seed.purchase_flavor_tag(&brew_list_user, &purchase.id, &brew_list_tag);
+    }
     let brew_list_brews = vec![
         seed.brew(&brew_list_user, &brew_list_purchases[0].id, B21, T21, T21),
         seed.brew(&brew_list_user, &brew_list_purchases[1].id, B21, T21, T21),
@@ -189,31 +180,23 @@ fn build_data() -> TestData {
     let brew_write_user = user_id(5);
     seed.user(&brew_write_user, "brew write user", created);
     let brew_write_session = seed.session(&brew_write_user, future, created);
-    let brew_write_product = seed.product(&brew_write_user, "書き換えの抽出の豆", T21, T21);
     let brew_write_shop = seed.shop(&brew_write_user, "書き換えの抽出の店", None, T21, T21);
     let brew_write_purchase = seed.purchase(
         &brew_write_user,
-        &brew_write_product.id,
+        "書き換えの抽出の豆",
         Some(&brew_write_shop.id),
         D21,
         T21,
         T21,
     );
 
-    // 他の利用者。商品と店と購入と抽出を 1 つずつ持つ。
+    // 他の利用者。店と購入と抽出を 1 つずつ持つ。
     let other_user = user_id(7);
     seed.user(&other_user, "other user", created);
     let other_session = seed.session(&other_user, future, created);
-    let other_product = seed.product(&other_user, "他人の豆", T21, T21);
     let other_shop = seed.shop(&other_user, "他人の店", None, T21, T21);
-    let other_purchase = seed.purchase(
-        &other_user,
-        &other_product.id,
-        Some(&other_shop.id),
-        D21,
-        T21,
-        T21,
-    );
+    let other_purchase =
+        seed.purchase(&other_user, "他人の豆", Some(&other_shop.id), D21, T21, T21);
     let other_brew = seed.brew(&other_user, &other_purchase.id, B21, T21, T21);
 
     // 記録が無い利用者。
@@ -221,18 +204,25 @@ fn build_data() -> TestData {
     seed.user(&empty_user, "empty user", created);
     let empty_session = seed.session(&empty_user, future, created);
 
-    // 購入の削除のテストの利用者 (0056)。写真つきの購入 1 件と抽出 2 件を持つ。
+    // 購入の削除のテストの利用者 (0056)。写真つきの購入 1 件と抽出 2 件と、同じタグを共有する
+    // 購入 1 件を持つ (ADR-0022)。
     let delete_purchase_user = user_id(11);
     seed.user(&delete_purchase_user, "delete purchase user", created);
     let delete_purchase_session = seed.session(&delete_purchase_user, future, created);
-    let delete_purchase_product = seed.product(&delete_purchase_user, "削除の購入の豆", T21, T21);
-    let delete_purchase_purchase = seed.purchase(
+    let delete_purchase_purchase =
+        seed.purchase(&delete_purchase_user, "削除の購入の豆", None, D21, T21, T21);
+    let delete_purchase_other_purchase =
+        seed.purchase(&delete_purchase_user, "残る購入の豆", None, D20, T20, T20);
+    let shared_tag = seed.flavor_tag(&delete_purchase_user, "shared");
+    seed.purchase_flavor_tag(
         &delete_purchase_user,
-        &delete_purchase_product.id,
-        None,
-        D21,
-        T21,
-        T21,
+        &delete_purchase_purchase.id,
+        &shared_tag,
+    );
+    seed.purchase_flavor_tag(
+        &delete_purchase_user,
+        &delete_purchase_other_purchase.id,
+        &shared_tag,
     );
     let delete_purchase_photo_key = format!(
         "users/{delete_purchase_user}/purchases/{}/photo.jpg",
@@ -263,15 +253,8 @@ fn build_data() -> TestData {
     let delete_brew_user = user_id(12);
     seed.user(&delete_brew_user, "delete brew user", created);
     let delete_brew_session = seed.session(&delete_brew_user, future, created);
-    let delete_brew_product = seed.product(&delete_brew_user, "削除の抽出の豆", T21, T21);
-    let delete_brew_purchase = seed.purchase(
-        &delete_brew_user,
-        &delete_brew_product.id,
-        None,
-        D21,
-        T21,
-        T21,
-    );
+    let delete_brew_purchase =
+        seed.purchase(&delete_brew_user, "削除の抽出の豆", None, D21, T21, T21);
     let delete_brew_brews = vec![
         seed.brew(&delete_brew_user, &delete_brew_purchase.id, B21, T21, T21),
         seed.brew(&delete_brew_user, &delete_brew_purchase.id, B20, T20, T20),
@@ -281,17 +264,14 @@ fn build_data() -> TestData {
         seed_sql: seed.sql(),
         purchase_list_user,
         purchase_list_session,
-        purchase_list_products,
         purchase_list_shop,
         purchase_list_purchases,
         purchase_list_old_purchase,
         purchase_write_user,
         purchase_write_session,
-        purchase_write_product,
         purchase_write_shop,
         brew_list_user,
         brew_list_session,
-        brew_list_product,
         brew_list_shop,
         brew_list_purchases,
         brew_list_brews,
@@ -301,13 +281,13 @@ fn build_data() -> TestData {
         brew_write_purchase,
         other_user,
         other_session,
-        other_product,
         other_shop,
         other_purchase,
         other_brew,
         empty_session,
         delete_purchase_session,
         delete_purchase_purchase,
+        delete_purchase_other_purchase,
         delete_purchase_brews,
         delete_purchase_photo_key,
         delete_brew_session,
@@ -363,25 +343,21 @@ fn sleep_millis(millis: u64) {
     std::thread::sleep(Duration::from_millis(millis));
 }
 
-/// ネストした商品を確かめる (FR-9、FR-11)。`flavor_notes` は期待するタグ名の配列。
-fn assert_nested_product(
-    body: &Value,
-    product: &SeededProduct,
-    user_id: &str,
-    flavor_notes: &[&str],
-) {
-    assert_eq!(body["product"]["id"], product.id, "{body}");
-    assert_eq!(body["product"]["name"], product.name, "{body}");
-    assert_eq!(body["product"]["user_id"], user_id, "{body}");
-    assert_eq!(
-        body["product"]["flavor_notes"],
-        json!(flavor_notes),
-        "{body}"
-    );
-    // 入れ子の商品にも favorited_at が含まれる (FR-21)。
+/// 購入が直下に持つ商品の項目を確かめる (FR-9、FR-11、ADR-0022)。
+/// `flavor_notes` は期待するタグ名の配列。
+fn assert_purchase_fields(body: &Value, name: &str, user_id: &str, flavor_notes: &[&str]) {
+    assert_eq!(body["name"], name, "{body}");
+    assert_eq!(body["user_id"], user_id, "{body}");
+    assert_eq!(body["flavor_notes"], json!(flavor_notes), "{body}");
+    // 購入にも favorited_at が含まれる (FR-21)。
     assert!(
-        body["product"].get("favorited_at").is_some(),
-        "the nested product must carry favorited_at: {body}"
+        body.get("favorited_at").is_some(),
+        "the purchase must carry favorited_at: {body}"
+    );
+    // 商品はネストせず、商品の ID も無い (ADR-0022)。
+    assert!(
+        body.get("product").is_none() && body.get("product_id").is_none(),
+        "the purchase must not carry a nested product: {body}"
     );
 }
 
@@ -426,13 +402,15 @@ mod purchases {
         );
         assert_eq!(purchases[0]["purchased_on"], D21, "{body}");
         assert_eq!(purchases[2]["purchased_on"], D20, "{body}");
-        // 応答には商品と店がネストしたオブジェクトとして入る (FR-9)。
-        assert_nested_product(
+        // 応答は商品の項目を直下に持ち、店はネストしたオブジェクトとして入る (FR-9、ADR-0022)。
+        assert_purchase_fields(
             &purchases[0],
-            &data.purchase_list_products[0],
+            &data.purchase_list_purchases[0].name,
             &data.purchase_list_user,
             &["購入のタグ"],
         );
+        // タグを付けていない購入では flavor_notes は空の配列になる。
+        assert_eq!(purchases[1]["flavor_notes"], json!([]), "{body}");
         assert_nested_shop(
             &purchases[0],
             &data.purchase_list_shop,
@@ -534,7 +512,17 @@ mod purchases {
             assert_bad_request(client.get(&format!("/api/purchases?{query}")));
         }
         // sort、order、favorite は受け付けない値を 400 にする (FR-20、FR-21)。
-        for query in ["sort=unknown", "order=up", "favorite=yes", "favorite=1"] {
+        // 購入の一覧の sort は purchased_on、price_amount、weight_grams だけで、他の一覧のキーと
+        // 商品名は受け付けない (0057)。
+        for query in [
+            "sort=unknown",
+            "sort=name",
+            "sort=created_at",
+            "sort=rating",
+            "order=up",
+            "favorite=yes",
+            "favorite=1",
+        ] {
             assert_bad_request(client.get(&format!("/api/purchases?{query}")));
         }
         // 200 ぴったりは受け付ける。
@@ -572,6 +560,15 @@ mod purchases {
         for purchase in purchases {
             assert!(purchase.get("favorited_at").is_some(), "{purchase}");
         }
+        // 価格と重さでも並べられ、3 件とも返る (FR-20、0057 で商品名を足していない)。
+        for query in [
+            "sort=price_amount&order=asc",
+            "sort=weight_grams&order=desc",
+        ] {
+            let body = assert_status(client.get(&format!("/api/purchases?{query}")), 200);
+            let sorted = body["purchases"].as_array().expect("purchases");
+            assert_eq!(sorted.len(), purchases.len(), "{body}");
+        }
     }
 
     #[test]
@@ -584,7 +581,7 @@ mod purchases {
             client.post_json(
                 "/api/purchases",
                 &json!({
-                    "product_id": data.purchase_write_product.id,
+                    "name": "お気に入りの豆",
                     "purchased_on": D21,
                     "price_amount": 1200,
                     "price_currency": "JPY",
@@ -644,19 +641,23 @@ mod purchases {
         let base_url = lease.use_server(|server| server.base_url());
         let client = ApiClient::new(&base_url, Some(&data.purchase_write_session));
 
-        // 商品と購入日だけを指定して登録できる。店と価格と重量は省略できる (FR-9)。
+        // 商品名と購入日だけを指定して登録できる。店と価格と重量と商品の他の項目は省略できる
+        // (FR-9、ADR-0022)。商品名は前後の空白を除いて保存する。
         let body = assert_status(
             client.post_json(
                 "/api/purchases",
                 &json!({
-                    "product_id": data.purchase_write_product.id,
+                    "name": "  名前だけの豆  ",
                     "purchased_on": D21,
                 }),
             ),
             200,
         );
         assert_eq!(body["user_id"], data.purchase_write_user, "{body}");
-        assert_eq!(body["product_id"], data.purchase_write_product.id, "{body}");
+        assert_purchase_fields(&body, "名前だけの豆", &data.purchase_write_user, &[]);
+        for field in ["producer", "origin", "region", "process", "variety"] {
+            assert_eq!(body[field], Value::Null, "{field}: {body}");
+        }
         assert_eq!(body["shop_id"], Value::Null, "{body}");
         assert_eq!(body["purchased_on"], D21, "{body}");
         assert_eq!(body["photo_key"], Value::Null, "{body}");
@@ -667,11 +668,7 @@ mod purchases {
         assert_eq!(body["price_amount"], Value::Null, "{body}");
         assert_eq!(body["price_currency"], Value::Null, "{body}");
         assert_eq!(body["weight_grams"], Value::Null, "{body}");
-        // 商品はネストして返り、店は null になる (FR-9)。
-        assert_eq!(
-            body["product"]["id"], data.purchase_write_product.id,
-            "{body}"
-        );
+        // 店は null になる (FR-9)。
         assert_eq!(body["shop"], Value::Null, "{body}");
         let id = body["id"].as_str().expect("the id must be present");
         assert_eq!(id.len(), 36, "the id must be a UUID: {id}");
@@ -685,12 +682,19 @@ mod purchases {
         let fetched = assert_status(client.get(&format!("/api/purchases/{id}")), 200);
         assert_eq!(fetched, body);
 
-        // 全項目を指定して登録する。自由記述は前後の空白を除いて保存する (0006 の規則)。
+        // 全項目とタグを指定して登録する。自由記述は前後の空白を除き、タグは重複を除いて共有する
+        // (0006 の規則、FR-8、ADR-0022)。
         let body = assert_status(
             client.post_json(
                 "/api/purchases",
                 &json!({
-                    "product_id": data.purchase_write_product.id,
+                    "name": "  全部入りの豆  ",
+                    "producer": "  生産者  ",
+                    "origin": "  エチオピア  ",
+                    "region": "  イルガチェフェ  ",
+                    "process": "  ウォッシュト  ",
+                    "variety": "  在来種  ",
+                    "flavor_notes": ["  チョコ  ", "berry", "チョコ", " berry "],
                     "shop_id": data.purchase_write_shop.id,
                     "purchased_on": D20,
                     "roast": "  中煎り  ",
@@ -702,6 +706,13 @@ mod purchases {
             ),
             200,
         );
+        assert_eq!(body["name"], "全部入りの豆", "{body}");
+        assert_eq!(body["producer"], "生産者", "{body}");
+        assert_eq!(body["origin"], "エチオピア", "{body}");
+        assert_eq!(body["region"], "イルガチェフェ", "{body}");
+        assert_eq!(body["process"], "ウォッシュト", "{body}");
+        assert_eq!(body["variety"], "在来種", "{body}");
+        assert_eq!(body["flavor_notes"], json!(["berry", "チョコ"]), "{body}");
         assert_eq!(body["shop_id"], data.purchase_write_shop.id, "{body}");
         assert_eq!(body["purchased_on"], D20, "{body}");
         assert_eq!(body["roast"], "中煎り", "{body}");
@@ -718,13 +729,26 @@ mod purchases {
             200,
         );
         assert_eq!(fetched, body);
+        // タグは利用者ごとに名前で一意にする (FR-8)。
+        let tags = assert_status(client.get("/api/flavor-tags"), 200);
+        let names: Vec<&str> = tags["flavor_tags"]
+            .as_array()
+            .expect("flavor_tags")
+            .iter()
+            .filter_map(|tag| tag["name"].as_str())
+            .collect();
+        assert_eq!(
+            names.iter().filter(|name| **name == "チョコ").count(),
+            1,
+            "the tag must be shared: {tags}"
+        );
 
         // 価格だけを指定して通貨コードを省略すると JPY を保存する (FR-9)。
         let body = assert_status(
             client.post_json(
                 "/api/purchases",
                 &json!({
-                    "product_id": data.purchase_write_product.id,
+                    "name": "書き換えの豆",
                     "purchased_on": D19,
                     "price_amount": 0,
                 }),
@@ -736,50 +760,85 @@ mod purchases {
     }
 
     #[test]
+    fn wrangler_purchases_create_ok_with_many_flavor_notes() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.purchase_write_session));
+        // タグの置き換えは 1 つのまとまり (D1 の batch) で行う。多数のタグでも通ることを確認する。
+        let names: Vec<String> = (0..60).map(|index| format!("tag-{index:02}")).collect();
+        let body = assert_status(
+            client.post_json(
+                "/api/purchases",
+                &json!({ "name": "タグが多い豆", "purchased_on": D21, "flavor_notes": names }),
+            ),
+            200,
+        );
+        let flavor_notes = body["flavor_notes"]
+            .as_array()
+            .expect("flavor_notes")
+            .clone();
+        assert_eq!(flavor_notes.len(), 60, "{body}");
+        assert_eq!(body["flavor_notes"][0], "tag-00");
+        assert_eq!(body["flavor_notes"][59], "tag-59");
+    }
+
+    #[test]
     fn wrangler_purchases_create_invalid_input_400() {
         let data = data();
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
         let client = ApiClient::new(&base_url, Some(&data.purchase_write_session));
-        let product = &data.purchase_write_product.id;
+        let name = "検査の豆";
         for body in [
             json!({}),
-            // 商品と購入日は必須 (FR-9)。
+            // 商品名と購入日は必須で、商品名は前後の空白を除いて空なら拒否する (FR-9、ADR-0022)。
             json!({ "purchased_on": D21 }),
-            json!({ "product_id": product }),
-            json!({ "product_id": product, "purchased_on": null }),
-            json!({ "product_id": null, "purchased_on": D21 }),
+            json!({ "name": name }),
+            json!({ "name": name, "purchased_on": null }),
+            json!({ "name": null, "purchased_on": D21 }),
+            json!({ "name": "", "purchased_on": D21 }),
+            json!({ "name": "   ", "purchased_on": D21 }),
+            // 空白だけのタグ名は拒否する (FR-8)。
+            json!({ "name": name, "purchased_on": D21, "flavor_notes": ["チョコ", "  "] }),
+            json!({ "name": name, "purchased_on": D21, "flavor_notes": [""] }),
+            // タグの配列でない値と `null` は拒否する (タグを付けないときは項目を省くか空の配列)。
+            json!({ "name": name, "purchased_on": D21, "flavor_notes": "チョコ" }),
+            json!({ "name": name, "purchased_on": D21, "flavor_notes": [1] }),
+            json!({ "name": name, "purchased_on": D21, "flavor_notes": null }),
+            // 商品の ID は受け付けない (商品は購入に統合した。ADR-0022)。
+            json!({ "name": name, "purchased_on": D21, "product_id": "no-such-id" }),
             // 購入日は実在する `YYYY-MM-DD` だけを受け付ける (ADR-0002)。
-            json!({ "product_id": product, "purchased_on": "" }),
-            json!({ "product_id": product, "purchased_on": "2026-02-30" }),
-            json!({ "product_id": product, "purchased_on": "2026-2-1" }),
-            json!({ "product_id": product, "purchased_on": "2026-9-1" }),
-            json!({ "product_id": product, "purchased_on": "2026-09-21T00:00:00.000Z" }),
-            json!({ "product_id": product, "purchased_on": " 2026-09-21" }),
-            json!({ "product_id": product, "purchased_on": D21, "roast_date": "2026-02-30" }),
-            json!({ "product_id": product, "purchased_on": D21, "roast_date": "2026-09-21T00:00:00.000Z" }),
+            json!({ "name": name, "purchased_on": "" }),
+            json!({ "name": name, "purchased_on": "2026-02-30" }),
+            json!({ "name": name, "purchased_on": "2026-2-1" }),
+            json!({ "name": name, "purchased_on": "2026-9-1" }),
+            json!({ "name": name, "purchased_on": "2026-09-21T00:00:00.000Z" }),
+            json!({ "name": name, "purchased_on": " 2026-09-21" }),
+            json!({ "name": name, "purchased_on": D21, "roast_date": "2026-02-30" }),
+            json!({ "name": name, "purchased_on": D21, "roast_date": "2026-09-21T00:00:00.000Z" }),
             // 価格と重量は 0 以上の整数だけ (FR-9)。
-            json!({ "product_id": product, "purchased_on": D21, "price_amount": -1 }),
-            json!({ "product_id": product, "purchased_on": D21, "price_amount": 1.5 }),
-            json!({ "product_id": product, "purchased_on": D21, "price_amount": "1200" }),
-            json!({ "product_id": product, "purchased_on": D21, "price_amount": 2147483648_i64 }),
-            json!({ "product_id": product, "purchased_on": D21, "weight_grams": -1 }),
-            json!({ "product_id": product, "purchased_on": D21, "weight_grams": 1.5 }),
-            json!({ "product_id": product, "purchased_on": D21, "weight_grams": 2147483648_i64 }),
+            json!({ "name": name, "purchased_on": D21, "price_amount": -1 }),
+            json!({ "name": name, "purchased_on": D21, "price_amount": 1.5 }),
+            json!({ "name": name, "purchased_on": D21, "price_amount": "1200" }),
+            json!({ "name": name, "purchased_on": D21, "price_amount": 2147483648_i64 }),
+            json!({ "name": name, "purchased_on": D21, "weight_grams": -1 }),
+            json!({ "name": name, "purchased_on": D21, "weight_grams": 1.5 }),
+            json!({ "name": name, "purchased_on": D21, "weight_grams": 2147483648_i64 }),
             // 通貨コードは ISO 4217 の 3 文字の英大文字だけ (FR-9)。
-            json!({ "product_id": product, "purchased_on": D21, "price_amount": 100, "price_currency": "usd" }),
-            json!({ "product_id": product, "purchased_on": D21, "price_amount": 100, "price_currency": "JP" }),
-            json!({ "product_id": product, "purchased_on": D21, "price_amount": 100, "price_currency": "JPYY" }),
-            json!({ "product_id": product, "purchased_on": D21, "price_amount": 100, "price_currency": "12" }),
-            json!({ "product_id": product, "purchased_on": D21, "price_amount": 100, "price_currency": "あいう" }),
+            json!({ "name": name, "purchased_on": D21, "price_amount": 100, "price_currency": "usd" }),
+            json!({ "name": name, "purchased_on": D21, "price_amount": 100, "price_currency": "JP" }),
+            json!({ "name": name, "purchased_on": D21, "price_amount": 100, "price_currency": "JPYY" }),
+            json!({ "name": name, "purchased_on": D21, "price_amount": 100, "price_currency": "12" }),
+            json!({ "name": name, "purchased_on": D21, "price_amount": 100, "price_currency": "あいう" }),
             // 価格が無いのに通貨コードだけを指定することはできない。
-            json!({ "product_id": product, "purchased_on": D21, "price_currency": "JPY" }),
+            json!({ "name": name, "purchased_on": D21, "price_currency": "JPY" }),
             // 受け取らない項目は無視せず 400 にする (0007 の設計判断)。
-            json!({ "product_id": product, "purchased_on": D21, "id": "no-such-id" }),
-            json!({ "product_id": product, "purchased_on": D21, "created_at": T21 }),
-            json!({ "product_id": product, "purchased_on": D21, "updated_at": T21 }),
-            json!({ "product_id": product, "purchased_on": D21, "photo_key": "purchases/photo.jpg" }),
-            json!({ "product_id": product, "purchased_on": D21, "user_id": data.purchase_write_user }),
+            json!({ "name": name, "purchased_on": D21, "id": "no-such-id" }),
+            json!({ "name": name, "purchased_on": D21, "created_at": T21 }),
+            json!({ "name": name, "purchased_on": D21, "updated_at": T21 }),
+            json!({ "name": name, "purchased_on": D21, "photo_key": "purchases/photo.jpg" }),
+            json!({ "name": name, "purchased_on": D21, "user_id": data.purchase_write_user }),
             json!([1, 2]),
         ] {
             assert_bad_request(client.post_json("/api/purchases", &body));
@@ -792,19 +851,11 @@ mod purchases {
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
         let client = ApiClient::new(&base_url, Some(&data.purchase_write_session));
-        // 存在しない商品と店、他の利用者の商品と店は 404 (FR-9、FR-5)。
-        assert_not_found(client.post_json(
-            "/api/purchases",
-            &json!({ "product_id": "no-such-id", "purchased_on": D21 }),
-        ));
-        assert_not_found(client.post_json(
-            "/api/purchases",
-            &json!({ "product_id": data.other_product.id, "purchased_on": D21 }),
-        ));
+        // 存在しない店と他の利用者の店は 404 (FR-9、FR-5)。
         assert_not_found(client.post_json(
             "/api/purchases",
             &json!({
-                "product_id": data.purchase_write_product.id,
+                "name": "書き換えの豆",
                 "shop_id": "no-such-id",
                 "purchased_on": D21,
             }),
@@ -812,18 +863,12 @@ mod purchases {
         assert_not_found(client.post_json(
             "/api/purchases",
             &json!({
-                "product_id": data.purchase_write_product.id,
+                "name": "書き換えの豆",
                 "shop_id": data.other_shop.id,
                 "purchased_on": D21,
             }),
         ));
-        // 他の利用者の商品と店は、その利用者からは参照できる (404 が利用者の違いによるものだと裏付ける)。
-        let other = assert_status(
-            ApiClient::new(&base_url, Some(&data.other_session))
-                .get(&format!("/api/products/{}", data.other_product.id)),
-            200,
-        );
-        assert_eq!(other["id"], data.other_product.id, "{other}");
+        // 他の利用者の店は、その利用者からは参照できる (404 が利用者の違いによるものだと裏付ける)。
         let other = assert_status(
             ApiClient::new(&base_url, Some(&data.other_session))
                 .get(&format!("/api/shops/{}", data.other_shop.id)),
@@ -838,7 +883,7 @@ mod purchases {
         let base_url = lease.use_server(|server| server.base_url());
         assert_unauthorized(anonymous(&base_url).post_json(
             "/api/purchases",
-            &json!({ "product_id": "no-such-id", "purchased_on": D21 }),
+            &json!({ "name": "豆", "purchased_on": D21 }),
         ));
     }
 
@@ -859,9 +904,9 @@ mod purchases {
         );
         assert_eq!(body["id"], data.purchase_list_purchases[0].id);
         assert_eq!(body["purchased_on"], D21);
-        assert_nested_product(
+        assert_purchase_fields(
             &body,
-            &data.purchase_list_products[0],
+            &data.purchase_list_purchases[0].name,
             &data.purchase_list_user,
             &["購入のタグ"],
         );
@@ -903,7 +948,7 @@ mod purchases {
             client.post_json(
                 "/api/purchases",
                 &json!({
-                    "product_id": data.purchase_write_product.id,
+                    "name": "変更前の豆",
                     "shop_id": data.purchase_write_shop.id,
                     "purchased_on": D21,
                     "roast": "変更前のロースト",
@@ -962,10 +1007,8 @@ mod purchases {
         );
         assert_eq!(body["shop_id"], Value::Null, "{body}");
         assert_eq!(body["shop"], Value::Null, "{body}");
-        assert_eq!(
-            body["product"]["id"], data.purchase_write_product.id,
-            "{body}"
-        );
+        // 商品の項目を指定しない更新では商品の項目は変わらない (ADR-0022)。
+        assert_eq!(body["name"], "変更前の豆", "{body}");
         // 単件の取得でも同じ内容になる (応答のエコーだけに頼らない)。
         let fetched = assert_status(client.get(&format!("/api/purchases/{id}")), 200);
         assert_eq!(fetched, body);
@@ -1016,6 +1059,108 @@ mod purchases {
     }
 
     #[test]
+    fn wrangler_purchases_update_ok_with_the_product_fields_and_the_flavor_notes() {
+        let data = data();
+        let lease = server();
+        let base_url = lease.use_server(|server| server.base_url());
+        let client = ApiClient::new(&base_url, Some(&data.purchase_write_session));
+        let created = assert_status(
+            client.post_json(
+                "/api/purchases",
+                &json!({
+                    "name": "変更前の商品の豆",
+                    "producer": "変更前の生産者",
+                    "flavor_notes": ["leftover-check", "shared-check"],
+                    "purchased_on": D21,
+                }),
+            ),
+            200,
+        );
+        let id = created["id"].as_str().expect("the id must be present");
+        sleep_millis(10);
+
+        // 商品の項目を更新する。自由記述は前後の空白を除いて保存する (FR-9、ADR-0022)。
+        let body = assert_status(
+            client.patch_json(
+                &format!("/api/purchases/{id}"),
+                &json!({
+                    "name": "  変更後の豆  ",
+                    "producer": "  変更後の生産者  ",
+                    "origin": "  エチオピア  ",
+                    "region": "  イルガチェフェ  ",
+                    "process": "  ウォッシュト  ",
+                    "variety": "  在来種  ",
+                }),
+            ),
+            200,
+        );
+        assert_eq!(body["name"], "変更後の豆", "{body}");
+        assert_eq!(body["producer"], "変更後の生産者", "{body}");
+        assert_eq!(body["origin"], "エチオピア", "{body}");
+        assert_eq!(body["region"], "イルガチェフェ", "{body}");
+        assert_eq!(body["process"], "ウォッシュト", "{body}");
+        assert_eq!(body["variety"], "在来種", "{body}");
+        assert_eq!(body["created_at"], created["created_at"]);
+        assert!(
+            body["updated_at"].as_str() > created["updated_at"].as_str(),
+            "updated_at must advance: {body}"
+        );
+        // 購入の項目を指定しない更新では購入の項目は変わらない。
+        assert_eq!(body["purchased_on"], D21, "{body}");
+        // タグを指定しない更新ではタグは変わらない。
+        assert_eq!(
+            body["flavor_notes"],
+            json!(["leftover-check", "shared-check"]),
+            "{body}"
+        );
+
+        // タグは配列で置き換える (FR-8)。
+        let body = assert_status(
+            client.patch_json(
+                &format!("/api/purchases/{id}"),
+                &json!({ "flavor_notes": ["shared-check"] }),
+            ),
+            200,
+        );
+        assert_eq!(body["flavor_notes"], json!(["shared-check"]), "{body}");
+        // 置き換えたタグは、単件の取得でも同じ内容になる (応答のエコーだけに頼らない)。
+        let fetched = assert_status(client.get(&format!("/api/purchases/{id}")), 200);
+        assert_eq!(
+            fetched["flavor_notes"],
+            json!(["shared-check"]),
+            "{fetched}"
+        );
+        // 参照されなくなったタグは削除せず残す (FR-8)。
+        let tags = assert_status(client.get("/api/flavor-tags"), 200);
+        assert!(
+            tags["flavor_tags"]
+                .as_array()
+                .expect("flavor_tags")
+                .iter()
+                .any(|tag| tag["name"] == "leftover-check"),
+            "the unused tag must remain: {tags}"
+        );
+
+        // 空の配列でタグを外せる。商品の任意の項目は null で NULL にできる (FR-9)。
+        let body = assert_status(
+            client.patch_json(
+                &format!("/api/purchases/{id}"),
+                &json!({ "flavor_notes": [], "producer": null, "origin": null }),
+            ),
+            200,
+        );
+        assert_eq!(body["flavor_notes"], json!([]), "{body}");
+        assert_eq!(body["producer"], Value::Null, "{body}");
+        assert_eq!(body["origin"], Value::Null, "{body}");
+        assert_eq!(body["region"], "イルガチェフェ", "{body}");
+        assert_eq!(body["name"], "変更後の豆", "{body}");
+
+        // 単件の取得でも同じ内容が返る。
+        let fetched = assert_status(client.get(&format!("/api/purchases/{id}")), 200);
+        assert_eq!(fetched, body);
+    }
+
+    #[test]
     fn wrangler_purchases_update_invalid_input_400() {
         let data = data();
         let lease = server();
@@ -1025,7 +1170,7 @@ mod purchases {
             client.post_json(
                 "/api/purchases",
                 &json!({
-                    "product_id": data.purchase_write_product.id,
+                    "name": "入力の検査の豆",
                     "purchased_on": D21,
                     "price_amount": 1000,
                 }),
@@ -1037,7 +1182,7 @@ mod purchases {
         let no_price = assert_status(
             client.post_json(
                 "/api/purchases",
-                &json!({ "product_id": data.purchase_write_product.id, "purchased_on": D21 }),
+                &json!({ "name": "入力の検査の豆", "purchased_on": D21 }),
             ),
             200,
         );
@@ -1049,7 +1194,16 @@ mod purchases {
             &json!({ "price_currency": "JPY" }),
         ));
         for body in [
+            // 商品名は必須で、前後の空白を除いて空なら拒否する。タグの `null` と空白だけの名前も
+            // 拒否する (FR-8、FR-9、ADR-0022)。
+            json!({ "name": null }),
+            json!({ "name": "" }),
+            json!({ "name": "   " }),
+            json!({ "flavor_notes": null }),
+            json!({ "flavor_notes": ["  "] }),
+            // 商品の ID は受け付けない (ADR-0022)。
             json!({ "product_id": null }),
+            json!({ "product_id": "no-such-id" }),
             json!({ "purchased_on": null }),
             json!({ "purchased_on": "2026-02-30" }),
             json!({ "roast_date": "2026-13-01" }),
@@ -1070,6 +1224,8 @@ mod purchases {
         }
         // 拒否した入力は保存されない。
         let body = assert_status(client.get(&format!("/api/purchases/{id}")), 200);
+        assert_eq!(body["name"], "入力の検査の豆", "{body}");
+        assert_eq!(body["flavor_notes"], json!([]), "{body}");
         assert_eq!(body["purchased_on"], D21, "{body}");
         assert_eq!(body["price_amount"], 1000, "{body}");
         assert_eq!(body["price_currency"], "JPY", "{body}");
@@ -1085,7 +1241,7 @@ mod purchases {
             client.post_json(
                 "/api/purchases",
                 &json!({
-                    "product_id": data.purchase_write_product.id,
+                    "name": "参照の検査の豆",
                     "shop_id": data.purchase_write_shop.id,
                     "purchased_on": D21,
                 }),
@@ -1096,11 +1252,7 @@ mod purchases {
         // 参照先を変更する更新でも、登録と同じ検査をする (FR-9)。
         assert_not_found(client.patch_json(
             &format!("/api/purchases/{id}"),
-            &json!({ "product_id": "no-such-id" }),
-        ));
-        assert_not_found(client.patch_json(
-            &format!("/api/purchases/{id}"),
-            &json!({ "product_id": data.other_product.id }),
+            &json!({ "shop_id": "no-such-id" }),
         ));
         assert_not_found(client.patch_json(
             &format!("/api/purchases/{id}"),
@@ -1111,7 +1263,6 @@ mod purchases {
             client.patch_json(
                 &format!("/api/purchases/{id}"),
                 &json!({
-                    "product_id": data.purchase_write_product.id,
                     "shop_id": data.purchase_write_shop.id,
                     "roast": "参照はそのまま",
                 }),
@@ -1119,11 +1270,7 @@ mod purchases {
             200,
         );
         assert_eq!(body["roast"], "参照はそのまま", "{body}");
-        // 別の有効な商品と店への付け替えは 200 になり、新しい参照先が保存される (設計判断)。
-        let new_product = assert_status(
-            client.post_json("/api/products", &json!({ "name": "付け替え先の豆" })),
-            200,
-        );
+        // 別の有効な店への付け替えは 200 になり、新しい参照先が保存される (設計判断)。
         let new_shop = assert_status(
             client.post_json("/api/shops", &json!({ "name": "付け替え先の店" })),
             200,
@@ -1132,20 +1279,16 @@ mod purchases {
             client.patch_json(
                 &format!("/api/purchases/{id}"),
                 &json!({
-                    "product_id": new_product["id"],
                     "shop_id": new_shop["id"],
                     "roast": "付け替え後",
                 }),
             ),
             200,
         );
-        assert_eq!(body["product_id"], new_product["id"], "{body}");
         assert_eq!(body["shop_id"], new_shop["id"], "{body}");
-        assert_eq!(body["product"]["name"], "付け替え先の豆", "{body}");
         assert_eq!(body["shop"]["name"], "付け替え先の店", "{body}");
         // 拒否した入力は保存されず、付け替えた参照先が残る。
         let body = assert_status(client.get(&format!("/api/purchases/{id}")), 200);
-        assert_eq!(body["product_id"], new_product["id"], "{body}");
         assert_eq!(body["shop_id"], new_shop["id"], "{body}");
 
         // 他の利用者の購入の更新は 404 (FR-5)。
@@ -1221,6 +1364,24 @@ mod purchases {
         for brew in &data.delete_purchase_brews {
             assert_not_found(client.get(&format!("/api/brews/{}", brew.id)));
         }
+        // 他の購入のタグの対応は残る (タグの行は消さない。ADR-0006、ADR-0022)。
+        let other = assert_status(
+            client.get(&format!(
+                "/api/purchases/{}",
+                data.delete_purchase_other_purchase.id
+            )),
+            200,
+        );
+        assert_eq!(other["flavor_notes"], json!(["shared"]), "{other}");
+        let tags = assert_status(client.get("/api/flavor-tags"), 200);
+        assert!(
+            tags["flavor_tags"]
+                .as_array()
+                .expect("flavor_tags")
+                .iter()
+                .any(|tag| tag["name"] == "shared"),
+            "the shared tag must remain: {tags}"
+        );
         let object = lease
             .use_server(|server| {
                 server.get_r2_object("brewbook-photos", &data.delete_purchase_photo_key)
@@ -1297,14 +1458,14 @@ mod brews {
         assert_eq!(brews[2]["id"], data.brew_list_old_brew.id);
         assert!(brews[0]["id"].as_str() < brews[1]["id"].as_str(), "{body}");
         assert_eq!(brews[0]["brewed_at"], B21, "{body}");
-        // 応答には購入がネストし、その中に商品と店が入る (FR-11)。
+        // 応答には購入がネストし、その中に商品の項目と店が入る (FR-11、ADR-0022)。
         assert_eq!(
             brews[0]["purchase"]["id"], data.brew_list_purchases[0].id,
             "{body}"
         );
-        assert_nested_product(
+        assert_purchase_fields(
             &brews[0]["purchase"],
-            &data.brew_list_product,
+            &data.brew_list_purchases[0].name,
             &data.brew_list_user,
             &["抽出のタグ"],
         );
@@ -1318,14 +1479,14 @@ mod brews {
         );
         // 店が無い購入では shop は null になる (FR-9、FR-11)。
         assert_eq!(brews[1]["purchase"]["shop"], Value::Null, "{body}");
-        // 古い抽出でも、購入と商品と店をたどれる。
+        // 古い抽出でも、購入とその商品の項目と店をたどれる。
         assert_eq!(
             brews[2]["purchase"]["id"], data.brew_list_old_brew.purchase_id,
             "{body}"
         );
-        assert_nested_product(
+        assert_purchase_fields(
             &brews[2]["purchase"],
-            &data.brew_list_product,
+            "抽出の豆",
             &data.brew_list_user,
             &["抽出のタグ"],
         );
@@ -1540,9 +1701,9 @@ mod brews {
         assert!(body.get("archived_at").is_none(), "{body}");
         assert_timestamp(&body["created_at"]);
         assert_eq!(body["created_at"], body["updated_at"], "{body}");
-        // 購入がネストし、その中に商品と店が入る (FR-11)。
+        // 購入がネストし、その中に商品の項目と店が入る (FR-11、ADR-0022)。
         assert_eq!(
-            body["purchase"]["product"]["id"], data.brew_write_purchase.product_id,
+            body["purchase"]["name"], data.brew_write_purchase.name,
             "{body}"
         );
         assert!(body["purchase"]["shop"].is_object(), "{body}");
@@ -1679,7 +1840,7 @@ mod brews {
             json!({ "purchase_id": purchase, "brewed_at": B21, "rating": 6 }),
             json!({ "purchase_id": purchase, "brewed_at": B21, "rating": 1.5 }),
             json!({ "purchase_id": purchase, "brewed_at": B21, "rating": -1 }),
-            // 購入以外の参照は受け付けない (ADR-0006)。
+            // 購入以外の参照は受け付けない (ADR-0006、ADR-0022)。
             json!({ "purchase_id": purchase, "brewed_at": B21, "product_id": "no-such-id" }),
             json!({ "purchase_id": purchase, "brewed_at": B21, "shop_id": "no-such-id" }),
             // 受け取らない項目は無視せず 400 にする (0007 の設計判断)。
@@ -1745,9 +1906,9 @@ mod brews {
             body["purchase"]["id"], data.brew_list_purchases[0].id,
             "{body}"
         );
-        assert_nested_product(
+        assert_purchase_fields(
             &body["purchase"],
-            &data.brew_list_product,
+            &data.brew_list_purchases[0].name,
             &data.brew_list_user,
             &["抽出のタグ"],
         );
@@ -1962,14 +2123,10 @@ mod brews {
         );
         assert_eq!(body["rating"], 2, "{body}");
         // 別の有効な購入への付け替えは 200 になり、新しい参照先が保存される (設計判断)。
-        let new_product = assert_status(
-            client.post_json("/api/products", &json!({ "name": "付け替え先の購入の豆" })),
-            200,
-        );
         let new_purchase = assert_status(
             client.post_json(
                 "/api/purchases",
-                &json!({ "product_id": new_product["id"], "purchased_on": D21 }),
+                &json!({ "name": "付け替え先の購入の豆", "purchased_on": D21 }),
             ),
             200,
         );
@@ -1981,10 +2138,7 @@ mod brews {
             200,
         );
         assert_eq!(body["purchase_id"], new_purchase["id"], "{body}");
-        assert_eq!(
-            body["purchase"]["product"]["name"], "付け替え先の購入の豆",
-            "{body}"
-        );
+        assert_eq!(body["purchase"]["name"], "付け替え先の購入の豆", "{body}");
         // 拒否した入力は保存されない。
         let body = assert_status(client.get(&format!("/api/brews/{id}")), 200);
         assert_eq!(body["purchase_id"], new_purchase["id"], "{body}");

@@ -6,8 +6,8 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use brew_book_frontend::records::{
-    apply_purchase_suggestion, product_match, Product, ProductMatch, ProductSuggestion,
-    PurchaseSuggestion, RecordError, RecordList, SuggestionState,
+    apply_purchase_suggestion, dedup_tags, PurchaseFormFields, PurchaseSuggestion, RecordError,
+    RecordList, SuggestionState,
 };
 use proptest::prelude::*;
 
@@ -81,83 +81,94 @@ proptest! {
         prop_assert!(list.is_loaded());
     }
 
-    /// 推測は空の入力欄にだけ入り、入力済みの値は上書きしない (FR-19)。
+    /// 推測のある項目は入力済みの値を上書きし、無い項目 (None と空のタグ) は入力を保つ
+    /// (FR-19、0057)。
     #[test]
-    fn the_suggestion_never_overwrites_an_input(
-        roast in ".*",
-        roast_date in ".*",
-        price in ".*",
-        weight in ".*",
-        suggested_roast in prop::option::of("[a-z]{0,8}"),
-        suggested_date in prop::option::of("[0-9]{4}-[0-9]{2}-[0-9]{2}"),
+    fn the_suggestion_overwrites_the_suggested_fields_and_keeps_the_rest(
+        texts in prop::collection::vec(".*", 10),
+        tags in prop::collection::vec("[a-z ]{0,6}", 0..4),
+        suggested_texts in prop::collection::vec(prop::option::of("[a-z]{0,8}"), 8),
+        suggested_tags in prop::collection::vec("[a-z ]{0,6}", 0..4),
         suggested_price in prop::option::of(0i64..100_000),
         suggested_weight in prop::option::of(0i64..10_000),
     ) {
         let suggestion = PurchaseSuggestion {
-            product: None,
-            roast: suggested_roast.clone(),
-            roast_date: suggested_date.clone(),
+            name: suggested_texts[0].clone(),
+            producer: suggested_texts[1].clone(),
+            origin: suggested_texts[2].clone(),
+            region: suggested_texts[3].clone(),
+            process: suggested_texts[4].clone(),
+            variety: suggested_texts[5].clone(),
+            flavor_notes: suggested_tags.clone(),
+            roast: suggested_texts[6].clone(),
+            roast_date: suggested_texts[7].clone(),
             price_amount: suggested_price,
             weight_grams: suggested_weight,
         };
-        let mut roast_value = roast.clone();
-        let mut roast_date_value = roast_date.clone();
-        let mut price_value = price.clone();
-        let mut weight_value = weight.clone();
+        let mut values = texts.clone();
+        let mut tag_values = tags.clone();
+        let (head, tail) = values.split_at_mut(5);
+        let [name, producer, origin, region, process] = head else { unreachable!() };
+        let [variety, roast, roast_date, price, weight] = tail else { unreachable!() };
         apply_purchase_suggestion(
-            &mut roast_value,
-            &mut roast_date_value,
-            &mut price_value,
-            &mut weight_value,
+            PurchaseFormFields {
+                name,
+                producer,
+                origin,
+                region,
+                process,
+                variety,
+                flavor_notes: &mut tag_values,
+                roast,
+                roast_date,
+                price,
+                weight,
+            },
             &suggestion,
         );
 
-        if roast.trim().is_empty() {
-            if let Some(value) = suggested_roast { prop_assert_eq!(roast_value, value); }
-        } else {
-            prop_assert_eq!(roast_value, roast);
+        // 文字の 8 項目: 推測があればその値、無ければ入力のまま。
+        for (index, suggested) in suggested_texts.iter().enumerate() {
+            let expected = suggested.clone().unwrap_or_else(|| texts[index].clone());
+            prop_assert_eq!(&values[index], &expected, "field {}", index);
         }
-        if roast_date.trim().is_empty() {
-            if let Some(value) = suggested_date { prop_assert_eq!(roast_date_value, value); }
+        // 価格と重量: 推測があれば 10 進の文字、無ければ入力のまま。
+        let expected_price = suggested_price.map(|v| v.to_string()).unwrap_or_else(|| texts[8].clone());
+        prop_assert_eq!(&values[8], &expected_price);
+        let expected_weight = suggested_weight.map(|v| v.to_string()).unwrap_or_else(|| texts[9].clone());
+        prop_assert_eq!(&values[9], &expected_weight);
+        // タグ: 推測が空なら入力のまま、あれば正規化した推測。
+        if suggested_tags.is_empty() {
+            prop_assert_eq!(&tag_values, &tags);
         } else {
-            prop_assert_eq!(roast_date_value, roast_date);
-        }
-        if price.trim().is_empty() {
-            if let Some(value) = suggested_price { prop_assert_eq!(price_value, value.to_string()); }
-        } else {
-            prop_assert_eq!(price_value, price);
-        }
-        if weight.trim().is_empty() {
-            if let Some(value) = suggested_weight { prop_assert_eq!(weight_value, value.to_string()); }
-        } else {
-            prop_assert_eq!(weight_value, weight);
+            prop_assert_eq!(&tag_values, &dedup_tags(&suggested_tags));
         }
     }
 
-    /// 商品が選択済みのときは何もしない (FR-19)。
+    /// タグの正規化は、空白を除いた空でない文字を、最初の出現の順で 1 つずつ残す (0057)。
     #[test]
-    fn a_selected_product_is_never_replaced(
-        name in prop::option::of("[a-zA-Z ]{0,6}"),
-        matched in any::<bool>(),
+    fn the_tags_are_trimmed_and_deduplicated_in_order(
+        tags in prop::collection::vec("[ a-z]{0,6}", 0..8),
     ) {
-        let suggestion = PurchaseSuggestion {
-            product: Some(ProductSuggestion { name, ..ProductSuggestion::default() }),
-            ..PurchaseSuggestion::default()
-        };
-        let matched_product = matched.then(|| Product {
-            id: "p1".to_string(),
-            name: "豆".to_string(),
-            producer: None,
-            origin: None,
-            region: None,
-            process: None,
-            variety: None,
-            flavor_notes: Vec::new(),
-            created_at: "2026-10-01T00:00:00.000Z".to_string(),
-            updated_at: "2026-10-01T00:00:00.000Z".to_string(),
-            favorited_at: None,
-        });
-        prop_assert_eq!(product_match(true, &suggestion, matched_product), ProductMatch::None);
+        let normalized = dedup_tags(&tags);
+        // 空と重複が無く、どれも前後に空白を持たない。
+        for (index, tag) in normalized.iter().enumerate() {
+            prop_assert!(!tag.is_empty());
+            prop_assert_eq!(tag.trim(), tag.as_str());
+            prop_assert!(!normalized[..index].contains(tag), "the tag {:?} appears twice", tag);
+        }
+        // 入力の空でないタグはすべて残り、順序は最初の出現の順。
+        let mut expected: Vec<String> = Vec::new();
+        for tag in &tags {
+            let tag = tag.trim();
+            if !tag.is_empty() && !expected.iter().any(|seen| seen == tag) {
+                expected.push(tag.to_string());
+            }
+        }
+        prop_assert_eq!(normalized, expected);
+        // 冪等。
+        let again = dedup_tags(&dedup_tags(&tags));
+        prop_assert_eq!(again, dedup_tags(&tags));
     }
 
     /// サジェストの状態は、古い世代の応答を反映しない (FR-13)。

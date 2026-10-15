@@ -144,7 +144,7 @@ pub fn ShopListScreen() -> Element {
 
     rsx! {
         WideLayout {
-            rail: rsx! { NavigationRail { items: rail_items(navigator, 3) } },
+            rail: rsx! { NavigationRail { items: rail_items(navigator, 2) } },
             list,
             detail,
         }

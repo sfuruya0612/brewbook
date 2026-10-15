@@ -7,8 +7,8 @@
  * - アイコンは Material Icons Outlined の Web フォントなので、svg を対象にした寸法の規則を
  *   .icon にも足した (色は原本の svg と同じく周囲の文字の色を継承する。docs/design/README.md
  *   の「アイコン」)。
- * - 一覧と詳細の中の小さなタグ (.chip.mini) と、タグの削除ボタン (.chip-remove)、タグを並べる
- *   .row .tags を足した (docs/design/components/ListRow、Chip)。
+ * - 一覧と詳細の中の小さなタグ (.chip.mini) と、タグの削除ボタン (.chip-remove) を足した
+ *   (docs/design/components/Chip)。
  * - 未評価の数字 (.rating .num.none) と、印の色 (.mark) を足した (docs/design/README.md の
  *   「状態」と WideLayout)。
  * - 2 段組 (.wide-layout、.wide-list、.wide-detail、.wide-detail-inner) の配置と、一覧と
@@ -103,7 +103,6 @@
   .row > .icon { font-size: 20px; flex: none; }
   .row .name { font-size: 16px; line-height: 24px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .row .sub { font-size: 12px; line-height: 16px; color: var(--ink-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .row .tags { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); margin-top: 6px; }
   .row .sub .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   .row .side { flex: none; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
   .row .val { font-family: var(--font-mono); font-size: 15px; line-height: 22px; font-variant-numeric: tabular-nums; }
@@ -153,7 +152,7 @@
   .ledger .v .u { font-family: var(--font-sans); font-size: 12px; color: var(--ink-muted); margin-left: var(--space-1); }
   .ledger .v.unset { color: var(--ink-faint); font-family: var(--font-sans); }
 
-  /* 参照先のタイル (購入、商品、店をたどる) */
+  /* 参照先のタイル (購入、店をたどる) */
   .tile { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--roast-soft); color: var(--ink); }
   .tile .k { font-size: 12px; line-height: 16px; color: var(--ink-muted); font-weight: 500; letter-spacing: 0.02em; }
   .tile .n { font-size: 15px; line-height: 22px; font-weight: 600; }

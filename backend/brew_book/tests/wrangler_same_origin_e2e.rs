@@ -15,7 +15,7 @@
 //! - 画面数の成功指標: アプリのルート要素の `data-route` 属性を MutationObserver で記録し、
 //!   ホームから抽出の保存までの画面の種類を数える (PRD の成功指標)。
 //!
-//! 利用者、登録用トークン、店、商品、購入、抽出はローカルの D1 に直接投入する (0005 の下ごしらえ)。
+//! 利用者、登録用トークン、店、購入 (タグ付き)、抽出はローカルの D1 に直接投入する (0005 の下ごしらえ)。
 //! 写真のアップロードは R2 の資格情報 (`backend/brew_book/.dev.vars`) がある環境でのみ確認し、
 //! 無い環境では対象外として記録する (issue 0044)。
 //! テスト名の `wrangler_` は、`wrangler dev` を起動するテストを `backend:test` が名前で除外するための規約。
@@ -34,8 +34,12 @@ use support::DevServer;
 /// 下ごしらえに使う時刻 (ISO 8601 UTC の固定長)。
 const CREATED: &str = "2026-09-01T00:00:00.000Z";
 const FUTURE: &str = "2099-01-01T00:00:00.000Z";
-/// 下ごしらえした商品の名前。
-const PRODUCT_NAME: &str = "E2E Product";
+/// 下ごしらえした購入の商品名 (0057)。
+const PURCHASE_NAME: &str = "E2E Beans";
+/// 推測の差し替えが返す商品名と生産者とタグ (FR-19、0057)。
+const SUGGESTED_NAME: &str = "E2E Suggested Beans";
+const SUGGESTED_PRODUCER: &str = "E2E Suggested Producer";
+const SUGGESTED_TAG: &str = "E2E Suggested Tag";
 /// 下ごしらえした購入の購入日。
 const PURCHASED_ON: &str = "2026-09-21";
 /// 登録するパスキーの名前。
@@ -51,24 +55,23 @@ const LOG_TAIL_LINES: usize = 80;
 fn wrangler_web_routes_registration_login_and_brew_save_ok() {
     let assets = e2e_assets();
 
-    // 下ごしらえ: 利用者、登録用トークン、店、商品 (タグ付き)、購入、抽出。
+    // 下ごしらえ: 利用者、登録用トークン、店、購入 (タグ付き)、抽出。
     // 購入は抽出の保存の画面が選ぶため、抽出は詳細の画面のスクリーンショットのために入れる。
     let mut seed = Seed::new();
     let user = seed::user_id(1);
     seed.user(&user, "E2E の利用者", CREATED);
     let token = seed.registration_token(&user, FUTURE);
     let shop = seed.shop(&user, "E2E の店", None, CREATED, CREATED);
-    let product = seed.product(&user, PRODUCT_NAME, CREATED, CREATED);
-    let tag = seed.flavor_tag(&user, "E2E のタグ");
-    seed.product_flavor_tag(&user, &product.id, &tag);
     let purchase = seed.purchase(
         &user,
-        &product.id,
+        PURCHASE_NAME,
         Some(&shop.id),
         PURCHASED_ON,
         CREATED,
         CREATED,
     );
+    let tag = seed.flavor_tag(&user, "E2E のタグ");
+    seed.purchase_flavor_tag(&user, &purchase.id, &tag);
     let brew = seed.brew_with_numbers(
         &user,
         &purchase.id,
@@ -105,7 +108,6 @@ fn wrangler_web_routes_registration_login_and_brew_save_ok() {
         token,
         brew_id: brew.id,
         purchase_id: purchase.id,
-        product_id: product.id,
         shop_id: shop.id,
     };
     let work_dir = std::env::temp_dir().join(format!("brewbook-e2e-{}", std::process::id()));
@@ -128,7 +130,6 @@ struct Fixture {
     token: String,
     brew_id: String,
     purchase_id: String,
-    product_id: String,
     shop_id: String,
 }
 
@@ -251,9 +252,9 @@ async fn run_steps(
     logout(browser).await?;
     login(browser).await?;
 
-    // ハンバーガーメニューから 6 つの行き先へ移れる (0047)。
+    // ハンバーガーメニューから 5 つの行き先へ移れる (0047、0057)。
     nav_menu(browser).await?;
-    println!("nav menu: the six destinations are reachable");
+    println!("nav menu: the five destinations are reachable");
 
     // エクスポートのダウンロード (FR-14、0043)。確認のダイアログ無しで一時ディレクトリへ保存する。
     let export_path = download_dir.join("brewbook-export.json");
@@ -276,10 +277,9 @@ async fn run_steps(
     form_layouts(browser, fixture).await?;
     println!("form layouts: the forms fit 375 px and scroll to the last input");
 
-    // 購入の登録の「推測した内容で商品を登録する」のシートが縦にスクロールできることを
-    // 確かめる (0048)。
-    register_sheet_scrolls(browser).await?;
-    println!("register sheet: the sheet scrolls to the last input and the save action");
+    // 購入の登録で写真を選ぶと、推測した商品の項目がフォームに入ることを確かめる (FR-19、0057)。
+    suggestion_fills_the_form(browser).await?;
+    println!("suggestion: the suggested name, producer, and tag are filled in the purchase form");
 
     // 設定の画面のログアウトでも、ログイン画面へ戻ることを確かめる (0043)。
     logout_from_settings(browser).await?;
@@ -353,15 +353,15 @@ async fn save_brew(browser: &E2eBrowser) -> Result<(), String> {
     browser.wait_route("/brews/new").await?;
     // 購入はボトムシートから選ぶ (画面は増えない。PRD の成功指標)。
     browser.click_selector(".picker").await?;
-    browser.wait_text(PRODUCT_NAME).await?;
-    browser.click_text(PRODUCT_NAME).await?;
+    browser.wait_text(PURCHASE_NAME).await?;
+    browser.click_text(PURCHASE_NAME).await?;
     browser.wait_text("Save").await?;
     browser.click_text("Save").await?;
     // 保存の完了は通知で示す (画面には数えない)。
     browser.wait_text("Saved.").await?;
     browser.wait_route("/").await?;
     // 保存した抽出がホームの一覧に出る (抽出の保存まで)。
-    browser.wait_text(PRODUCT_NAME).await?;
+    browser.wait_text(PURCHASE_NAME).await?;
     Ok(())
 }
 
@@ -390,16 +390,15 @@ async fn logout_from_settings(browser: &E2eBrowser) -> Result<(), String> {
     Ok(())
 }
 
-/// ヘッダーのハンバーガーメニューから 6 つの行き先へ移れることを確かめる (0047)。
+/// ヘッダーのハンバーガーメニューから 5 つの行き先へ移れることを確かめる (0047、0057)。
 ///
 /// メニューはハンバーガーの下に開き、項目を押すと対応する経路へ移って閉じる。現在の経路と
 /// 同じ項目を押したときは遷移せず、メニューだけ閉じる (履歴が増えないことで確かめる)。
 /// 印を押すとホームへ戻り、ホームでは何もしない。
 async fn nav_menu(browser: &E2eBrowser) -> Result<(), String> {
-    // 6 つの行き先を順に開く。
+    // 5 つの行き先を順に開く (0057 で商品を外した)。
     for (label, route) in [
         ("Purchases", "/purchases"),
-        ("Products", "/products"),
         ("Shops", "/shops"),
         ("Stats", "/stats"),
         ("Settings", "/settings"),
@@ -450,10 +449,10 @@ async fn nav_menu(browser: &E2eBrowser) -> Result<(), String> {
     browser.wait_route("/").await?;
 
     // フォームの画面にはメニューと印を出さない (0054)。閉じると一覧へ戻る。
-    browser.goto("/products").await?;
-    browser.wait_route("/products").await?;
-    browser.click_text("Add a product").await?;
-    browser.wait_route("/products/new").await?;
+    browser.goto("/purchases").await?;
+    browser.wait_route("/purchases").await?;
+    browser.click_text("Log a purchase").await?;
+    browser.wait_route("/purchases/new").await?;
     let has_menu = browser
         .eval_string(
             "return String(document.querySelector(\"button[aria-label='Menu']\") !== null);",
@@ -475,7 +474,7 @@ async fn nav_menu(browser: &E2eBrowser) -> Result<(), String> {
     browser
         .click_selector("button[aria-label='Cancel']")
         .await?;
-    browser.wait_route("/products").await?;
+    browser.wait_route("/purchases").await?;
     Ok(())
 }
 
@@ -521,15 +520,9 @@ fn screens(fixture: &Fixture) -> Vec<Screen> {
             reference: "Detail",
         },
         Screen {
-            name: "Products",
-            path: "/products".to_string(),
-            route: "/products",
-            reference: "Lists",
-        },
-        Screen {
-            name: "ProductEdit",
-            path: format!("/products/{}/edit", fixture.product_id),
-            route: "/products/:id/edit",
+            name: "PurchaseEdit",
+            path: format!("/purchases/{}/edit", fixture.purchase_id),
+            route: "/purchases/:id/edit",
             reference: "RecordForms",
         },
         Screen {
@@ -696,18 +689,6 @@ struct FormScreen {
 fn form_screens(fixture: &Fixture) -> Vec<FormScreen> {
     vec![
         FormScreen {
-            name: "ProductNew",
-            path: "/products/new".to_string(),
-            route: "/products/new",
-            custom_period: false,
-        },
-        FormScreen {
-            name: "ProductEdit",
-            path: format!("/products/{}/edit", fixture.product_id),
-            route: "/products/:id/edit",
-            custom_period: false,
-        },
-        FormScreen {
             name: "PurchaseNew",
             path: "/purchases/new".to_string(),
             route: "/purchases/new",
@@ -867,41 +848,52 @@ fn check_form_metrics(metrics: &Value, name: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 購入の登録の「推測した内容で商品を登録する」のシートを開き、シートの中を縦にスクロールして
-/// 下部の入力欄と保存の操作に到達できることを確かめる (0048)。
+/// 購入の登録で写真を選ぶと、推測した商品名、生産者、タグがフォームに入ることを確かめる
+/// (FR-19、0057)。
 ///
-/// シートは `.sheet` (高さ 70 vh) の中にフォームを置くため、内容が高さを超えると下部が切れて
-/// いた (0048)。表示の領域の高さを低くして内容が高さを超える状態にし、シートの本体
-/// (`.sheet .body`) を末尾までスクロールできることを確かめる。
-async fn register_sheet_scrolls(browser: &E2eBrowser) -> Result<(), String> {
+/// 推測の応答はページの `fetch` に差し込む。実環境の推測は Workers AI を呼ぶため E2E では
+/// 使えない (0048 のテストのための仕掛け)。商品名は入力欄の値で、タグは Chip の文字で確かめる。
+async fn suggestion_fills_the_form(browser: &E2eBrowser) -> Result<(), String> {
     browser.goto("/purchases/new").await?;
     browser.wait_route("/purchases/new").await?;
     browser.wait_selector(".form .field .box .in").await?;
-    // 推測の応答を差し替え、写真の選択のダイアログを開かないようにする。実環境の推測は
-    // Workers AI を呼ぶため E2E では使えない (0048 のテストのための仕掛け)。
     browser.eval_string(SUGGESTION_STUB_SCRIPT).await?;
     browser.click_text("Choose a photo").await?;
     // 写真の入力欄は押した時点で本文に足される (frontend/src/records/photo.rs)。
     browser
         .choose_file_selector("input[type=file]", &photo_path()?)
         .await?;
-    // 推測の商品名は下ごしらえした商品と一致しないため、登録の導線が出る (FR-19)。
-    browser
-        .wait_text("Add a product with the suggested values")
-        .await?;
-    browser
-        .click_text("Add a product with the suggested values")
-        .await?;
-    browser.wait_selector(".sheet .body .form").await?;
-    // 内容が 70 vh を超える高さにする (0048)。
-    browser.set_viewport_size(375, 520).await?;
-    let result = match browser.eval_json(SHEET_METRICS_SCRIPT).await {
-        Ok(metrics) => check_sheet_metrics(&metrics),
-        Err(error) => Err(error),
-    };
-    // 検査が失敗しても表示の上書きを外す (最初の失敗を保つ)。
-    let cleared = browser.clear_viewport_size().await;
-    result.and(cleared)
+    wait_input_value(browser, "Product name", SUGGESTED_NAME).await?;
+    wait_input_value(browser, "Producer", SUGGESTED_PRODUCER).await?;
+    browser.wait_text(SUGGESTED_TAG).await?;
+    Ok(())
+}
+
+/// ラベルが `label` の入力欄 (`.form .field` の `.lbl` で探す) の値が期待の文字になるまで待つ。
+async fn wait_input_value(browser: &E2eBrowser, label: &str, expected: &str) -> Result<(), String> {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let script = format!(
+        "const label = {};\
+         const field = Array.from(document.querySelectorAll('.form .field')).find((field) => {{\
+           const lbl = field.querySelector('.lbl');\
+           return lbl && lbl.textContent.trim().startsWith(label);\
+         }});\
+         const input = field ? field.querySelector('input') : null;\
+         return input ? String(input.value) : '';",
+        serde_json::to_string(label).map_err(|error| error.to_string())?
+    );
+    loop {
+        let value = browser.eval_string(&script).await?.unwrap_or_default();
+        if value == expected {
+            return Ok(());
+        }
+        if Instant::now() > deadline {
+            return Err(format!(
+                "the input {label} must have the value {expected:?} but had {value:?}"
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
 }
 
 /// 推測の導線に使う写真 (リポジトリにある PNG)。chromedriver は正規化したパスを求めるため、
@@ -913,17 +905,17 @@ fn photo_path() -> Result<PathBuf, String> {
 
 /// 推測 API の応答を差し替え、写真の選択のダイアログを開かないようにするスクリプト (0048)。
 ///
-/// E2E の環境では Workers AI を呼べないため、推測の応答をページの `fetch` に差し込む。返す
-/// 商品名は下ごしらえした商品と一致しないので、「推測した内容で商品を登録する」の導線が出る
-/// (FR-19)。写真の選択は `<input type="file">` のクリックでダイアログを開くため、クリックを
-/// 止めて入力欄を残し、あとから WebDriver でファイルを設定できるようにする。
+/// E2E の環境では Workers AI を呼べないため、推測の応答をページの `fetch` に差し込む。応答は
+/// 商品の項目を平らに持つ (0057)。写真の選択は `<input type="file">` のクリックでダイアログを
+/// 開くため、クリックを止めて入力欄を残し、あとから WebDriver でファイルを設定できるようにする。
 const SUGGESTION_STUB_SCRIPT: &str = r#"
 const realFetch = window.fetch.bind(window);
 window.fetch = (input, init) => {
   const url = typeof input === 'string' ? input : (input && input.url) || '';
   if (url.includes('/api/purchase-suggestions')) {
     const body = JSON.stringify({
-      product: { name: 'E2E Suggested Product', producer: null, origin: null, region: null, process: null, variety: null, flavor_notes: [] },
+      name: 'E2E Suggested Beans', producer: 'E2E Suggested Producer', origin: null, region: null,
+      process: null, variety: null, flavor_notes: ['E2E Suggested Tag'],
       roast: null, roast_date: null, price_amount: null, weight_grams: null
     });
     return Promise.resolve(new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -936,77 +928,6 @@ HTMLInputElement.prototype.click = function () {
   return originalClick.apply(this, arguments);
 };
 "#;
-
-/// シートの中の縦スクロールと、下部の入力欄と保存の操作の位置を測るスクリプト (0048)。
-const SHEET_METRICS_SCRIPT: &str = r#"
-const sheet = document.querySelector('.sheet');
-if (!sheet) { return JSON.stringify({ error: 'the sheet must be open' }); }
-const body = sheet.querySelector('.body');
-if (!body) { return JSON.stringify({ error: 'the sheet must have a .body' }); }
-const inputs = body.querySelectorAll('input, textarea');
-const last = inputs.length ? inputs[inputs.length - 1] : null;
-body.scrollTop = body.scrollHeight;
-const endScrollTop = body.scrollTop;
-if (last && last.scrollIntoView) { last.scrollIntoView({ block: 'end' }); }
-const sheetRect = sheet.getBoundingClientRect();
-const bodyRect = body.getBoundingClientRect();
-const lastRect = last ? last.getBoundingClientRect() : null;
-const acts = sheet.querySelector('.acts');
-const actsRect = acts ? acts.getBoundingClientRect() : null;
-return JSON.stringify({
-  viewportWidth: window.innerWidth,
-  viewportHeight: window.innerHeight,
-  scrollHeight: body.scrollHeight,
-  clientHeight: body.clientHeight,
-  endScrollTop: endScrollTop,
-  sheet: [sheetRect.top, sheetRect.bottom, sheetRect.left, sheetRect.right],
-  body: [bodyRect.top, bodyRect.bottom, bodyRect.left, bodyRect.right],
-  last: lastRect ? [lastRect.top, lastRect.bottom, lastRect.left, lastRect.right] : null,
-  acts: actsRect ? [actsRect.top, actsRect.bottom, actsRect.left, actsRect.right] : null,
-});
-"#;
-
-/// シートの計測を確かめる (0048)。
-fn check_sheet_metrics(metrics: &Value) -> Result<(), String> {
-    if let Some(error) = metrics.get("error") {
-        return Err(format!("the register sheet: {error}"));
-    }
-    let scroll_height = metric_number(metrics, "scrollHeight")?;
-    let client_height = metric_number(metrics, "clientHeight")?;
-    if scroll_height <= client_height {
-        return Err(format!(
-            "the register sheet must have content taller than the body but scrollHeight {scroll_height} was not above clientHeight {client_height}"
-        ));
-    }
-    let end_scroll_top = metric_number(metrics, "endScrollTop")?;
-    let max_scroll_top = scroll_height - client_height;
-    if (end_scroll_top - max_scroll_top).abs() > 1.0 {
-        return Err(format!(
-            "the register sheet must scroll to the end but scrollTop was {end_scroll_top} of {max_scroll_top}"
-        ));
-    }
-    let body = metric_rect(metrics, "body")?;
-    let last = metric_rect(metrics, "last")?;
-    if last[0] < body[0] - 1.0 || last[1] > body[1] + 1.0 {
-        return Err(format!(
-            "the last input of the register sheet must be inside the sheet body: input {last:?} body {body:?}"
-        ));
-    }
-    let sheet = metric_rect(metrics, "sheet")?;
-    let acts = metric_rect(metrics, "acts")?;
-    if acts[0] < sheet[0] - 1.0 || acts[1] > sheet[1] + 1.0 {
-        return Err(format!(
-            "the save action of the register sheet must be inside the sheet: acts {acts:?} sheet {sheet:?}"
-        ));
-    }
-    let viewport_height = metric_number(metrics, "viewportHeight")?;
-    if acts[0] < 0.0 || acts[1] > viewport_height + 1.0 {
-        return Err(format!(
-            "the save action of the register sheet must be visible but acts {acts:?} viewport height {viewport_height}"
-        ));
-    }
-    Ok(())
-}
 
 /// 計測の JSON から数の値を読む。
 fn metric_number(metrics: &Value, key: &str) -> Result<f64, String> {
@@ -1076,7 +997,7 @@ const COMPONENTS: &[Component] = &[
     },
     Component {
         name: "Chip",
-        screen: "Products",
+        screen: "PurchaseDetail",
         selector: ".chip",
         reference: "Chip",
     },
@@ -1277,16 +1198,16 @@ fn check_export(path: &Path) -> Result<(), String> {
         .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
     let value: Value = serde_json::from_str(&text)
         .map_err(|error| format!("{} must be JSON: {error}", path.display()))?;
-    let products = value
-        .get("products")
+    let purchases = value
+        .get("purchases")
         .and_then(Value::as_array)
-        .ok_or_else(|| format!("the export must have the products array: {value}"))?;
-    if !products
+        .ok_or_else(|| format!("the export must have the purchases array: {value}"))?;
+    if !purchases
         .iter()
-        .any(|product| product.get("name").and_then(Value::as_str) == Some(PRODUCT_NAME))
+        .any(|purchase| purchase.get("name").and_then(Value::as_str) == Some(PURCHASE_NAME))
     {
         return Err(format!(
-            "the export must contain the product {PRODUCT_NAME}: {value}"
+            "the export must contain the purchase {PURCHASE_NAME}: {value}"
         ));
     }
     let brews = value

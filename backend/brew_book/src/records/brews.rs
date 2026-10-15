@@ -2,8 +2,8 @@
 //!
 //! 一覧はカーソル方式で、並び順は抽出日時の降順と ID の昇順とする (FR-11)。応答には続きを引く
 //! `next_cursor` を含める (ページが `limit` に満たないときは null)。
-//! 応答には購入 (`purchase`) をネストし、その中に商品 (`product`) と店 (`shop`) を含める (FR-11)。
-//! 購入、商品、店の結合は 1 回の SQL で行う (ADR-0006)。店が無い購入では `shop` は null になる。
+//! 応答には購入 (`purchase`) をネストし、その中に商品の項目と店 (`shop`) を含める (FR-11、ADR-0022)。
+//! 購入と店の結合は 1 回の SQL で行う (ADR-0006)。店が無い購入では `shop` は null になる。
 //! 購入を指定した登録と、参照先の購入を変更する更新は、存在しないか他の利用者の ID を 404 に
 //! する (FR-11)。参照先を変えない更新は検査しない (0007 の設計判断)。
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
@@ -18,17 +18,16 @@ use serde::{Deserialize, Serialize};
 use worker::d1::D1Database;
 use worker::{Env, Request, Response, Result};
 
-use super::products::ProductResponse;
 use super::purchases::{PurchaseJoinRow, PurchaseResponse};
 use super::{
-    apply_favorite, attach_flavor_notes, invalid_input, not_found, query_error_response,
-    read_input, require_purchase, ListParams,
+    apply_favorite, attach_flavor_notes, invalid_input, merge_text, not_found,
+    query_error_response, read_input, require_purchase, ListParams,
 };
 use crate::auth::session::Session;
 use crate::db;
 use crate::respond;
 
-/// 抽出の応答。購入をネストし、その中に商品と店を含める (FR-11)。
+/// 抽出の応答。購入をネストし、その中に商品の項目と店を含める (FR-11、ADR-0022)。
 #[derive(Debug, Serialize)]
 pub struct BrewResponse {
     pub id: String,
@@ -59,7 +58,7 @@ pub struct BrewListResponse {
     pub next_cursor: Option<String>,
 }
 
-/// 抽出と、購入、商品、店を結合した行。項目名は `brew_book_core::query` が付ける列の別名と同じ。
+/// 抽出と、購入、店を結合した行。項目名は `brew_book_core::query` が付ける列の別名と同じ。
 #[derive(Debug, Deserialize)]
 struct BrewJoinRow {
     b_id: String,
@@ -79,7 +78,6 @@ struct BrewJoinRow {
     b_favorited_at: Option<String>,
     p_id: String,
     p_user_id: String,
-    p_product_id: String,
     p_shop_id: Option<String>,
     p_purchased_on: String,
     p_roast: Option<String>,
@@ -88,20 +86,15 @@ struct BrewJoinRow {
     p_price_currency: Option<String>,
     p_weight_grams: Option<i64>,
     p_photo_key: Option<String>,
+    p_name: String,
+    p_producer: Option<String>,
+    p_origin: Option<String>,
+    p_region: Option<String>,
+    p_process: Option<String>,
+    p_variety: Option<String>,
     p_created_at: String,
     p_updated_at: String,
     p_favorited_at: Option<String>,
-    pr_id: String,
-    pr_user_id: String,
-    pr_name: String,
-    pr_producer: Option<String>,
-    pr_origin: Option<String>,
-    pr_region: Option<String>,
-    pr_process: Option<String>,
-    pr_variety: Option<String>,
-    pr_created_at: String,
-    pr_updated_at: String,
-    pr_favorited_at: Option<String>,
     sh_id: Option<String>,
     sh_user_id: Option<String>,
     sh_name: Option<String>,
@@ -112,14 +105,13 @@ struct BrewJoinRow {
 }
 
 impl BrewJoinRow {
-    /// 応答に組み立てる。商品の Flavor Notes は別のクエリで引くため、ここでは空にする。
+    /// 応答に組み立てる。購入の Flavor Notes は別のクエリで引くため、ここでは空にする。
     ///
-    /// 購入と商品と店の部分は、購入の行と同じ形にしてから組み立てる。
+    /// 購入と店の部分は、購入の行と同じ形にしてから組み立てる。
     fn into_response(self) -> BrewResponse {
         let purchase = PurchaseJoinRow {
             p_id: self.p_id,
             p_user_id: self.p_user_id,
-            p_product_id: self.p_product_id,
             p_shop_id: self.p_shop_id,
             p_purchased_on: self.p_purchased_on,
             p_roast: self.p_roast,
@@ -128,20 +120,15 @@ impl BrewJoinRow {
             p_price_currency: self.p_price_currency,
             p_weight_grams: self.p_weight_grams,
             p_photo_key: self.p_photo_key,
+            p_name: self.p_name,
+            p_producer: self.p_producer,
+            p_origin: self.p_origin,
+            p_region: self.p_region,
+            p_process: self.p_process,
+            p_variety: self.p_variety,
             p_created_at: self.p_created_at,
             p_updated_at: self.p_updated_at,
             p_favorited_at: self.p_favorited_at,
-            pr_id: self.pr_id,
-            pr_user_id: self.pr_user_id,
-            pr_name: self.pr_name,
-            pr_producer: self.pr_producer,
-            pr_origin: self.pr_origin,
-            pr_region: self.pr_region,
-            pr_process: self.pr_process,
-            pr_variety: self.pr_variety,
-            pr_created_at: self.pr_created_at,
-            pr_updated_at: self.pr_updated_at,
-            pr_favorited_at: self.pr_favorited_at,
             sh_id: self.sh_id,
             sh_user_id: self.sh_user_id,
             sh_name: self.sh_name,
@@ -540,13 +527,11 @@ pub async fn delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Re
     Ok(Response::empty()?.with_status(204))
 }
 
-/// 応答の商品に Flavor Notes を付ける (FR-8)。
+/// 応答の購入に Flavor Notes を付ける (FR-8)。
 async fn attach_notes(d1: &D1Database, user_id: &str, brews: &mut [BrewResponse]) -> Result<()> {
-    let mut products: Vec<&mut ProductResponse> = brews
-        .iter_mut()
-        .map(|brew| &mut brew.purchase.product)
-        .collect();
-    attach_flavor_notes(d1, user_id, &mut products).await
+    let mut purchases: Vec<&mut PurchaseResponse> =
+        brews.iter_mut().map(|brew| &mut brew.purchase).collect();
+    attach_flavor_notes(d1, user_id, &mut purchases).await
 }
 
 /// 小数の入力の値を検証する (0 以上で小数第 1 位まで)。
@@ -580,14 +565,5 @@ fn merge_rating(input: Option<i64>) -> std::result::Result<Option<i64>, Response
             Err(error) => Err(invalid_input(error.message())),
         },
         None => Ok(None),
-    }
-}
-
-/// 更新の入力の任意の値を、現在の値と合わせる。
-/// 入力が無ければ現在の値、`null` なら NULL、値があれば前後の空白を除いた値にする。
-fn merge_text(input: Option<Option<String>>, current: Option<String>) -> Option<String> {
-    match input {
-        Some(value) => trim_optional(value.as_deref()),
-        None => current,
     }
 }

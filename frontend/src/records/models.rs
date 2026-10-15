@@ -43,12 +43,14 @@ impl Shop {
     }
 }
 
-/// 商品 (FR-7、FR-8)。
+/// 購入 (FR-9、FR-10)。商品の項目 (商品名から Flavor Notes まで) を購入が持つ (ADR-0022)。
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Product {
+pub struct Purchase {
     /// ID。
     pub id: String,
-    /// 商品名。
+    /// 店の ID。店が無い購入では None。
+    pub shop_id: Option<String>,
+    /// 商品名 (ADR-0022)。
     pub name: String,
     /// 生産者。
     pub producer: Option<String>,
@@ -62,42 +64,6 @@ pub struct Product {
     pub variety: Option<String>,
     /// Flavor Notes のタグ名 (名前の昇順。FR-8)。
     pub flavor_notes: Vec<String>,
-    /// 作成日時。
-    pub created_at: String,
-    /// 更新日時。
-    pub updated_at: String,
-    /// お気に入りにした日時。未設定のときは None (FR-21)。
-    pub favorited_at: Option<String>,
-}
-
-impl Product {
-    /// JSON のオブジェクトから組み立てる。
-    pub fn from_json(json: &Map<String, Value>) -> Result<Self, RecordError> {
-        Ok(Self {
-            id: string_field(json, "id")?,
-            name: string_field(json, "name")?,
-            producer: optional_string(json, "producer")?,
-            origin: optional_string(json, "origin")?,
-            region: optional_string(json, "region")?,
-            process: optional_string(json, "process")?,
-            variety: optional_string(json, "variety")?,
-            flavor_notes: string_list(json, "flavor_notes")?,
-            created_at: string_field(json, "created_at")?,
-            updated_at: string_field(json, "updated_at")?,
-            favorited_at: optional_string(json, "favorited_at")?,
-        })
-    }
-}
-
-/// 購入 (FR-9、FR-10)。
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Purchase {
-    /// ID。
-    pub id: String,
-    /// 商品の ID。
-    pub product_id: String,
-    /// 店の ID。店が無い購入では None。
-    pub shop_id: Option<String>,
     /// 購入日 (`YYYY-MM-DD`)。
     pub purchased_on: String,
     /// 焙煎度。
@@ -118,8 +84,6 @@ pub struct Purchase {
     pub updated_at: String,
     /// お気に入りにした日時。未設定のときは None (FR-21)。
     pub favorited_at: Option<String>,
-    /// 商品。必須の参照のため常にある (FR-9)。
-    pub product: Product,
     /// 店。店が無い購入では None (FR-9)。
     pub shop: Option<Shop>,
 }
@@ -132,8 +96,14 @@ impl Purchase {
             .transpose()?;
         Ok(Self {
             id: string_field(json, "id")?,
-            product_id: string_field(json, "product_id")?,
             shop_id: optional_string(json, "shop_id")?,
+            name: string_field(json, "name")?,
+            producer: optional_string(json, "producer")?,
+            origin: optional_string(json, "origin")?,
+            region: optional_string(json, "region")?,
+            process: optional_string(json, "process")?,
+            variety: optional_string(json, "variety")?,
+            flavor_notes: string_list(json, "flavor_notes")?,
             purchased_on: string_field(json, "purchased_on")?,
             roast: optional_string(json, "roast")?,
             roast_date: optional_string(json, "roast_date")?,
@@ -144,7 +114,6 @@ impl Purchase {
             created_at: string_field(json, "created_at")?,
             updated_at: string_field(json, "updated_at")?,
             favorited_at: optional_string(json, "favorited_at")?,
-            product: Product::from_json(&object_field(json, "product")?)?,
             shop,
         })
     }
@@ -181,7 +150,7 @@ pub struct Brew {
     pub updated_at: String,
     /// お気に入りにした日時。未設定のときは None (FR-21)。
     pub favorited_at: Option<String>,
-    /// 購入。必須の参照のため常にある。中に商品と店を含む (FR-11)。
+    /// 購入。必須の参照のため常にある。中に店を含む (FR-11)。
     pub purchase: Purchase,
 }
 
@@ -208,11 +177,10 @@ impl Brew {
     }
 }
 
-/// 写真から推測した商品の項目 (FR-19)。推測できない項目は None。
-///
-/// 商品の応答 ([`Product`]) とは違い、ID と日時を持たない候補である。
+/// 写真から推測した購入の項目 (FR-19、ADR-0022)。キーは購入の応答の列名に揃える。
+/// 推測できない項目は None (Flavor Notes は空の配列)。
 #[derive(Clone, PartialEq, Eq, Debug, Default)]
-pub struct ProductSuggestion {
+pub struct PurchaseSuggestion {
     /// 商品名の候補。
     pub name: Option<String>,
     /// 生産者の候補。
@@ -227,28 +195,6 @@ pub struct ProductSuggestion {
     pub variety: Option<String>,
     /// Flavor Notes の候補 (FR-8)。
     pub flavor_notes: Vec<String>,
-}
-
-impl ProductSuggestion {
-    /// JSON のオブジェクトから組み立てる。
-    pub fn from_json(json: &Map<String, Value>) -> Result<Self, RecordError> {
-        Ok(Self {
-            name: optional_string(json, "name")?,
-            producer: optional_string(json, "producer")?,
-            origin: optional_string(json, "origin")?,
-            region: optional_string(json, "region")?,
-            process: optional_string(json, "process")?,
-            variety: optional_string(json, "variety")?,
-            flavor_notes: string_list(json, "flavor_notes")?,
-        })
-    }
-}
-
-/// 写真から推測した購入と商品の項目 (FR-19)。キーは購入の応答の列名に揃える。
-#[derive(Clone, PartialEq, Eq, Debug, Default)]
-pub struct PurchaseSuggestion {
-    /// 商品の項目。1 つも推測できないときは None。
-    pub product: Option<ProductSuggestion>,
     /// 焙煎度の候補。
     pub roast: Option<String>,
     /// 焙煎日の候補 (`YYYY-MM-DD`)。
@@ -262,11 +208,14 @@ pub struct PurchaseSuggestion {
 impl PurchaseSuggestion {
     /// JSON のオブジェクトから組み立てる。
     pub fn from_json(json: &Map<String, Value>) -> Result<Self, RecordError> {
-        let product = optional_object(json, "product")?
-            .map(|product| ProductSuggestion::from_json(&product))
-            .transpose()?;
         Ok(Self {
-            product,
+            name: optional_string(json, "name")?,
+            producer: optional_string(json, "producer")?,
+            origin: optional_string(json, "origin")?,
+            region: optional_string(json, "region")?,
+            process: optional_string(json, "process")?,
+            variety: optional_string(json, "variety")?,
+            flavor_notes: string_list(json, "flavor_notes")?,
             roast: optional_string(json, "roast")?,
             roast_date: optional_string(json, "roast_date")?,
             price_amount: optional_i64(json, "price_amount")?,
@@ -299,8 +248,8 @@ impl PlaceCandidate {
 /// 記録の削除の影響の件数 (0056)。
 ///
 /// 削除の確認のダイアログに出す。対象によって意味が異なり、店では `purchases` が
-/// 店の指定が外れる購入の件数 (購入は消えない)、商品では `purchases` が消える購入の件数、
-/// `brews` が消える抽出の件数である。応答に無い項目は 0 にする。
+/// 店の指定が外れる購入の件数 (購入は消えない)、購入では `brews` が消える抽出の件数である。
+/// 応答に無い項目は 0 にする。
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct DeleteImpact {
     /// 削除される (店では店の指定が外れる) 購入の件数。

@@ -66,7 +66,7 @@ pub fn HomeScreen() -> Element {
         let mut favorite_notice = notice;
         rsx! {
             ListRow {
-                title: brew.purchase.product.name.clone(),
+                title: brew.purchase.name.clone(),
                 subtitle: Some(rsx! { span { RowValue { text: subtitle } } }),
                 trailing: Some(rsx! { Rating { value: brew.rating } }),
                 favorited,

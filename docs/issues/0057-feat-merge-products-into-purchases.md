@@ -217,3 +217,97 @@ TODO の 2 つ目の小項目 (「この購入をもとに登録」) は issue 0
 - issue 0058 (「この購入をもとに登録」。本 issue の統合の後に実装する。TODO の 2 つ目の小項目に対応する)。
 - ADR-0006 (データモデル)、ADR-0016 (写真からの推測)、ADR-0018 (最終スキーマ)、ADR-0020 (記録の削除)。
 - issue 0034 (写真からの推測の商品の照合と登録の導線を本 issue で消す)、0056 (商品の削除の連鎖を本 issue で消す)。
+
+## 追記 (2026-10-14、実装時の調査結果)
+
+- マイグレーションの purchases の作り直しは、「## 設計判断」に書いた「`purchases_new` を作り、古い purchases を DROP して RENAME する」方式を採らず、退避テーブルの方式に変えた。
+  SQLite は `PRAGMA defer_foreign_keys = true` で遅延した外部キー違反を件数で数え、親の行の削除 (`DROP TABLE` の暗黙の DELETE) で増やし、同じ名前の親のテーブルへの行の挿入で減らす。
+  `RENAME TO` は件数を戻さないため、brews を持つ購入があると COMMIT が `FOREIGN KEY constraint failed` になる (2026-10-14 に SQLite 3.51.0 で確認)。
+  そのため 0005 は、移す行を制約の無い `purchases_merged` に退避し、purchases を `DROP TABLE` してから同じ名前で `CREATE TABLE` し、退避した行を入れ直してから `purchases_merged` を消す。
+  `backend/brew_book/tests/schema.rs` のパーサは完了条件のとおり `ALTER TABLE ... RENAME TO` も解釈するが、0005 はこの文を使わない。
+- マイグレーションのファイル全体が 1 つのトランザクションで適用されることは、`mise run db-migrate` (`wrangler d1 migrations apply --local`) と `backend/brew_book/tests/d1_binding.rs` の `execute_sql_file` (`wrangler d1 execute --file`) の両方で、brews を持つ購入が残ることで確かめる (結果は close 時の「## 解決方法」に書く)。
+- ローカルの D1 での確認 (2026-10-14)。
+  ローカルの D1 (0002 まで適用済み) に 0003 と 0004 を `wrangler d1 execute DB --local --file` で適用して `d1_migrations` に記録し、0004 の状態で次を入れた。
+  店 `s-m`、購入が 2 件ある商品 `p-two` (6 項目とタグ berry、floral とお気に入り付き)、購入が無い商品 `p-none` (タグ berry 付き)、購入が 1 件ある商品 `p-one`、写真のキーとお気に入りと店と価格を持つ購入 `b-1`、価格と店の無い購入 `b-2`、購入 `b-3`、抽出 `w-1` (`b-1`) と `w-2` (`b-3`)。
+  `mise run db-migrate` で 0005 が 1 つのトランザクションで適用され (`20 commands executed successfully`)、`wrangler d1 execute DB --local --json` で次を確かめた。
+  - `products`、`product_flavor_tags` と products のインデックス 4 つが無く、`purchase_flavor_tags` (主キー `(purchase_id, tag_id)`) と purchases のインデックス 4 つがある。
+  - 購入は 3 件のままで、`b-1` と `b-2` が `p-two` の 6 項目 (Two Purchases、Producer A、Ethiopia、Guji、Natural、Heirloom) とタグ berry、floral を持ち、`b-3` が `p-one` の項目 (One Purchase、Kenya、Washed。他は NULL) を持つ。
+  - 既存の列 (`shop_id`、`purchased_on`、`roast`、`roast_date`、`price_amount`、`price_currency`、`weight_grams`、`photo_key`、`created_at`、`updated_at`、`favorited_at`) の値は適用の前後で 3 件とも一致した。
+  - 抽出 `w-1` と `w-2` は購入 `b-1` と `b-3` を参照したまま残り、`PRAGMA foreign_key_check` は空である。
+  - `flavor_tags` の 2 行は残り、`p-none` のタグの対応は捨てられた。適用の前の購入の無い商品の件数は 1 (`p-none`) である。
+- デザインの原本の再生成 (2026-10-15)。
+  `docs/design/components/` の `preview.html` のうち、見た目が変わる Lists、RecordForms、Detail、Home、WideLayout、ReferenceTile の 6 つを両テーマで描画し直し、`docs/design/screenshots/` の原本を置き換えた。
+  描画には Google Chrome の headless モード (`--headless=new --window-size=<@dsCard の width,height> --screenshot`) を使い、`preview.html` の `<head>` に `../../tokens.css` のリンクを足して `<html>` に `data-theme` を付けた複製を開いた。
+  同じ手順で見た目を変えていない AppBar を描画すると、コミット済みの原本と画素まで一致した (差のある画素 0)。
+  Detail の購入の詳細の帳簿には、`Detail/README.md` と `frontend/src/screens/records/purchase_detail.rs` に合わせて生産者、生産国、地域、精製方法、品種の 5 行を足し、カードの高さを 900 から 1140 にした。
+  Lists は幅 1310 から 860 (購入と店の 2 画面) になり、RecordForms は幅 1290 から 860、高さ 900 から 1240 (購入のフォームに商品の項目とフレーバーノートが入る) になった。
+  ReferenceTile の原本は高さ 250 で `@dsCard` の高さ 210 とずれていたため、210 で描画し直した。
+- 検査の結果 (2026-10-15)。
+  `mise run check` を段ごとに実行し、`fmt`、`lint`、`frontend:build`、`frontend:lint`、`formal`、`backend:test`、`backend:test-integration`、`frontend:test`、`frontend:test-web`、`frontend:test-same-origin` がすべて通過した。
+  `backend/brew_book/tests/d1_binding.rs` の `wrangler_the_migration_merging_products_keeps_the_purchases_and_brews` も通過し、`execute_sql_file` で 0005 を適用しても brews を持つ購入が残ることを確かめた (上の 2 つ目の項目の確認)。
+  `backend:test-integration` の 1 回目は、brew_book の 17 本のテストが通過した後の `brew_book_admin` のコンパイルで rustc が進まなくなった (CPU 時間が増えないまま 10 分以上経過)。
+  その rustc を止めて `cargo test -p brew_book_admin --test wrangler_admin_api` だけを再実行し、7 件が通過した。
+  E2E のスクリーンショット比較は 55 件である (0056 の 58 件から、商品の一覧と編集の 2 画面の 6 件が減り、購入の編集の 3 件が加わった)。
+  保存したスクリーンショットで、購入の詳細 (`PurchaseDetail`) に生産者から品種までの 5 行が出ること、購入の編集 (`PurchaseEdit`) に商品名、生産者、生産国、地域、精製方法、品種、フレーバーノートの入力が出ること、ドロワーが抽出、購入、店、統計、設定の 5 項目になることを確かめた。
+  原本との比較の mean は、paper が PurchaseDetail 11.2、PurchaseEdit 12.1、Purchases 14.2、Shops 13.2、WideLayout 11.4、Home 21.3 で、night が PurchaseDetail 14.5、PurchaseEdit 14.9、Purchases 11.5、Shops 10.6、WideLayout 9.5、Home 12.2 である。
+- staging での確認: 未実施 (所有者の承認待ち)。
+  完了条件の staging の項目 (`mise run db-migrate-staging` と staging での動作確認) は外部リソースの変更にあたるため、所有者の承認を得てから行う。
+  適用のときは、完了条件の購入の無い商品の件数に加えて、適用の前後の purchases と brews の件数、適用の前の購入のある商品のタグの対応の件数 (`SELECT COUNT(*) FROM purchases AS p JOIN product_flavor_tags AS t ON t.product_id = p.product_id`) と適用の後の purchase_flavor_tags の件数、適用の後の `PRAGMA foreign_key_check` の結果を `wrangler d1 execute DB --env staging --remote` で記録する。
+  purchases と brews の件数が変わらず、タグの対応の件数が一致し、foreign_key_check が空であることを確かめる (0005 は purchases を作り直すため、実データで行が落ちていないことを件数で裏付ける)。
+
+## 解決方法
+
+close は staging の項目の承認後に行う (完了条件の「0055 と同じ扱い」)。
+実装とテストは 2026-10-15 のコミットに含め、`Completed:` 行と `issues/closed/` への移動だけを残す。
+
+- マイグレーション `backend/brew_book/migrations/0005_merge_products_into_purchases.sql` を足した。
+  purchases に `name`、`producer`、`origin`、`region`、`process`、`variety` を足して `product_id` を外し、`purchase_flavor_tags` (主キー `(purchase_id, tag_id)`) を作り、products、product_flavor_tags と products のインデックス 4 つを消す。
+  purchases の作り直しは「## 追記」の 1 つ目の項目のとおり退避テーブル `purchases_merged` の方式で行う (「## 設計判断」の `RENAME TO` の方式からの乖離)。
+- 台帳 (`backend/brew_book_core/src/routes.rs`) から商品の 8 経路 (`products_list`、`products_create`、`products_get`、`products_update`、`products_favorite_put`、`products_favorite_delete`、`products_delete`、`products_delete_impact`) を外し、スイート (`backend/brew_book/tests/support/mod.rs`) も同じ 48 経路にした。
+- `brew_book_core::query` から商品の定数と文 (`PRODUCT_SORT_KEYS`、`PRODUCTS_TABLE`、`PRODUCT_COLUMNS`、`PRODUCT_FLAVOR_TAGS_TABLE`、`products_list`、`product_find`、`product_insert`、`product_update`、`product_delete`、`product_purchases_delete`、`product_brews_delete`、`product_purchase_photo_keys`、`product_delete_impact`、`product_flavor_notes`、`delete_product_flavor_tags`、`insert_product_flavor_tag`) と `ListQuery.name`、`NameFilter`、`list_path` の `name` 引数を消した。
+  `PURCHASE_COLUMNS` に 6 列を足し、`PURCHASE_FLAVOR_TAGS_TABLE`、`purchase_flavor_notes`、`delete_purchase_flavor_tags`、`insert_purchase_flavor_tag` を足した。
+  サジェストの Producer、Origin、Region、Process、Variety は purchases から引く。
+- `brew_book_core::suggestion` の `ProductSuggestion` を消し、`PurchaseSuggestion` が `name` から `flavor_notes` までを直下に持つ平坦な形にした。
+  購入の入力の検証 (`brew_book_core::records`) は、店名と同じ規則で購入の商品名を検証する。
+- Worker の `records::products` (`ProductResponse`、`ProductListResponse` を含む) を消した。
+  `records::purchases` の `create` と `update` が `name` (必須)、5 項目、`flavor_notes` を受け、`product_id` を未知の項目として 400 にし、応答 (一覧、単件、登録、更新と抽出の `purchase`) が商品の項目と `flavor_notes` を直下に持つ。
+  購入の削除は `purchase_flavor_tags` の対応を消し、`flavor_tags` の行を残す。
+  `export` は `products` と `product_flavor_tags` を外して `purchase_flavor_tags` を足し、アカウント削除のテーブルは `purchase_flavor_tags` を含む 10 テーブルにした。
+- Frontend から商品の型 (`Product`、`ProductInput`、`ProductSuggestion`)、`RecordsApi` の商品の 7 メソッド、画面 (`product_list.rs`、`product_form.rs`)、経路 (`/products`、`/products/new`、`/products/:id/edit`) を消し、ナビゲーションを抽出、購入、店、統計、設定の 5 項目にした。
+  購入のフォーム (`purchase_form.rs`) に商品名 (必須)、Producer、Origin、Region、Process、Variety (サジェスト付き)、Flavor Notes (タグ入力) を足し、商品のピッカーと「推測した内容で商品を登録」のシートを消した。
+  写真からの推測は、null でない項目を入力済みの欄でも上書きし、null の項目と空の `flavor_notes` は変えず、通貨は変えない。
+  購入の詳細 (`purchase_detail.rs`) に Producer から Variety までの 5 行と Flavor Notes を出し、購入と抽出の詳細から商品のタイルを消した。
+  `ListRow` の商品の行だけが使っていた `tags` prop と `design.css` の `.row .tags` を消した。
+- i18n の商品の 13 キーを消した (`KEY_COUNT` 237)。
+- デザインの原本 (`docs/design/README.md`、`tokens.json`、`bundle.css`、AppBar、Detail、Home、ListRow、Lists、RecordForms、ReferenceTile、WideLayout の README と preview.html) から商品の画面、タイル、行、ピッカー、「商品を登録」、6 項目のドロワーとレールを消し、スクリーンショット (Detail、Home、Lists、RecordForms、ReferenceTile、WideLayout の paper と night) を再生成した (手順は「## 追記」)。
+- ADR-0022 を足し、ADR-0006、ADR-0018、ADR-0020 に置き換えの注記を足した。PRD と `README.md` を「## 設計判断」のとおり更新した。
+- `CHANGES.md` に `[CHANGE]` を 1 件足した。
+- テスト: `backend/brew_book/tests/d1_binding.rs` に 0005 の適用のテスト、`schema.rs` に `PRAGMA`、`INSERT INTO`、`DROP TABLE`、`ALTER TABLE ... RENAME TO` の解釈と `RENAME TO` の単体の検査、`test_query.rs` と `test_queries.rs` に新しい SQL の検査、結合テスト (`wrangler_records_api.rs`、`wrangler_purchases_brews_api.rs`、`wrangler_suggestions_api.rs`、`wrangler_export_api.rs`、`wrangler_account_api.rs`、`wrangler_records_scale.rs`、`wrangler_stats_api.rs`、`wrangler_stats_scale.rs`、`wrangler_same_origin_e2e.rs`、`wrangler_photos_api.rs`) と `support/seed.rs` を新しい形にした。
+  `wrangler_purchases_brews_api.rs` は、購入の一覧の `sort` が `price_amount` と `weight_grams` を受け付け、`name`、`created_at`、`rating` を 400 にすることも検査する。
+  `test_suggestion.rs`、`prop_suggestion.rs`、`prop_query.rs`、Frontend の `test_records_api.rs`、`test_records_forms.rs`、`test_records_display.rs`、`test_records_screens.rs`、`test_router.rs`、`test_i18n.rs`、`test_records_lists_web.rs`、`test_records_screens_web.rs`、`test_app_nav_web.rs`、`prop_records.rs` (推測の上書きの PBT) を新しい形にした。
+- ローカルの D1 での 0005 の確認とスクリーンショット比較の結果は「## 追記」の「ローカルの D1 での確認」と「検査の結果」に記録した。
+  購入 3 件が残り、抽出が購入を参照したまま残り、`PRAGMA foreign_key_check` が空で、適用の前の購入の無い商品の件数は 1 である。
+  E2E のスクリーンショット比較は 55 件で、意図した差分で原本を更新した。
+
+## 検証
+
+レビューの指摘を反映した後に `mise run check` の段を順に実行した (2026-10-15)。
+
+- fmt: `cargo fmt --all --check` と Frontend の fmt が通過した。
+- lint: 通過した。
+  1 回目は、実装側が停止したと誤認して clippy-driver に SIGTERM を送ったため signal 15 で失敗した (環境の問題ではなく操作の誤り)。
+  再実行で通過した。
+- frontend:build と frontend:lint: 通過した。
+- formal: TLC が完了し、エラーは無い (11644 distinct states)。
+- backend:test: `cargo test --workspace -- --skip wrangler_` の 40 binary が通過した。
+  `schema.rs` の 10 件 (`the_parser_renames_a_table_and_its_indexes_with_rename_to` を含む) と `test_query.rs`、`test_queries.rs`、`test_suggestion.rs`、`prop_query.rs`、`prop_suggestion.rs` を含む。
+- backend:test-integration: brew_book の 17 suite と brew_book_admin の 1 suite が通過した。
+  `wrangler_purchases_brews_api` 46 件 (購入の一覧の `sort` の受け付けと拒否を含む)、`wrangler_records_api` 26 件、`wrangler_suggestions_api` 12 件、`wrangler_purchase_suggestions_api` 5 件、`wrangler_photos_api` 14 件、`wrangler_export_api` 5 件、`wrangler_account_api` 5 件、`wrangler_stats_api` 18 件、`wrangler_records_scale` 1 件、`wrangler_stats_scale` 1 件、`wrangler_same_origin_api` 9 件、`wrangler_auth_api` 35 件、`wrangler_passkey_flow` 9 件、`wrangler_maps_api` 6 件、`wrangler_display_name` 1 件、`d1_binding` 4 件、`dev_server` 3 件、`wrangler_admin_api` 7 件である。
+  1 回目は `wrangler_passkey_flow` の `wrangler_auth_login_complete_expired_challenge_410_and_deleted_on_issue` が `410 != 400` で失敗し、cargo がその suite で止まった。
+  このテストはチャレンジの TTL を 5 秒にして期限切れを確かめるもので、発行し直したチャレンジの検査までの処理が端末のセキュリティソフトのスキャンの負荷で 5 秒を超えると期限切れになる (9 件で 572 秒かかった実行でも同じ失敗)。
+  0057 は認証のコードとこのテストを変えておらず、0055 の検証でも同じ suite が環境で落ちている。
+  残りの suite を `--no-fail-fast` で実行して通過を確認し、失敗した 1 件を単独で再実行して通過を確認した (102 秒)。
+- frontend:test: 46 binary が通過した。
+- frontend:test-web: ブラウザの 12 suite が通過した (`test_records_lists_web.rs`、`test_records_screens_web.rs`、`test_app_nav_web.rs` を含む)。
+- frontend:test-same-origin: `wrangler_same_origin_e2e` が通過し、スクリーンショット比較は 55 件である。
+- staging での確認: 未実施 (所有者の承認待ち)。完了条件の staging の項目 (件数の記録、0005 の適用、`PRAGMA foreign_key_check`、画面の確認) は承認の後に行う。

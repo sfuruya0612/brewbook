@@ -1,4 +1,4 @@
-<!-- @dsCard group="画面" width=1290 height=900 subtitle="購入の記録、商品の登録、店の登録 (地図と住所の補完)" -->
+<!-- @dsCard group="画面" width=860 height=1240 subtitle="購入の記録、店の登録 (地図と住所の補完)" -->
 <!doctype html>
 <html lang="ja">
 <head>
@@ -103,7 +103,7 @@ a { color: var(--link); }
 .ledger .v .u { font-family: var(--font-sans); font-size: 12px; color: var(--ink-muted); margin-left: var(--space-1); }
 .ledger .v.unset { color: var(--ink-faint); font-family: var(--font-sans); }
 
-/* 参照先のタイル (購入、商品、店をたどる) */
+/* 参照先のタイル (購入、店をたどる) */
 .tile { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--roast-soft); color: var(--ink); }
 .tile .k { font-size: 12px; line-height: 16px; color: var(--ink-muted); font-weight: 500; letter-spacing: 0.02em; }
 .tile .n { font-size: 15px; line-height: 22px; font-weight: 600; }
@@ -250,23 +250,6 @@ a { color: var(--link); }
 <div class="stage"><div class="phone"><div class="screen">
 <div class="appbar"><span class="lead"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="ttl">購入を記録</span><span class="acts"><span class="btn text">キャンセル</span><span class="btn primary sm">保存</span></span></div>
 <div class="form">
-  <div class="picker"><div class="main"><div class="k">商品<span style="margin-left:4px;font-weight:400">必須</span></div><div class="n">Ethiopia Guji Natural</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
-  <div class="picker"><div class="main"><div class="k">店</div><div class="n" style="color:var(--ink-faint);font-weight:400">店を指定しない</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
-  <div class="field "><div class="lbl">購入日<span class="req">必須</span></div><div class="box"><span class="in num">2026-09-26</span><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg></div></div>
-  <div class="field "><div class="lbl">焙煎度</div><div class="box"><span class="in">浅煎り</span></div></div>
-  <div class="field "><div class="lbl">焙煎日</div><div class="box"><span class="in ph">YYYY-MM-DD</span><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg></div></div>
-  <div class="grid2" style="grid-template-columns:2fr 1fr">
-    <div class="field "><div class="lbl">価格</div><div class="box"><span class="in num">1980</span></div></div>
-    <div class="field "><div class="lbl">通貨</div><div class="box"><span class="in num">JPY</span></div></div>
-  </div>
-  <div class="field "><div class="lbl">重量</div><div class="box"><span class="in num">200</span><span class="unit">g</span></div></div>
-  <div class="field"><div class="lbl">写真</div>
-    <div style="display:flex;gap:var(--space-3);align-items:center"><div class="photo" style="width:88px;height:88px"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div><div style="display:flex;flex-direction:column;gap:var(--space-2)"><span class="btn secondary sm" style="align-self:flex-start">写真を選ぶ</span><span class="t-caption muted">JPEG に変換し、長辺 2048 px 以下に縮小して保存します。</span></div></div>
-  </div>
-</div>
-</div></div><div class="phone"><div class="screen">
-<div class="appbar"><span class="lead"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="ttl">商品を登録</span><span class="acts"><span class="btn text">キャンセル</span><span class="btn primary sm">保存</span></span></div>
-<div class="form">
   <div class="field "><div class="lbl">商品名<span class="req">必須</span></div><div class="box"><span class="in">Ethiopia Guji Natural</span></div></div>
   <div class="field "><div class="lbl">生産者</div><div class="box"><span class="in">Guji Highland Farm</span></div></div>
   <div class="grid2">
@@ -279,6 +262,18 @@ a { color: var(--link); }
   </div>
   <div class="field"><div class="lbl">フレーバーノート</div>
     <div class="chips"><span class="chip tag">ピーチ <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="chip tag">ジャスミン <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="chip tag">黒糖 <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></span><span class="chip add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>タグを入力</span></div>
+  </div>
+  <div class="picker"><div class="main"><div class="k">店</div><div class="n" style="color:var(--ink-faint);font-weight:400">店を指定しない</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+  <div class="field "><div class="lbl">購入日<span class="req">必須</span></div><div class="box"><span class="in num">2026-09-26</span><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg></div></div>
+  <div class="field "><div class="lbl">焙煎度</div><div class="box"><span class="in">浅煎り</span></div></div>
+  <div class="field "><div class="lbl">焙煎日</div><div class="box"><span class="in ph">YYYY-MM-DD</span><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg></div></div>
+  <div class="grid2" style="grid-template-columns:2fr 1fr">
+    <div class="field "><div class="lbl">価格</div><div class="box"><span class="in num">1980</span></div></div>
+    <div class="field "><div class="lbl">通貨</div><div class="box"><span class="in num">JPY</span></div></div>
+  </div>
+  <div class="field "><div class="lbl">重量</div><div class="box"><span class="in num">200</span><span class="unit">g</span></div></div>
+  <div class="field"><div class="lbl">写真</div>
+    <div style="display:flex;gap:var(--space-3);align-items:center"><div class="photo" style="width:88px;height:88px"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div><div style="display:flex;flex-direction:column;gap:var(--space-2)"><span class="btn secondary sm" style="align-self:flex-start">写真を選ぶ</span><span class="t-caption muted">JPEG に変換し、長辺 2048 px 以下に縮小して保存します。</span></div></div>
   </div>
 </div>
 </div></div><div class="phone"><div class="screen">

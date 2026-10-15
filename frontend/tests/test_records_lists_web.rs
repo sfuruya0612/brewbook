@@ -1,6 +1,6 @@
 //! 一覧の並び替えとお気に入りのブラウザテスト (0051、FR-20、FR-21)。
 //!
-//! 4 つの一覧のツールバーと、行の星と、抽出と購入の詳細と、商品と店の編集の星を実際に描き、
+//! 3 つの一覧のツールバーと、行の星と、抽出と購入の詳細と、店の編集の星を実際に描き、
 //! 操作で送るクエリと経路、行の押下 (詳細を開く) との分離を検査する。ブラウザで動かすため
 //! `frontend:test-web` (wasm-bindgen-test) で実行する。
 
@@ -18,8 +18,6 @@ use brew_book_frontend::records::values::LocalDateTime;
 use brew_book_frontend::records::{PhotoUploader, RecordServices, RecordsApi};
 use brew_book_frontend::screens::records::brew_detail::BrewDetailScreen;
 use brew_book_frontend::screens::records::home::HomeScreen;
-use brew_book_frontend::screens::records::product_form::ProductForm;
-use brew_book_frontend::screens::records::product_list::ProductListScreen;
 use brew_book_frontend::screens::records::purchase_detail::PurchaseDetailScreen;
 use brew_book_frontend::screens::records::purchase_list::PurchaseListScreen;
 use brew_book_frontend::screens::records::shop_form::ShopForm;
@@ -101,16 +99,12 @@ enum TestRoute {
     Home {},
     #[route("/purchases", PurchasesRoute)]
     Purchases {},
-    #[route("/products", ProductsRoute)]
-    Products {},
     #[route("/shops", ShopsRoute)]
     Shops {},
     #[route("/brews/:id", BrewDetailRoute)]
     BrewDetail { id: String },
     #[route("/purchases/:id", PurchaseDetailRoute)]
     PurchaseDetail { id: String },
-    #[route("/products/:id/edit", ProductEditRoute)]
-    ProductEdit { id: String },
     #[route("/shops/:id/edit", ShopEditRoute)]
     ShopEdit { id: String },
 }
@@ -126,13 +120,6 @@ fn HomeRoute() -> Element {
 fn PurchasesRoute() -> Element {
     rsx! {
         PurchaseListScreen {}
-    }
-}
-
-#[component]
-fn ProductsRoute() -> Element {
-    rsx! {
-        ProductListScreen {}
     }
 }
 
@@ -160,14 +147,6 @@ fn PurchaseDetailRoute(id: String) -> Element {
 }
 
 #[component]
-fn ProductEditRoute(id: String) -> Element {
-    let _ = id;
-    rsx! {
-        div { class: "opened-detail" }
-    }
-}
-
-#[component]
 fn ShopEditRoute(id: String) -> Element {
     let _ = id;
     rsx! {
@@ -184,21 +163,10 @@ enum DetailRoute {
     BrewDetail { id: String },
     #[route("/purchases/:id", RealPurchaseDetailRoute)]
     PurchaseDetail { id: String },
-    #[route("/products/new", RealProductNewRoute)]
-    ProductNew {},
-    #[route("/products/:id/edit", RealProductEditRoute)]
-    ProductEdit { id: String },
     #[route("/shops/new", RealShopNewRoute)]
     ShopNew {},
     #[route("/shops/:id/edit", RealShopEditRoute)]
     ShopEdit { id: String },
-}
-
-#[component]
-fn RealProductNewRoute() -> Element {
-    rsx! {
-        ProductForm {}
-    }
 }
 
 #[component]
@@ -219,13 +187,6 @@ fn RealBrewDetailRoute(id: String) -> Element {
 fn RealPurchaseDetailRoute(id: String) -> Element {
     rsx! {
         PurchaseDetailScreen { id }
-    }
-}
-
-#[component]
-fn RealProductEditRoute(id: String) -> Element {
-    rsx! {
-        ProductForm { id: Some(id) }
     }
 }
 
@@ -400,11 +361,12 @@ fn shop_json(id: &str, name: &str, favorited_at: Option<&str>) -> Value {
     })
 }
 
-/// 商品の応答の JSON。
-fn product_json(id: &str, name: &str, favorited_at: Option<&str>) -> Value {
+/// 購入の応答の JSON (商品の項目を持ち、店をネストする。0057)。
+fn purchase_json(id: &str, name: &str, favorited_at: Option<&str>) -> Value {
     json!({
         "id": id,
         "user_id": "user",
+        "shop_id": null,
         "name": name,
         "producer": null,
         "origin": null,
@@ -412,19 +374,6 @@ fn product_json(id: &str, name: &str, favorited_at: Option<&str>) -> Value {
         "process": null,
         "variety": null,
         "flavor_notes": [],
-        "created_at": "2026-10-01T00:00:00.000Z",
-        "updated_at": "2026-10-01T00:00:00.000Z",
-        "favorited_at": favorited_at,
-    })
-}
-
-/// 購入の応答の JSON (商品と店をネストする)。
-fn purchase_json(id: &str, product: &Value, favorited_at: Option<&str>) -> Value {
-    json!({
-        "id": id,
-        "user_id": "user",
-        "product_id": "p1",
-        "shop_id": null,
         "purchased_on": "2026-10-01",
         "roast": null,
         "roast_date": null,
@@ -435,7 +384,6 @@ fn purchase_json(id: &str, product: &Value, favorited_at: Option<&str>) -> Value
         "created_at": "2026-10-01T00:00:00.000Z",
         "updated_at": "2026-10-01T00:00:00.000Z",
         "favorited_at": favorited_at,
-        "product": product,
         "shop": null,
     })
 }
@@ -462,15 +410,14 @@ fn brew_json(id: &str, purchase: &Value, favorited_at: Option<&str>) -> Value {
     })
 }
 
-/// 4 つの一覧に並び順の選択と昇順/降順の切り替えとお気に入りのみの切り替えが出る (FR-20、FR-21)。
+/// 3 つの一覧に並び順の選択と昇順/降順の切り替えとお気に入りのみの切り替えが出る (FR-20、FR-21)。
 #[wasm_bindgen_test]
-async fn the_four_lists_have_the_sort_and_favorite_toolbar() {
+async fn the_three_lists_have_the_sort_and_favorite_toolbar() {
     install_styles();
     set_theme("paper");
     set_language(Language::English);
-    let product = || product_json("p1", "Beans", None);
-    let purchase = || purchase_json("b1", &product(), None);
-    let cases: [(&str, Value, [&str; 3]); 4] = [
+    let purchase = || purchase_json("b1", "Beans", None);
+    let cases: [(&str, Value, [&str; 3]); 3] = [
         (
             "/",
             json!({"brews": [brew_json("w1", &purchase(), None)], "next_cursor": null}),
@@ -480,11 +427,6 @@ async fn the_four_lists_have_the_sort_and_favorite_toolbar() {
             "/purchases",
             json!({"purchases": [purchase()], "next_cursor": null}),
             ["Purchased on", "Price", "Weight"],
-        ),
-        (
-            "/products",
-            json!({"products": [product()], "next_cursor": null}),
-            ["Created", "Product name", "Updated"],
         ),
         (
             "/shops",
@@ -520,8 +462,7 @@ async fn changing_the_sort_and_the_order_and_the_favorites_reloads_from_the_firs
     install_styles();
     set_theme("paper");
     set_language(Language::English);
-    let product = product_json("p1", "Beans", None);
-    let purchase = purchase_json("b1", &product, None);
+    let purchase = purchase_json("b1", "Beans", None);
     let list = |favorited: Option<&str>| json!({"brews": [brew_json("w1", &purchase, favorited)], "next_cursor": null});
     let (root, transport) = mount_at(
         "/",
@@ -576,17 +517,17 @@ async fn the_favorites_only_filter_hides_the_records_that_are_not_favorites() {
     set_theme("paper");
     set_language(Language::English);
     let (root, transport) = mount_at(
-        "/products",
+        "/shops",
         vec![
             response(&json!({
-                "products": [
-                    product_json("p1", "Favorite", Some("2026-10-05T00:00:00.000Z")),
-                    product_json("p2", "Plain", None),
+                "shops": [
+                    shop_json("s1", "Favorite", Some("2026-10-05T00:00:00.000Z")),
+                    shop_json("s2", "Plain", None),
                 ],
                 "next_cursor": null,
             })),
             response(&json!({
-                "products": [product_json("p1", "Favorite", Some("2026-10-05T00:00:00.000Z"))],
+                "shops": [shop_json("s1", "Favorite", Some("2026-10-05T00:00:00.000Z"))],
                 "next_cursor": null,
             })),
         ],
@@ -601,7 +542,7 @@ async fn the_favorites_only_filter_hides_the_records_that_are_not_favorites() {
 
     assert_eq!(
         transport.last_request().path,
-        "/api/products?limit=50&sort=created_at&order=desc&favorite=true"
+        "/api/shops?limit=50&sort=created_at&order=desc&favorite=true"
     );
     assert_eq!(count(&root, ".row"), 1);
     let row = select(&root, ".row .name");
@@ -640,8 +581,7 @@ async fn the_star_on_a_row_toggles_the_favorite_without_opening_the_detail() {
     install_styles();
     set_theme("paper");
     set_language(Language::English);
-    let product = product_json("p1", "Beans", None);
-    let purchase = purchase_json("b1", &product, None);
+    let purchase = purchase_json("b1", "Beans", None);
     let list = |favorited: Option<&str>| json!({"brews": [brew_json("w1", &purchase, favorited)], "next_cursor": null});
     let (root, transport) = mount_at(
         "/",
@@ -650,16 +590,12 @@ async fn the_star_on_a_row_toggles_the_favorite_without_opening_the_detail() {
             // お気に入りの `PUT` の応答は更新後の抽出 1 件。
             response(&brew_json(
                 "w1",
-                &purchase_json("b1", &product_json("p1", "Beans", None), None),
+                &purchase_json("b1", "Beans", None),
                 Some("2026-10-05T00:00:00.000Z"),
             )),
             response(&list(Some("2026-10-05T00:00:00.000Z"))),
             // 星の押下が行の押下を発火させた場合に、詳細の読み込みで止まらないようにする。
-            response(&brew_json(
-                "w1",
-                &purchase_json("b1", &product_json("p1", "Beans", None), None),
-                None,
-            )),
+            response(&brew_json("w1", &purchase_json("b1", "Beans", None), None)),
         ],
     )
     .await;
@@ -689,23 +625,20 @@ async fn the_star_on_a_row_toggles_the_favorite_without_opening_the_detail() {
     }
 }
 
-/// 商品と店の編集の星でお気に入りを切り替えられ、新規の登録には星が出ない (FR-21)。
+/// 店の編集の星でお気に入りを切り替えられ、新規の登録には星が出ない (FR-21)。
 #[wasm_bindgen_test]
-async fn the_edit_forms_have_the_star_and_the_new_forms_do_not() {
+async fn the_edit_form_has_the_star_and_the_new_form_does_not() {
     install_styles();
     set_theme("paper");
     set_language(Language::English);
 
-    // 商品の編集: 星が出て、押すと `PUT` を送る。
+    // 店の編集: 星が出て、押すと `PUT` を送る。地図の設定 (FR-22) の応答も返す。
     let (root, transport) = mount_detail(
-        "/products/p1/edit",
+        "/shops/s1/edit",
         vec![
-            response(&product_json("p1", "Beans", None)),
-            response(&product_json(
-                "p1",
-                "Beans",
-                Some("2026-10-05T00:00:00.000Z"),
-            )),
+            response(&shop_json("s1", "Shop", None)),
+            response(&json!({"embed_api_key": null})),
+            response(&shop_json("s1", "Shop", Some("2026-10-05T00:00:00.000Z"))),
         ],
     )
     .await;
@@ -717,7 +650,7 @@ async fn the_edit_forms_have_the_star_and_the_new_forms_do_not() {
     );
     click(&star);
     settle().await;
-    assert_eq!(transport.last_request().path, "/api/products/p1/favorite");
+    assert_eq!(transport.last_request().path, "/api/shops/s1/favorite");
     assert_eq!(transport.last_request().method.as_str(), "PUT");
     // 押した後は星が塗りになる。
     assert_eq!(
@@ -727,21 +660,7 @@ async fn the_edit_forms_have_the_star_and_the_new_forms_do_not() {
         Some("Remove from favorites")
     );
 
-    // 店の編集: 同じく星が出る。地図の設定 (FR-22) の応答も返す。
-    let (root, _) = mount_detail(
-        "/shops/s1/edit",
-        vec![
-            response(&shop_json("s1", "Shop", None)),
-            response(&json!({"embed_api_key": null})),
-        ],
-    )
-    .await;
-    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 2);
-
     // 新規の登録: 星は出ない (保存の文字ボタンだけ)。
-    let (root, _) = mount_detail("/products/new", vec![]).await;
-    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 0);
-    assert_eq!(count(&root, ".appbar .acts > .btn"), 1);
     let (root, _) = mount_detail(
         "/shops/new",
         vec![response(&json!({"embed_api_key": null}))],
@@ -757,8 +676,7 @@ async fn the_detail_screens_have_the_star() {
     install_styles();
     set_theme("paper");
     set_language(Language::English);
-    let product = product_json("p1", "Beans", None);
-    let purchase = purchase_json("b1", &product, None);
+    let purchase = purchase_json("b1", "Beans", None);
 
     // 抽出の詳細: 星と編集の 2 つ。押すと `PUT` を送る。
     let (root, transport) = mount_detail(
@@ -819,8 +737,7 @@ async fn the_delete_confirmation_gates_the_request() {
     install_styles();
     set_theme("paper");
     set_language(Language::English);
-    let product = product_json("p1", "Beans", None);
-    let purchase = purchase_json("b1", &product, None);
+    let purchase = purchase_json("b1", "Beans", None);
     let (root, transport) = mount_detail(
         "/brews/w1",
         vec![
@@ -870,8 +787,7 @@ async fn the_purchase_delete_shows_the_brew_count_and_deletes_on_the_confirmatio
     install_styles();
     set_theme("paper");
     set_language(Language::English);
-    let product = product_json("p1", "Beans", None);
-    let purchase = purchase_json("b1", &product, None);
+    let purchase = purchase_json("b1", "Beans", None);
     let (root, transport) = mount_detail(
         "/purchases/b1",
         vec![
@@ -960,8 +876,7 @@ async fn the_wide_layout_closes_the_detail_pane_after_the_delete() {
     install_styles();
     set_theme("paper");
     set_language(Language::English);
-    let product = product_json("p1", "Beans", None);
-    let purchase = purchase_json("b1", &product, None);
+    let purchase = purchase_json("b1", "Beans", None);
     let list = json!({"brews": [brew_json("w1", &purchase, None)], "next_cursor": null});
     let (root, transport) = mount_at(
         "/",

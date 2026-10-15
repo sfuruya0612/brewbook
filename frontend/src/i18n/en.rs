@@ -53,10 +53,6 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "Log a purchase",                                             // purchaseNewTitle
     "Edit the purchase",                                          // purchaseEditTitle
     "Purchase",                                                   // purchaseDetailTitle
-    "Products",                                                   // productsTitle
-    "Add a product",                                              // newProductButton
-    "Add a product",                                              // productNewTitle
-    "Edit the product",                                           // productEditTitle
     "Shops",                                                      // shopsTitle
     "Add a shop",                                                 // newShopButton
     "Add a shop",                                                 // shopNewTitle
@@ -117,7 +113,6 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "Grind setting",                                              // grindSettingLabel
     "Rating",                                                     // ratingLabel
     "Notes",                                                      // notesLabel
-    "Product",                                                    // productLabel
     "Shop",                                                       // shopLabel
     "Purchase",                                                   // purchaseLabel
     "Enter a tag",                                                // tagInputHint
@@ -131,7 +126,6 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "No photo",                                                   // photoNoneLabel
     "Rating history",                                             // ratingHistoryTitle
     "Choose a purchase",                                          // selectPurchaseTitle
-    "Choose a product",                                           // selectProductTitle
     "Choose a shop",                                              // selectShopTitle
     "No shop",                                                    // shopNoneLabel
     "This field is required.",                                    // validationRequired
@@ -139,7 +133,6 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "Enter a number of 0 or more with at most one decimal place.", // validationDecimal
     "Enter the date as YYYY-MM-DD.",                              // validationDay
     "Enter the time as HH:MM.",                                   // validationTime
-    "Choose a product.",                                          // validationProduct
     "Choose a purchase.",                                         // validationPurchase
     "{date} / {shop}",                                            // brewRowSubtitle
     "{date}",                                                     // brewRowSubtitleNoShop
@@ -202,7 +195,6 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "Not rated",                                                        // ratingNone
     "Use the button at the bottom right to log your first cup.",        // homeEmptyHint
     "Use the button at the bottom right to log your first purchase.",   // purchasesEmptyHint
-    "Use the button at the bottom right to add your first product.",    // productsEmptyHint
     "Use the button at the bottom right to add your first shop.",       // shopsEmptyHint
     "Choose a purchase",                                                // purchasePickPlaceholder
     "e.g. Comandante 24",                                               // grindSettingHint
@@ -210,7 +202,6 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "Uploading",                                                        // uploadingLabel
     "Reading the photo",                                                // suggestionLoadingLabel
     "Could not read the photo. You can continue by entering the values manually.", // suggestionFailedMessage
-    "Add a product with the suggested values", // suggestionRegisterProductButton
     "If you cannot log in, ask the administrator for a registration link.", // loginRegisterHint
     "Contact the administrator to have a new registration link issued.", // registerTokenGuidance
     "From ",                                   // statsRangePrefix
@@ -248,10 +239,6 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "Delete purchase",                            // deletePurchaseConfirmTitle
     "This purchase will be deleted. This cannot be undone.", // deletePurchaseConfirmMessage
     "This purchase will be deleted. {count} brews of this purchase will also be deleted. This cannot be undone.", // deletePurchaseConfirmMessageWithBrews
-    "Delete product",                             // deleteProductConfirmTitle
-    "This product will be deleted. This cannot be undone.", // deleteProductConfirmMessage
-    "This product will be deleted. {count} purchases of this product will also be deleted. This cannot be undone.", // deleteProductConfirmMessageWithPurchases
-    "This product will be deleted. {purchases} purchases and {brews} brews of those purchases will also be deleted. This cannot be undone.", // deleteProductConfirmMessageWithCascades
     "Delete shop",                                // deleteShopConfirmTitle
     "This shop will be deleted. This cannot be undone.", // deleteShopConfirmMessage
     "This shop will be deleted. The shop will be cleared from {count} purchases. This cannot be undone.", // deleteShopConfirmMessageWithPurchases

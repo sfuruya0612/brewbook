@@ -1,6 +1,6 @@
 //! 購入の詳細の画面 (FR-9、FR-10、UC-6)。
 //!
-//! 商品と店をたどれるようにし、写真の差し替えと削除ができる (FR-10)。幅 840 px 以上の
+//! 店をたどれるようにし、写真の差し替えと削除ができる (FR-10)。幅 840 px 以上の
 //! 2 段組では `embedded` を true にし、右の面に出す。
 
 use dioxus::prelude::*;
@@ -293,13 +293,13 @@ pub fn PurchaseDetail(
                                 }
                             }
                             div { class: "detail-head-main",
-                                div { class: "name", "{purchase.product.name}" }
+                                div { class: "name", "{purchase.name}" }
                                 if let Some(shop) = purchase.shop.as_ref() {
                                     div { class: "t-caption muted", "{shop.name}" }
                                 }
-                                if !purchase.product.flavor_notes.is_empty() {
+                                if !purchase.flavor_notes.is_empty() {
                                     div { class: "chips",
-                                        for note in purchase.product.flavor_notes.clone() {
+                                        for note in purchase.flavor_notes.clone() {
                                             TagChip { label: note }
                                         }
                                     }
@@ -307,6 +307,31 @@ pub fn PurchaseDetail(
                             }
                         }
                         Ledger {
+                            LedgerRow {
+                                label: t(Key::Producer).to_string(),
+                                value: purchase.producer.clone(),
+                                mono: false,
+                            }
+                            LedgerRow {
+                                label: t(Key::Origin).to_string(),
+                                value: purchase.origin.clone(),
+                                mono: false,
+                            }
+                            LedgerRow {
+                                label: t(Key::Region).to_string(),
+                                value: purchase.region.clone(),
+                                mono: false,
+                            }
+                            LedgerRow {
+                                label: t(Key::Process).to_string(),
+                                value: purchase.process.clone(),
+                                mono: false,
+                            }
+                            LedgerRow {
+                                label: t(Key::Variety).to_string(),
+                                value: purchase.variety.clone(),
+                                mono: false,
+                            }
                             LedgerRow {
                                 label: t(Key::PurchasedOnLabel).to_string(),
                                 value: Some(purchase_row_subtitle(&purchase, language)),
@@ -358,14 +383,9 @@ pub fn PurchaseDetail(
                         ReferenceChain {
                             for (kind, name) in purchase_reference_tiles(&purchase).into_iter() {
                                 {
-                                    let route = match kind {
-                                        Key::ProductLabel => Some(Route::ProductEdit {
-                                            id: purchase.product.id.clone(),
-                                        }),
-                                        _ => purchase.shop.as_ref().map(|shop| Route::ShopEdit {
-                                            id: shop.id.clone(),
-                                        }),
-                                    };
+                                    let route = purchase.shop.as_ref().map(|shop| Route::ShopEdit {
+                                        id: shop.id.clone(),
+                                    });
                                     rsx! {
                                         ReferenceTile {
                                             kind: t(kind).to_string(),

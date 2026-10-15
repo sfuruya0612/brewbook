@@ -1,4 +1,7 @@
-//! 写真から購入と商品の項目を推測するプロンプトと、モデルの応答の解析 (FR-19、ADR-0016)。
+//! 写真から購入の項目を推測するプロンプトと、モデルの応答の解析 (FR-19、ADR-0016)。
+//!
+//! 商品の項目 (商品名、Producer、Origin、Region、Process、Variety、Flavor Notes) は購入が持つ
+//! ため、応答は入れ子を持たず、購入の応答と同じ平坦な形にする (ADR-0022)。
 //!
 //! プロンプトは応答の JSON の形を固定し、項目を増やさない (出力の tokens を抑えるため)。
 //! 解析は、前後の説明文やコードフェンスを許して最初の JSON オブジェクトを取り出し、
@@ -23,13 +26,13 @@ pub const MAX_FLAVOR_NOTES: usize = 20;
 /// モデルに渡すプロンプト (FR-19)。
 ///
 /// 出力の tokens を抑えるため、応答の JSON の形を固定し、項目を増やさない (ADR-0016)。
-const PROMPT: &str = r#"You read a photo of a coffee bag and extract the purchase and product information printed on the package.
+const PROMPT: &str = r#"You read a photo of a coffee bag and extract the purchase information printed on the package.
 Reply with exactly one JSON object and nothing else. Do not explain and do not wrap the JSON in a code fence.
 The JSON object has exactly these keys:
-{"product": {"name": string|null, "producer": string|null, "origin": string|null, "region": string|null, "process": string|null, "variety": string|null, "flavor_notes": string[]}, "roast": string|null, "roast_date": string|null, "price_amount": integer|null, "weight_grams": integer|null}
+{"name": string|null, "producer": string|null, "origin": string|null, "region": string|null, "process": string|null, "variety": string|null, "flavor_notes": string[], "roast": string|null, "roast_date": string|null, "price_amount": integer|null, "weight_grams": integer|null}
 Rules:
 - Use null for a value that is not printed on the package or that you cannot read.
-- Set product to null when the package shows no product information.
+- name is the product name printed on the package.
 - Copy the values as printed on the package and keep each one at most 100 characters long.
 - roast_date must be a real date in the format YYYY-MM-DD.
 - price_amount and weight_grams must be integers of 0 or more, without currency symbols or units.
@@ -41,9 +44,10 @@ pub fn prompt() -> &'static str {
     PROMPT
 }
 
-/// 推測した商品の項目 (FR-19)。推測できない項目は None にする。
+/// 推測の応答 (FR-19)。キーは購入の API の列名に揃え、入れ子を持たない (ADR-0022)。
+/// 推測できない項目は None (`flavor_notes` は空の配列) にする。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ProductSuggestion {
+pub struct PurchaseSuggestion {
     /// 商品名。上限は 200 文字。
     pub name: Option<String>,
     /// 生産者。上限は 100 文字。
@@ -56,29 +60,9 @@ pub struct ProductSuggestion {
     pub process: Option<String>,
     /// 品種。上限は 100 文字。
     pub variety: Option<String>,
-    /// Flavor Notes の候補。上限は 20 件 (FR-8)。
+    /// Flavor Notes の候補。上限は 20 件 (FR-8)。推測できないときは空の配列。
     #[serde(default)]
     pub flavor_notes: Vec<String>,
-}
-
-impl ProductSuggestion {
-    /// 推測できた項目が 1 つも無いか。無いときは応答の `product` を null にする (FR-19)。
-    pub fn is_empty(&self) -> bool {
-        self.name.is_none()
-            && self.producer.is_none()
-            && self.origin.is_none()
-            && self.region.is_none()
-            && self.process.is_none()
-            && self.variety.is_none()
-            && self.flavor_notes.is_empty()
-    }
-}
-
-/// 推測の応答 (FR-19)。キーは既存の API の列名に揃える。
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PurchaseSuggestion {
-    /// 商品の項目。1 つも推測できないときは null。
-    pub product: Option<ProductSuggestion>,
     /// 焙煎度。
     pub roast: Option<String>,
     /// 焙煎日 (`YYYY-MM-DD`)。
@@ -193,22 +177,14 @@ fn first_json_object(text: &str) -> Option<serde_json::Value> {
 
 /// JSON のオブジェクトを推測にする。項目ごとに検証し、形式に合わない項目は None にする。
 fn parse_object(value: &serde_json::Value) -> PurchaseSuggestion {
-    let product = value
-        .get("product")
-        .filter(|product| product.is_object())
-        .map(|product| ProductSuggestion {
-            name: text_field(product, "name", MAX_NAME_CHARS),
-            producer: text_field(product, "producer", MAX_TEXT_CHARS),
-            origin: text_field(product, "origin", MAX_TEXT_CHARS),
-            region: text_field(product, "region", MAX_TEXT_CHARS),
-            process: text_field(product, "process", MAX_TEXT_CHARS),
-            variety: text_field(product, "variety", MAX_TEXT_CHARS),
-            flavor_notes: flavor_notes_field(product),
-        })
-        // 商品の項目が 1 つも推測できないときは product を null にする (FR-19)。
-        .filter(|product| !product.is_empty());
     PurchaseSuggestion {
-        product,
+        name: text_field(value, "name", MAX_NAME_CHARS),
+        producer: text_field(value, "producer", MAX_TEXT_CHARS),
+        origin: text_field(value, "origin", MAX_TEXT_CHARS),
+        region: text_field(value, "region", MAX_TEXT_CHARS),
+        process: text_field(value, "process", MAX_TEXT_CHARS),
+        variety: text_field(value, "variety", MAX_TEXT_CHARS),
+        flavor_notes: flavor_notes_field(value),
         roast: text_field(value, "roast", MAX_TEXT_CHARS),
         roast_date: date_field(value, "roast_date"),
         price_amount: count_field(value, "price_amount"),

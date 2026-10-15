@@ -1,4 +1,4 @@
-<!-- @dsCard group="画面" width=860 height=900 subtitle="抽出の詳細と購入の詳細 (帳簿の表と参照先のタイル)" -->
+<!-- @dsCard group="画面" width=860 height=1140 subtitle="抽出の詳細と購入の詳細 (帳簿の表と参照先のタイル)" -->
 <!doctype html>
 <html lang="ja">
 <head>
@@ -103,7 +103,7 @@ a { color: var(--link); }
 .ledger .v .u { font-family: var(--font-sans); font-size: 12px; color: var(--ink-muted); margin-left: var(--space-1); }
 .ledger .v.unset { color: var(--ink-faint); font-family: var(--font-sans); }
 
-/* 参照先のタイル (購入、商品、店をたどる) */
+/* 参照先のタイル (購入、店をたどる) */
 .tile { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--roast-soft); color: var(--ink); }
 .tile .k { font-size: 12px; line-height: 16px; color: var(--ink-muted); font-weight: 500; letter-spacing: 0.02em; }
 .tile .n { font-size: 15px; line-height: 22px; font-weight: 600; }
@@ -259,7 +259,6 @@ a { color: var(--link); }
     <div class="sec" style="padding-top:0;margin-bottom:var(--space-2)">使った豆</div>
     <div class="chain">
       <div class="tile"><div class="main"><div class="k">購入</div><div class="n">2026-09-14 / 200 g / 1,980 JPY</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
-      <div class="tile"><div class="main"><div class="k">商品</div><div class="n">Ethiopia Guji Natural</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
       <div class="tile"><div class="main"><div class="k">店</div><div class="n">Kaido Coffee Roasters</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
     </div>
   </div>
@@ -276,6 +275,11 @@ a { color: var(--link); }
     </div>
   </div>
   <div class="ledger">
+    <div class="k">生産者</div><div class="v txt">Guji Highland Farm</div>
+    <div class="k">生産国</div><div class="v txt">Ethiopia</div>
+    <div class="k">地域</div><div class="v txt">Guji</div>
+    <div class="k">精製方法</div><div class="v txt">Natural</div>
+    <div class="k">品種</div><div class="v txt">Heirloom</div>
     <div class="k">購入日</div><div class="v">2026-09-14</div>
     <div class="k">焙煎度</div><div class="v txt">浅煎り</div>
     <div class="k">焙煎日</div><div class="v">2026-09-10</div>
@@ -294,7 +298,6 @@ a { color: var(--link); }
     </svg>
   </div>
   <div class="chain">
-    <div class="tile"><div class="main"><div class="k">商品</div><div class="n">Ethiopia Guji Natural</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
     <div class="tile"><div class="main"><div class="k">店</div><div class="n">Kaido Coffee Roasters</div></div><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
   </div>
 </div>

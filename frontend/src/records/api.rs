@@ -7,25 +7,25 @@
 use crate::api::{ApiCallError, ApiClient};
 use serde_json::json;
 
-use super::inputs::{BrewInput, ProductInput, PurchaseInput, ShopInput};
+use super::inputs::{BrewInput, PurchaseInput, ShopInput};
 use super::models::{
     items_field, next_cursor_field, optional_string, Brew, DeleteImpact, PhotoUploadTarget,
-    PlaceCandidate, Product, Purchase, PurchaseSuggestion, RecordPage, Shop,
+    PlaceCandidate, Purchase, PurchaseSuggestion, RecordPage, Shop,
 };
 use super::RecordError;
 
 /// サジェスト (FR-13) の対象の項目名。値は API の経路の名前と同じにする。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SuggestionTarget {
-    /// 商品の生産者。
+    /// 購入の生産者。
     Producer,
-    /// 商品の生産国。
+    /// 購入の生産国。
     Origin,
-    /// 商品の地域。
+    /// 購入の地域。
     Region,
-    /// 商品の精製方法。
+    /// 購入の精製方法。
     Process,
-    /// 商品の品種。
+    /// 購入の品種。
     Variety,
     /// 購入の焙煎度。
     Roast,
@@ -148,7 +148,7 @@ impl RecordsApi {
     ) -> Result<RecordPage<Shop>, RecordError> {
         let json = self
             .api
-            .get_json(&list_path("/shops", *options, cursor, None))
+            .get_json(&list_path("/shops", *options, cursor))
             .await?;
         Ok(RecordPage {
             items: items_field(&json, "shops", Shop::from_json)?,
@@ -197,75 +197,6 @@ impl RecordsApi {
         )
     }
 
-    /// 商品の一覧を引く (FR-7、FR-8、FR-20、FR-21)。
-    ///
-    /// `name` を指定したときは、前後の空白を除いて大文字と小文字を区別しない名前の完全一致で
-    /// 絞り込む (FR-19。写真からの推測で一致する商品を 1 リクエストで引くために使う)。
-    pub async fn products(
-        &self,
-        options: &ListOptions,
-        cursor: Option<&str>,
-        name: Option<&str>,
-    ) -> Result<RecordPage<Product>, RecordError> {
-        let json = self
-            .api
-            .get_json(&list_path("/products", *options, cursor, name))
-            .await?;
-        Ok(RecordPage {
-            items: items_field(&json, "products", Product::from_json)?,
-            next_cursor: next_cursor_field(&json)?,
-        })
-    }
-
-    /// 商品のお気に入りを付け外しする (FR-21)。更新後の商品を返す。
-    pub async fn set_product_favorite(
-        &self,
-        id: &str,
-        favorite: bool,
-    ) -> Result<Product, RecordError> {
-        favorite_record(&self.api, "products", id, favorite, Product::from_json).await
-    }
-
-    /// 商品を削除する (0056)。
-    pub async fn delete_product(&self, id: &str) -> Result<(), RecordError> {
-        self.api.delete_json(&format!("/products/{id}")).await?;
-        Ok(())
-    }
-
-    /// 商品の削除で消える購入と抽出の件数を引く (0056)。
-    pub async fn product_delete_impact(&self, id: &str) -> Result<DeleteImpact, RecordError> {
-        DeleteImpact::from_json(
-            &self
-                .api
-                .get_json(&format!("/products/{id}/delete-impact"))
-                .await?,
-        )
-    }
-
-    /// 商品を 1 件引く (FR-7)。
-    pub async fn product(&self, id: &str) -> Result<Product, RecordError> {
-        Product::from_json(&self.api.get_json(&format!("/products/{id}")).await?)
-    }
-
-    /// 商品を登録する (FR-7、FR-8)。
-    pub async fn create_product(&self, input: &ProductInput) -> Result<Product, RecordError> {
-        Product::from_json(&self.api.post_json("/products", &input.to_json()).await?)
-    }
-
-    /// 商品を更新する (FR-7、FR-8)。タグは入力した配列で置き換える (FR-8)。
-    pub async fn update_product(
-        &self,
-        id: &str,
-        input: &ProductInput,
-    ) -> Result<Product, RecordError> {
-        Product::from_json(
-            &self
-                .api
-                .patch_json(&format!("/products/{id}"), &input.to_json())
-                .await?,
-        )
-    }
-
     /// 購入の一覧を引く (FR-9、FR-20、FR-21)。
     pub async fn purchases(
         &self,
@@ -274,7 +205,7 @@ impl RecordsApi {
     ) -> Result<RecordPage<Purchase>, RecordError> {
         let json = self
             .api
-            .get_json(&list_path("/purchases", *options, cursor, None))
+            .get_json(&list_path("/purchases", *options, cursor))
             .await?;
         Ok(RecordPage {
             items: items_field(&json, "purchases", Purchase::from_json)?,
@@ -339,7 +270,7 @@ impl RecordsApi {
     ) -> Result<RecordPage<Brew>, RecordError> {
         let json = self
             .api
-            .get_json(&list_path("/brews", *options, cursor, None))
+            .get_json(&list_path("/brews", *options, cursor))
             .await?;
         Ok(RecordPage {
             items: items_field(&json, "brews", Brew::from_json)?,
@@ -421,7 +352,7 @@ impl RecordsApi {
         )
     }
 
-    /// 変換済みの写真から購入と商品の項目の推測を引く (FR-19)。
+    /// 変換済みの写真から購入の項目の推測を引く (FR-19、ADR-0022)。
     ///
     /// 写真は変換済みの JPEG をそのまま送る。推測はどの記録も変更しない。
     /// AI の呼び出しに失敗したときは API が 500 を返し、[`RecordError::Api`] になる。
@@ -497,10 +428,10 @@ impl RecordsApi {
     }
 }
 
-/// 一覧の経路に、件数と並び順と絞り込みとカーソルを付ける (FR-19、FR-20、FR-21)。
+/// 一覧の経路に、件数と並び順と絞り込みとカーソルを付ける (FR-20、FR-21)。
 ///
 /// `sort` が空のときは送らない (API の既定に任せる。選択のシート)。
-fn list_path(path: &str, options: ListOptions, cursor: Option<&str>, name: Option<&str>) -> String {
+fn list_path(path: &str, options: ListOptions, cursor: Option<&str>) -> String {
     let mut query = format!("?limit={PAGE_SIZE}");
     if !options.sort.is_empty() {
         query.push_str("&sort=");
@@ -514,10 +445,6 @@ fn list_path(path: &str, options: ListOptions, cursor: Option<&str>, name: Optio
     if let Some(cursor) = cursor {
         query.push_str("&cursor=");
         query.push_str(&encode_query(cursor));
-    }
-    if let Some(name) = name {
-        query.push_str("&name=");
-        query.push_str(&encode_query(name));
     }
     format!("{path}{query}")
 }

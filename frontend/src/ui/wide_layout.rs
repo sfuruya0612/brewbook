@@ -32,7 +32,7 @@ pub struct RailItem {
     pub on_click: EventHandler<MouseEvent>,
 }
 
-/// ナビゲーションレール (88 px)。上に印、その下に抽出、購入、商品、店、統計、設定。
+/// ナビゲーションレール (88 px)。上に印、その下に抽出、購入、店、統計、設定。
 #[component]
 pub fn NavigationRail(
     /// レールの項目。選択中は 1 つだけにする。

@@ -12,10 +12,6 @@ use brew_book_frontend::screens::records::{
     brew_detail::{BrewDetail, BrewDetailProps, BrewDetailScreen, BrewDetailScreenProps},
     brew_form::{BrewEditScreen, BrewEditScreenProps, BrewForm, BrewFormProps, BrewFormScreen},
     home::HomeScreen,
-    product_form::{
-        ProductEditScreen, ProductEditScreenProps, ProductForm, ProductFormProps, ProductFormScreen,
-    },
-    product_list::ProductListScreen,
     purchase_detail::{PurchaseDetailScreen, PurchaseDetailScreenProps},
     purchase_form::{
         PurchaseEditScreen, PurchaseEditScreenProps, PurchaseForm, PurchaseFormProps,
@@ -52,9 +48,6 @@ fn the_record_screens_have_the_expected_props() {
     let _: fn() -> Element = PurchaseFormScreen;
     let _: fn(PurchaseEditScreenProps) -> Element = PurchaseEditScreen;
     let _: fn(PurchaseDetailScreenProps) -> Element = PurchaseDetailScreen;
-    let _: fn() -> Element = ProductListScreen;
-    let _: fn() -> Element = ProductFormScreen;
-    let _: fn(ProductEditScreenProps) -> Element = ProductEditScreen;
     let _: fn() -> Element = ShopListScreen;
     let _: fn() -> Element = ShopFormScreen;
     let _: fn(ShopEditScreenProps) -> Element = ShopEditScreen;
@@ -62,7 +55,6 @@ fn the_record_screens_have_the_expected_props() {
     let _: fn(BrewFormProps) -> Element = BrewForm;
     let _: fn(BrewDetailProps) -> Element = BrewDetail;
     let _: fn(PurchaseFormProps) -> Element = PurchaseForm;
-    let _: fn(ProductFormProps) -> Element = ProductForm;
     let _: fn(ShopFormProps) -> Element = ShopForm;
 
     // 編集の画面は ID を受け取り、2 段組の面に出せる (props の中身の確認)。
@@ -95,13 +87,6 @@ fn the_record_screens_have_the_expected_props() {
         on_saved: None,
     };
     assert!(shop_form.id.is_none());
-    let product_form = ProductFormProps {
-        id: None,
-        embedded: false,
-        on_close: None,
-        on_saved: None,
-    };
-    assert!(product_form.id.is_none());
     let purchase_form = PurchaseFormProps {
         id: None,
         embedded: false,
@@ -127,9 +112,6 @@ fn the_record_routes_are_wired_to_the_record_screens() {
         ("/purchases/new", "PurchaseFormScreen"),
         ("/purchases/:id", "PurchaseDetailScreen"),
         ("/purchases/:id/edit", "PurchaseEditScreen"),
-        ("/products", "ProductListScreen"),
-        ("/products/new", "ProductFormScreen"),
-        ("/products/:id/edit", "ProductEditScreen"),
         ("/shops", "ShopListScreen"),
         ("/shops/new", "ShopFormScreen"),
         ("/shops/:id/edit", "ShopEditScreen"),
@@ -152,8 +134,6 @@ fn the_signed_in_screens_use_the_screen_app_bar() {
         "src/screens/records/purchase_list.rs",
         "src/screens/records/purchase_detail.rs",
         "src/screens/records/purchase_form.rs",
-        "src/screens/records/product_list.rs",
-        "src/screens/records/product_form.rs",
         "src/screens/records/shop_list.rs",
         "src/screens/records/shop_form.rs",
         "src/screens/stats/mod.rs",
@@ -198,6 +178,27 @@ fn the_navigation_entries_start_with_the_brews_label() {
         NAV_ENTRIES[0].0,
         Key::BrewsLabel,
         "the first navigation entry must be the brews label"
+    );
+}
+
+/// 商品を購入に統合したため、行き先は抽出、購入、店、統計、設定の 5 項目になる (ADR-0022)。
+#[test]
+fn the_navigation_entries_do_not_have_the_products() {
+    let keys: Vec<Key> = NAV_ENTRIES.iter().map(|(key, _, _)| *key).collect();
+    assert_eq!(
+        keys,
+        [
+            Key::BrewsLabel,
+            Key::PurchasesTitle,
+            Key::ShopsTitle,
+            Key::StatsTitle,
+            Key::SettingsTitle,
+        ]
+    );
+    // 商品の経路はルーターに無い。
+    assert!(
+        !router_source().contains("/products"),
+        "the router must not have the product routes"
     );
 }
 

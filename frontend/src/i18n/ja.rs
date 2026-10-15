@@ -53,10 +53,6 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "購入を記録",                                                         // purchaseNewTitle
     "購入を編集",                                                         // purchaseEditTitle
     "購入の詳細",                                                         // purchaseDetailTitle
-    "商品",                                                               // productsTitle
-    "商品を登録",                                                         // newProductButton
-    "商品を登録",                                                         // productNewTitle
-    "商品を編集",                                                         // productEditTitle
     "店",                                                                 // shopsTitle
     "店を登録",                                                           // newShopButton
     "店を登録",                                                           // shopNewTitle
@@ -117,7 +113,6 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "挽き目",                                                             // grindSettingLabel
     "評価",                                                               // ratingLabel
     "感想",                                                               // notesLabel
-    "商品",                                                               // productLabel
     "店",                                                                 // shopLabel
     "購入",                                                               // purchaseLabel
     "タグを入力",                                                         // tagInputHint
@@ -131,7 +126,6 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "写真はありません",                                                   // photoNoneLabel
     "評価の推移",                                                         // ratingHistoryTitle
     "購入を選ぶ",                                                         // selectPurchaseTitle
-    "商品を選ぶ",                                                         // selectProductTitle
     "店を選ぶ",                                                           // selectShopTitle
     "店を指定しない",                                                     // shopNoneLabel
     "必須の項目です。",                                                   // validationRequired
@@ -139,7 +133,6 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "0 以上で小数第 1 位までの数を入力してください。",                    // validationDecimal
     "日付を YYYY-MM-DD で入力してください。",                             // validationDay
     "時刻を HH:MM で入力してください。",                                  // validationTime
-    "商品を選んでください。",                                             // validationProduct
     "購入を選んでください。",                                             // validationPurchase
     "{date} / {shop}",                                                    // brewRowSubtitle
     "{date}",                                                             // brewRowSubtitleNoShop
@@ -202,7 +195,6 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "未評価",                                                    // ratingNone
     "右下の「抽出を記録」から最初の 1 杯を記録します。",         // homeEmptyHint
     "右下の「購入を記録」から最初の 1 件を記録します。",         // purchasesEmptyHint
-    "右下の「商品を登録」から最初の 1 件を登録します。",         // productsEmptyHint
     "右下の「店を登録」から最初の 1 件を登録します。",           // shopsEmptyHint
     "購入を選ぶ",                                                // purchasePickPlaceholder
     "例: Comandante 24",                                         // grindSettingHint
@@ -210,7 +202,6 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "アップロード中",                                            // uploadingLabel
     "写真から推測中",                                            // suggestionLoadingLabel
     "写真からの推測に失敗しました。手入力で続けられます。",      // suggestionFailedMessage
-    "推測した内容で商品を登録",                                  // suggestionRegisterProductButton
     "ログインできないときは管理者から登録用のリンクを受け取ってください。", // loginRegisterHint
     "管理者に連絡して、登録用のリンクを再発行してもらってください。", // registerTokenGuidance
     "",                                                          // statsRangePrefix
@@ -243,17 +234,13 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "検索中",                                                    // searchingLabel
     "住所の候補が見つかりません。手入力で続けられます。",        // addressSearchEmpty
     "地図",                                                      // mapTitle
-    "抽出を削除",                                                 // deleteBrewConfirmTitle
-    "この抽出を削除します。取り消せません。",                     // deleteBrewConfirmMessage
-    "購入を削除",                                                 // deletePurchaseConfirmTitle
-    "この購入を削除します。取り消せません。",                     // deletePurchaseConfirmMessage
+    "抽出を削除",                                                // deleteBrewConfirmTitle
+    "この抽出を削除します。取り消せません。",                    // deleteBrewConfirmMessage
+    "購入を削除",                                                // deletePurchaseConfirmTitle
+    "この購入を削除します。取り消せません。",                    // deletePurchaseConfirmMessage
     "この購入を削除します。購入に紐づく抽出 {count} 件も削除されます。取り消せません。", // deletePurchaseConfirmMessageWithBrews
-    "商品を削除",                                                 // deleteProductConfirmTitle
-    "この商品を削除します。取り消せません。",                     // deleteProductConfirmMessage
-    "この商品を削除します。商品の購入 {count} 件も削除されます。取り消せません。", // deleteProductConfirmMessageWithPurchases
-    "この商品を削除します。商品の購入 {purchases} 件と、購入に紐づく抽出 {brews} 件も削除されます。取り消せません。", // deleteProductConfirmMessageWithCascades
-    "店を削除",                                                   // deleteShopConfirmTitle
-    "この店を削除します。取り消せません。",                       // deleteShopConfirmMessage
+    "店を削除",                             // deleteShopConfirmTitle
+    "この店を削除します。取り消せません。", // deleteShopConfirmMessage
     "この店を削除します。購入 {count} 件の店の指定が外れます。取り消せません。", // deleteShopConfirmMessageWithPurchases
-    "削除しました。",                                             // recordDeletedMessage
+    "削除しました。", // recordDeletedMessage
 ];

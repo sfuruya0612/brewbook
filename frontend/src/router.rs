@@ -12,9 +12,8 @@ use dioxus_router::Routable;
 use crate::app::AppShell;
 use crate::screens::{
     BrewDetailScreen, BrewEditScreen, BrewFormScreen, HomeScreen, LoginScreen, NotFound,
-    ProductEditScreen, ProductFormScreen, ProductListScreen, PurchaseDetailScreen,
-    PurchaseEditScreen, PurchaseFormScreen, PurchaseListScreen, RegisterScreen, SettingsScreen,
-    ShopEditScreen, ShopFormScreen, ShopListScreen, StatsScreen,
+    PurchaseDetailScreen, PurchaseEditScreen, PurchaseFormScreen, PurchaseListScreen,
+    RegisterScreen, SettingsScreen, ShopEditScreen, ShopFormScreen, ShopListScreen, StatsScreen,
 };
 
 /// 画面の経路の台帳 (ADR-0017)。
@@ -35,10 +34,10 @@ const fn route(pattern: &'static str) -> AppRoute {
     }
 }
 
-/// Flutter の `AppRoutes` と同じ 18 経路 (0038)。
+/// Flutter の `AppRoutes` の 18 経路から商品の 3 経路を除いた 15 経路 (0038、ADR-0022)。
 ///
 /// 順序は Flutter の台帳と同じにする。経路の照合の順序は Dioxus のルーターが特異度で決める。
-pub const APP_ROUTES: [AppRoute; 18] = [
+pub const APP_ROUTES: [AppRoute; 15] = [
     route("/login"),
     route("/register"),
     route("/"),
@@ -50,9 +49,6 @@ pub const APP_ROUTES: [AppRoute; 18] = [
     route("/purchases/new"),
     route("/purchases/:id"),
     route("/purchases/:id/edit"),
-    route("/products"),
-    route("/products/new"),
-    route("/products/:id/edit"),
     route("/shops"),
     route("/shops/new"),
     route("/shops/:id/edit"),
@@ -98,15 +94,6 @@ pub enum Route {
     /// 購入の編集 (FR-9)。
     #[route("/purchases/:id/edit", PurchaseEditScreen)]
     PurchaseEdit { id: String },
-    /// 商品の一覧 (FR-7)。
-    #[route("/products", ProductListScreen)]
-    Products {},
-    /// 商品の登録 (FR-7)。
-    #[route("/products/new", ProductFormScreen)]
-    ProductNew {},
-    /// 商品の編集 (FR-7)。
-    #[route("/products/:id/edit", ProductEditScreen)]
-    ProductEdit { id: String },
     /// 店の一覧 (FR-6)。
     #[route("/shops", ShopListScreen)]
     Shops {},
@@ -147,9 +134,6 @@ pub fn route_name(route: &Route) -> &'static str {
         Route::PurchaseNew {} => "/purchases/new",
         Route::PurchaseDetail { .. } => "/purchases/:id",
         Route::PurchaseEdit { .. } => "/purchases/:id/edit",
-        Route::Products {} => "/products",
-        Route::ProductNew {} => "/products/new",
-        Route::ProductEdit { .. } => "/products/:id/edit",
         Route::Shops {} => "/shops",
         Route::ShopNew {} => "/shops/new",
         Route::ShopEdit { .. } => "/shops/:id/edit",

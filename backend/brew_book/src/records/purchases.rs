@@ -2,36 +2,39 @@
 //!
 //! 一覧はカーソル方式で、並び順は購入日の降順と ID の昇順とする (FR-9)。応答には続きを引く
 //! `next_cursor` を含める (ページが `limit` に満たないときは null)。
-//! 応答には商品 (`product`) と店 (`shop`) をネストしたオブジェクトとして含み、結合は 1 回の
+//! 商品の項目 (商品名、Producer、Origin、Region、Process、Variety、Flavor Notes) は購入が直接
+//! 持つ (ADR-0022)。応答には店 (`shop`) をネストしたオブジェクトとして含み、結合は 1 回の
 //! SQL で行う (ADR-0006)。店が無い購入では `shop` は null になる (FR-9)。
-//! 商品と店を指定した登録と、参照先を変更する更新は、存在しないか他の利用者の ID を 404 に
+//! Flavor Notes はタグ名の配列 (`flavor_notes`) で、並びは名前の昇順にする (FR-8)。
+//! 店を指定した登録と、参照先を変更する更新は、存在しないか他の利用者の ID を 404 に
 //! する (FR-9)。参照先を変えない更新は検査しない (0007 の設計判断)。
 //! 存在しない ID と他の利用者の ID は区別せず 404 を返す (ADR-0006)。
 //! `updated_at` は更新で現在時刻にする (ADR-0006)。
 
 use brew_book_core::cursor::{CursorValue, SortKey};
 use brew_book_core::query::{self, PurchaseValues};
-use brew_book_core::records::{trim_optional, validate_count, validate_currency, validate_day};
+use brew_book_core::records::{
+    trim_optional, validate_count, validate_currency, validate_day, validate_flavor_notes,
+    validate_name,
+};
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Database;
 use worker::{Env, Request, Response, Result};
 
-use super::products::ProductResponse;
 use super::shops::ShopResponse;
 use super::{
-    apply_favorite, attach_flavor_notes, invalid_input, not_found, photos, query_error_response,
-    read_input, require_product, require_shop, ListParams,
+    apply_favorite, attach_flavor_notes, invalid_input, merge_name, merge_text, not_found, photos,
+    query_error_response, read_input, replace_flavor_notes_statements, require_shop, ListParams,
 };
 use crate::auth::session::Session;
 use crate::db;
 use crate::respond;
 
-/// 購入の応答。商品と店をネストしたオブジェクトとして含む (FR-9)。
+/// 購入の応答。商品の項目を直下に持ち、店をネストしたオブジェクトとして含む (FR-9、ADR-0022)。
 #[derive(Debug, Serialize)]
 pub struct PurchaseResponse {
     pub id: String,
     pub user_id: String,
-    pub product_id: String,
     pub shop_id: Option<String>,
     pub purchased_on: String,
     pub roast: Option<String>,
@@ -41,12 +44,19 @@ pub struct PurchaseResponse {
     pub weight_grams: Option<i64>,
     /// 写真のオブジェクトキー。クライアントが写真の有無を知るために含める (操作は 0009)。
     pub photo_key: Option<String>,
+    /// 商品名。必須 (FR-9)。
+    pub name: String,
+    pub producer: Option<String>,
+    pub origin: Option<String>,
+    pub region: Option<String>,
+    pub process: Option<String>,
+    pub variety: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     /// お気に入りにした日時。未設定のときは null (FR-21)。
     pub favorited_at: Option<String>,
-    /// 商品。必須の参照のため常にある (FR-9)。
-    pub product: ProductResponse,
+    /// Flavor Notes のタグ名。並びは名前の昇順 (FR-8)。
+    pub flavor_notes: Vec<String>,
     /// 店。店が無い購入では null になる (FR-9)。
     pub shop: Option<ShopResponse>,
 }
@@ -59,13 +69,12 @@ pub struct PurchaseListResponse {
     pub next_cursor: Option<String>,
 }
 
-/// 購入と商品と店を結合した行。項目名は `brew_book_core::query` が付ける列の別名と同じ。
+/// 購入と店を結合した行。項目名は `brew_book_core::query` が付ける列の別名と同じ。
 /// 抽出の行も同じ列を持つため、項目は `records` の配下から読めるようにする。
 #[derive(Debug, Deserialize)]
 pub(super) struct PurchaseJoinRow {
     pub(super) p_id: String,
     pub(super) p_user_id: String,
-    pub(super) p_product_id: String,
     pub(super) p_shop_id: Option<String>,
     pub(super) p_purchased_on: String,
     pub(super) p_roast: Option<String>,
@@ -74,20 +83,15 @@ pub(super) struct PurchaseJoinRow {
     pub(super) p_price_currency: Option<String>,
     pub(super) p_weight_grams: Option<i64>,
     pub(super) p_photo_key: Option<String>,
+    pub(super) p_name: String,
+    pub(super) p_producer: Option<String>,
+    pub(super) p_origin: Option<String>,
+    pub(super) p_region: Option<String>,
+    pub(super) p_process: Option<String>,
+    pub(super) p_variety: Option<String>,
     pub(super) p_created_at: String,
     pub(super) p_updated_at: String,
     pub(super) p_favorited_at: Option<String>,
-    pub(super) pr_id: String,
-    pub(super) pr_user_id: String,
-    pub(super) pr_name: String,
-    pub(super) pr_producer: Option<String>,
-    pub(super) pr_origin: Option<String>,
-    pub(super) pr_region: Option<String>,
-    pub(super) pr_process: Option<String>,
-    pub(super) pr_variety: Option<String>,
-    pub(super) pr_created_at: String,
-    pub(super) pr_updated_at: String,
-    pub(super) pr_favorited_at: Option<String>,
     pub(super) sh_id: Option<String>,
     pub(super) sh_user_id: Option<String>,
     pub(super) sh_name: Option<String>,
@@ -98,12 +102,11 @@ pub(super) struct PurchaseJoinRow {
 }
 
 impl PurchaseJoinRow {
-    /// 応答に組み立てる。商品の Flavor Notes は別のクエリで引くため、ここでは空にする。
+    /// 応答に組み立てる。Flavor Notes は別のクエリで引くため、ここでは空にする。
     pub(super) fn into_response(self) -> PurchaseResponse {
         PurchaseResponse {
             id: self.p_id,
             user_id: self.p_user_id,
-            product_id: self.p_product_id,
             shop_id: self.p_shop_id,
             purchased_on: self.p_purchased_on,
             roast: self.p_roast,
@@ -112,23 +115,16 @@ impl PurchaseJoinRow {
             price_currency: self.p_price_currency,
             weight_grams: self.p_weight_grams,
             photo_key: self.p_photo_key,
+            name: self.p_name,
+            producer: self.p_producer,
+            origin: self.p_origin,
+            region: self.p_region,
+            process: self.p_process,
+            variety: self.p_variety,
             created_at: self.p_created_at,
             updated_at: self.p_updated_at,
             favorited_at: self.p_favorited_at,
-            product: ProductResponse {
-                id: self.pr_id,
-                user_id: self.pr_user_id,
-                name: self.pr_name,
-                producer: self.pr_producer,
-                origin: self.pr_origin,
-                region: self.pr_region,
-                process: self.pr_process,
-                variety: self.pr_variety,
-                flavor_notes: Vec::new(),
-                created_at: self.pr_created_at,
-                updated_at: self.pr_updated_at,
-                favorited_at: self.pr_favorited_at,
-            },
+            flavor_notes: Vec::new(),
             // 店は LEFT JOIN のため、店が無いときは全ての列が NULL になる。
             shop: self.sh_id.map(|id| ShopResponse {
                 id,
@@ -147,8 +143,26 @@ impl PurchaseJoinRow {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreateInput {
-    /// 商品の ID。必須。
-    product_id: String,
+    /// 商品名。必須 (FR-9、ADR-0022)。
+    name: String,
+    /// 生産者。任意。
+    #[serde(default)]
+    producer: Option<String>,
+    /// 生産国。任意。
+    #[serde(default)]
+    origin: Option<String>,
+    /// 地域。任意。
+    #[serde(default)]
+    region: Option<String>,
+    /// 精製方法。任意。
+    #[serde(default)]
+    process: Option<String>,
+    /// 品種。任意。
+    #[serde(default)]
+    variety: Option<String>,
+    /// Flavor Notes のタグ名の配列。任意 (省略は空の配列と同じ)。`null` は拒否する (FR-8)。
+    #[serde(default, deserialize_with = "super::double_option")]
+    flavor_notes: Option<Option<Vec<String>>>,
     /// 店の ID。任意 (店が無い購入がある。ADR-0006)。
     #[serde(default)]
     shop_id: Option<String>,
@@ -175,9 +189,27 @@ struct CreateInput {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct UpdateInput {
-    /// 新しい商品。無いときは変更しない。`null` は拒否する (商品は必須)。
+    /// 新しい商品名。無いときは変更しない。`null` は拒否する (商品名は必須)。
     #[serde(default, deserialize_with = "super::double_option")]
-    product_id: Option<Option<String>>,
+    name: Option<Option<String>>,
+    /// 新しい生産者。`null` のときは NULL にする。
+    #[serde(default, deserialize_with = "super::double_option")]
+    producer: Option<Option<String>>,
+    /// 新しい生産国。`null` のときは NULL にする。
+    #[serde(default, deserialize_with = "super::double_option")]
+    origin: Option<Option<String>>,
+    /// 新しい地域。`null` のときは NULL にする。
+    #[serde(default, deserialize_with = "super::double_option")]
+    region: Option<Option<String>>,
+    /// 新しい精製方法。`null` のときは NULL にする。
+    #[serde(default, deserialize_with = "super::double_option")]
+    process: Option<Option<String>>,
+    /// 新しい品種。`null` のときは NULL にする。
+    #[serde(default, deserialize_with = "super::double_option")]
+    variety: Option<Option<String>>,
+    /// 新しい Flavor Notes。無いときは変更しない。空の配列は全て外す。`null` は拒否する (FR-8)。
+    #[serde(default, deserialize_with = "super::double_option")]
+    flavor_notes: Option<Option<Vec<String>>>,
     /// 新しい店。`null` のときは店を外す。
     #[serde(default, deserialize_with = "super::double_option")]
     shop_id: Option<Option<String>>,
@@ -250,17 +282,24 @@ fn sort_value(purchase: &PurchaseResponse, sort: SortKey) -> Option<CursorValue>
 pub async fn create(req: &mut Request, env: &Env, session: &Session) -> Result<Response> {
     let Some(input) = read_input::<CreateInput>(req).await else {
         return Ok(invalid_input(
-            "the body must be JSON with a product and a purchased date",
+            "the body must be JSON with a name and a purchased date",
         ));
     };
+    let name = match validate_name(&input.name) {
+        Ok(name) => name,
+        Err(error) => return Ok(invalid_input(error.message())),
+    };
+    let flavor_notes = match input.flavor_notes {
+        Some(Some(names)) => match validate_flavor_notes(&names) {
+            Ok(names) => names,
+            Err(error) => return Ok(invalid_input(error.message())),
+        },
+        // `null` は受け付けない。タグを付けないときは項目を省くか空の配列を送る。
+        Some(None) => return Ok(invalid_input("the flavor notes must be an array")),
+        None => Vec::new(),
+    };
     let d1 = db::database(env)?;
-    // 商品と店は、存在しないか他の利用者のものは 404 にする (FR-9)。
-    if let Err(response) = require_product(&d1, &session.user_id, &input.product_id)
-        .await?
-        .or_return()
-    {
-        return Ok(response);
-    }
+    // 店は、存在しないか他の利用者のものは 404 にする (FR-9)。
     if let Some(shop_id) = input.shop_id.as_deref() {
         if let Err(response) = require_shop(&d1, &session.user_id, shop_id)
             .await?
@@ -291,10 +330,20 @@ pub async fn create(req: &mut Request, env: &Env, session: &Session) -> Result<R
         Err(response) => return Ok(response),
     };
     let roast = trim_optional(input.roast.as_deref());
+    let producer = trim_optional(input.producer.as_deref());
+    let origin = trim_optional(input.origin.as_deref());
+    let region = trim_optional(input.region.as_deref());
+    let process = trim_optional(input.process.as_deref());
+    let variety = trim_optional(input.variety.as_deref());
     let id = db::new_id()?;
     let now = db::now_text()?;
     let values = PurchaseValues {
-        product_id: &input.product_id,
+        name: &name,
+        producer: producer.as_deref(),
+        origin: origin.as_deref(),
+        region: region.as_deref(),
+        process: process.as_deref(),
+        variety: variety.as_deref(),
         shop_id: input.shop_id.as_deref(),
         purchased_on: &input.purchased_on,
         roast: roast.as_deref(),
@@ -307,7 +356,17 @@ pub async fn create(req: &mut Request, env: &Env, session: &Session) -> Result<R
         Ok(statement) => statement,
         Err(error) => return Ok(query_error_response(error)),
     };
-    db::prepared(&d1, &statement)?.run().await?;
+    // 購入の行とタグの対応を 1 つの batch (1 トランザクション) で書く (ADR-0002)。
+    let mut statements = vec![db::prepared(&d1, &statement)?];
+    if !flavor_notes.is_empty() {
+        statements.extend(replace_flavor_notes_statements(
+            &d1,
+            &session.user_id,
+            &id,
+            &flavor_notes,
+        )?);
+    }
+    db::execute_batch(&d1, statements).await?;
     respond_fetched(&d1, &session.user_id, &id).await
 }
 
@@ -342,27 +401,29 @@ pub async fn update(
     let Some(current) = find(&d1, &session.user_id, id).await? else {
         return Ok(not_found("the purchase does not exist"));
     };
-    let product_id = match input.product_id {
-        Some(Some(product_id)) => {
-            // 参照先を変更する更新では、新しい参照先を登録と同じ条件で検査する (FR-9)。
-            if product_id != current.product_id {
-                if let Err(response) = require_product(&d1, &session.user_id, &product_id)
-                    .await?
-                    .or_return()
-                {
-                    return Ok(response);
-                }
-            }
-            product_id
-        }
-        // 商品は必須のため `null` を拒否する。
-        Some(None) => return Ok(invalid_input("the product must not be null")),
-        None => current.product_id.clone(),
+    let name = match merge_name(input.name, current.name.clone()) {
+        Ok(name) => name,
+        Err(response) => return Ok(response),
     };
+    let notes = match input.flavor_notes {
+        Some(Some(names)) => match validate_flavor_notes(&names) {
+            Ok(names) => Some(names),
+            Err(error) => return Ok(invalid_input(error.message())),
+        },
+        // `null` は受け付けない。全て外すときは空の配列を送る (項目が無いときは変更しない)。
+        Some(None) => return Ok(invalid_input("the flavor notes must be an array")),
+        None => None,
+    };
+    let producer = merge_text(input.producer, current.producer.clone());
+    let origin = merge_text(input.origin, current.origin.clone());
+    let region = merge_text(input.region, current.region.clone());
+    let process = merge_text(input.process, current.process.clone());
+    let variety = merge_text(input.variety, current.variety.clone());
     let shop_id = match input.shop_id {
         Some(shop_id) => {
             if let Some(new_shop_id) = shop_id.as_deref() {
                 if current.shop_id.as_deref() != Some(new_shop_id) {
+                    // 参照先を変更する更新では、新しい参照先を登録と同じ条件で検査する (FR-9)。
                     if let Err(response) = require_shop(&d1, &session.user_id, new_shop_id)
                         .await?
                         .or_return()
@@ -419,7 +480,12 @@ pub async fn update(
     };
     let now = db::now_text()?;
     let values = PurchaseValues {
-        product_id: &product_id,
+        name: &name,
+        producer: producer.as_deref(),
+        origin: origin.as_deref(),
+        region: region.as_deref(),
+        process: process.as_deref(),
+        variety: variety.as_deref(),
         shop_id: shop_id.as_deref(),
         purchased_on: &purchased_on,
         roast: roast.as_deref(),
@@ -432,11 +498,21 @@ pub async fn update(
         Ok(statement) => statement,
         Err(error) => return Ok(query_error_response(error)),
     };
-    db::prepared(&d1, &statement)?.run().await?;
+    // 購入の行とタグの対応を 1 つの batch (1 トランザクション) で書く (ADR-0002)。
+    let mut statements = vec![db::prepared(&d1, &statement)?];
+    if let Some(names) = notes.as_deref() {
+        statements.extend(replace_flavor_notes_statements(
+            &d1,
+            &session.user_id,
+            id,
+            names,
+        )?);
+    }
+    db::execute_batch(&d1, statements).await?;
     respond_fetched(&d1, &session.user_id, id).await
 }
 
-/// 購入を 1 件引く。商品と店を結合する (FR-9)。
+/// 購入を 1 件引く。店を結合し、Flavor Notes を付ける (FR-9)。
 pub(super) async fn find(
     d1: &D1Database,
     user_id: &str,
@@ -505,8 +581,9 @@ async fn set_favorite(
 
 /// 購入を削除する (0056)。認証が必要。
 ///
-/// その購入の抽出と、購入の写真 (R2) も削除する。写真は D1 の前に消し、失敗した場合は
-/// 記録が残ったまま再試行できる (アカウント削除と同じ順序)。
+/// その購入の抽出、Flavor Notes の対応、購入の写真 (R2) も削除する。タグの行 (flavor_tags) は
+/// 消さない (ADR-0006)。写真は D1 の前に消し、失敗した場合は記録が残ったまま再試行できる
+/// (アカウント削除と同じ順序)。
 pub async fn delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Response> {
     let Some(id) = id else {
         return Ok(not_found("the purchase does not exist"));
@@ -520,6 +597,10 @@ pub async fn delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Re
     }
     // 外部キーの参照元から先に消す (ADR-0006)。1 つの batch で 1 トランザクションにする (ADR-0002)。
     let statements = vec![
+        db::prepared(
+            &d1,
+            &query::delete_purchase_flavor_tags(&session.user_id, id),
+        )?,
         db::prepared(&d1, &query::purchase_brews_delete(&session.user_id, id))?,
         db::prepared(&d1, &query::purchase_delete(&session.user_id, id))?,
     ];
@@ -555,17 +636,14 @@ fn responses(rows: Vec<PurchaseJoinRow>) -> Vec<PurchaseResponse> {
         .collect()
 }
 
-/// 応答の商品に Flavor Notes を付ける (FR-8)。
+/// 応答の購入に Flavor Notes を付ける (FR-8)。
 async fn attach_notes(
     d1: &D1Database,
     user_id: &str,
     purchases: &mut [PurchaseResponse],
 ) -> Result<()> {
-    let mut products: Vec<&mut ProductResponse> = purchases
-        .iter_mut()
-        .map(|purchase| &mut purchase.product)
-        .collect();
-    attach_flavor_notes(d1, user_id, &mut products).await
+    let mut targets: Vec<&mut PurchaseResponse> = purchases.iter_mut().collect();
+    attach_flavor_notes(d1, user_id, &mut targets).await
 }
 
 /// 価格と通貨コードの組を決める (0007 の設計判断)。

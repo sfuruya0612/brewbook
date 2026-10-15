@@ -135,3 +135,5 @@
   - @sfuruya0612
 - [FIX] Workers Builds のビルドで wrangler をインストールできるように、mise.toml に node を追加する
   - @sfuruya0612
+- [CHANGE] 商品を購入に統合し、購入が商品名、Producer、Origin、Region、Process、Variety、Flavor Notes を直接持つようにする
+  - @sfuruya0612

@@ -25,9 +25,9 @@ impl ShopInput {
     }
 }
 
-/// 商品の登録と更新の入力 (FR-7、FR-8)。
+/// 購入の登録と更新の入力 (FR-9)。商品の項目も購入が持つ (ADR-0022)。
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct ProductInput {
+pub struct PurchaseInput {
     /// 商品名。必須。
     pub name: String,
     /// 生産者。
@@ -42,28 +42,6 @@ pub struct ProductInput {
     pub variety: Option<String>,
     /// Flavor Notes のタグ名。更新ではこの配列で置き換える (FR-8)。
     pub flavor_notes: Vec<String>,
-}
-
-impl ProductInput {
-    /// API の本文にする。タグは空の配列でも送り、全て外す操作を表せるようにする (FR-8)。
-    pub fn to_json(&self) -> Value {
-        json!({
-            "name": self.name,
-            "producer": self.producer,
-            "origin": self.origin,
-            "region": self.region,
-            "process": self.process,
-            "variety": self.variety,
-            "flavor_notes": self.flavor_notes,
-        })
-    }
-}
-
-/// 購入の登録と更新の入力 (FR-9)。
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct PurchaseInput {
-    /// 商品の ID。必須。
-    pub product_id: String,
     /// 店の ID。店を指定しないときは None。
     pub shop_id: Option<String>,
     /// 購入日 (`YYYY-MM-DD`)。必須。
@@ -84,9 +62,16 @@ impl PurchaseInput {
     /// API の本文にする。
     ///
     /// 価格が無いときは通貨コードも null にする (価格だけを持つ組は API が 400 で拒否する)。
+    /// タグは空の配列でも送り、全て外す操作を表せるようにする (FR-8)。
     pub fn to_json(&self) -> Value {
         json!({
-            "product_id": self.product_id,
+            "name": self.name,
+            "producer": self.producer,
+            "origin": self.origin,
+            "region": self.region,
+            "process": self.process,
+            "variety": self.variety,
+            "flavor_notes": self.flavor_notes,
             "shop_id": self.shop_id,
             "purchased_on": self.purchased_on,
             "roast": self.roast,

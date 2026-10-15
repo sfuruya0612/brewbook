@@ -4,10 +4,10 @@
 
 use brew_book_frontend::i18n::{text, Key, Language};
 use brew_book_frontend::records::display::{
-    brew_reference_tiles, brew_row_subtitle, product_row_subtitle, purchase_reference_tiles,
-    purchase_row_subtitle, purchase_tile_name, shop_row_subtitle,
+    brew_reference_tiles, brew_row_subtitle, purchase_reference_tiles, purchase_row_subtitle,
+    purchase_tile_name, shop_row_subtitle,
 };
-use brew_book_frontend::records::{Brew, Product, Purchase, Shop};
+use brew_book_frontend::records::{Brew, Purchase, Shop};
 
 /// 店を作る。
 fn shop(id: &str, name: &str, address: Option<&str>) -> Shop {
@@ -21,10 +21,11 @@ fn shop(id: &str, name: &str, address: Option<&str>) -> Shop {
     }
 }
 
-/// 商品を作る。
-fn product() -> Product {
-    Product {
-        id: "p1".to_string(),
+/// 購入を作る (商品の項目も購入が持つ。ADR-0022)。
+fn purchase(with_shop: bool) -> Purchase {
+    Purchase {
+        id: "b1".to_string(),
+        shop_id: with_shop.then(|| "s1".to_string()),
         name: "豆".to_string(),
         producer: Some("生産者".to_string()),
         origin: Some("エチオピア".to_string()),
@@ -32,18 +33,6 @@ fn product() -> Product {
         process: Some("ウォッシュド".to_string()),
         variety: Some("在来種".to_string()),
         flavor_notes: Vec::new(),
-        created_at: "2026-10-01T00:00:00.000Z".to_string(),
-        updated_at: "2026-10-01T00:00:00.000Z".to_string(),
-        favorited_at: None,
-    }
-}
-
-/// 購入を作る。
-fn purchase(with_shop: bool) -> Purchase {
-    Purchase {
-        id: "b1".to_string(),
-        product_id: "p1".to_string(),
-        shop_id: with_shop.then(|| "s1".to_string()),
         purchased_on: "2026-10-01".to_string(),
         roast: None,
         roast_date: None,
@@ -54,7 +43,6 @@ fn purchase(with_shop: bool) -> Purchase {
         created_at: "2026-10-01T00:00:00.000Z".to_string(),
         updated_at: "2026-10-01T00:00:00.000Z".to_string(),
         favorited_at: None,
-        product: product(),
         shop: with_shop.then(|| shop("s1", "店", None)),
     }
 }
@@ -110,20 +98,6 @@ fn the_purchase_row_subtitle_shows_the_day_and_the_shop() {
 }
 
 #[test]
-fn the_product_row_subtitle_joins_the_location_process_and_variety() {
-    assert_eq!(
-        product_row_subtitle(&product()),
-        Some("イルガチェフェ, エチオピア / ウォッシュド / 在来種".to_string())
-    );
-    let mut empty = product();
-    empty.origin = None;
-    empty.region = None;
-    empty.process = None;
-    empty.variety = None;
-    assert_eq!(product_row_subtitle(&empty), None);
-}
-
-#[test]
 fn the_shop_row_subtitle_shows_the_address_or_the_unset_label() {
     assert_eq!(
         shop_row_subtitle(&shop("s1", "店", Some("住所")), Language::Japanese),
@@ -136,38 +110,39 @@ fn the_shop_row_subtitle_shows_the_address_or_the_unset_label() {
 }
 
 #[test]
-fn the_brew_reference_tiles_follow_the_purchase_product_and_shop() {
+fn the_brew_reference_tiles_follow_the_purchase_and_the_shop() {
     let tiles = brew_reference_tiles(&brew(true), Language::Japanese);
-    assert_eq!(tiles.len(), 3);
+    assert_eq!(tiles.len(), 2);
     assert_eq!(tiles[0].0, Key::PurchaseLabel);
-    assert_eq!(tiles[0].1, "2026/10/1 / 200 g / 1200 JPY");
-    assert_eq!(tiles[1], (Key::ProductLabel, "豆".to_string()));
-    assert_eq!(tiles[2], (Key::ShopLabel, "店".to_string()));
+    assert_eq!(tiles[0].1, "豆 / 2026/10/1 / 200 g / 1200 JPY");
+    assert_eq!(tiles[1], (Key::ShopLabel, "店".to_string()));
 
     // 店が無い購入では店のタイルを省く (FR-9、UC-6)。
     let tiles = brew_reference_tiles(&brew(false), Language::Japanese);
-    assert_eq!(tiles.len(), 2);
-    assert_eq!(tiles[1].0, Key::ProductLabel);
+    assert_eq!(tiles.len(), 1);
+    assert_eq!(tiles[0].0, Key::PurchaseLabel);
 }
 
 #[test]
-fn the_purchase_reference_tiles_follow_the_product_and_the_shop() {
+fn the_purchase_reference_tiles_follow_only_the_shop() {
     let tiles = purchase_reference_tiles(&purchase(true));
-    assert_eq!(tiles.len(), 2);
-    assert_eq!(tiles[0], (Key::ProductLabel, "豆".to_string()));
-    assert_eq!(tiles[1], (Key::ShopLabel, "店".to_string()));
-    assert_eq!(purchase_reference_tiles(&purchase(false)).len(), 1);
+    assert_eq!(tiles, vec![(Key::ShopLabel, "店".to_string())]);
+    // 店が無い購入では参照先が無い (商品は購入に統合した。ADR-0022)。
+    assert!(purchase_reference_tiles(&purchase(false)).is_empty());
 }
 
 #[test]
-fn the_purchase_tile_name_shows_the_day_the_weight_and_the_price() {
+fn the_purchase_tile_name_shows_the_name_the_day_the_weight_and_the_price() {
     assert_eq!(
         purchase_tile_name(&purchase(true), Language::Japanese),
-        "2026/10/1 / 200 g / 1200 JPY"
+        "豆 / 2026/10/1 / 200 g / 1200 JPY"
     );
     let mut bare = purchase(false);
     bare.weight_grams = None;
     bare.price_amount = None;
     bare.price_currency = None;
-    assert_eq!(purchase_tile_name(&bare, Language::Japanese), "2026/10/1");
+    assert_eq!(
+        purchase_tile_name(&bare, Language::Japanese),
+        "豆 / 2026/10/1"
+    );
 }

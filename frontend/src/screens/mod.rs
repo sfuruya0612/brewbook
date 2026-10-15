@@ -1,6 +1,6 @@
 //! 画面 (0038、0040、0041、0042、0043)。
 //!
-//! 認証の画面 (ログイン、登録)、記録の画面 (ホーム、抽出、購入、商品、店)、統計の画面、設定の
+//! 認証の画面 (ログイン、登録)、記録の画面 (ホーム、抽出、購入、店)、統計の画面、設定の
 //! 画面を入れる。
 
 use dioxus::prelude::*;
@@ -22,8 +22,6 @@ pub use records::{
     brew_detail::BrewDetailScreen,
     brew_form::{BrewEditScreen, BrewFormScreen},
     home::HomeScreen,
-    product_form::{ProductEditScreen, ProductFormScreen},
-    product_list::ProductListScreen,
     purchase_detail::PurchaseDetailScreen,
     purchase_form::{PurchaseEditScreen, PurchaseFormScreen},
     purchase_list::PurchaseListScreen,

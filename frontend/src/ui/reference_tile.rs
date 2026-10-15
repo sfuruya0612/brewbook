@@ -8,10 +8,10 @@ use dioxus::prelude::*;
 
 use crate::ui::{is_activation_key, Icon};
 
-/// 参照先 (購入、商品、店) をたどるタイル。
+/// 参照先 (購入、店) をたどるタイル。
 #[component]
 pub fn ReferenceTile(
-    /// 種類 (「購入」「商品」「店」。ARB から取る)。
+    /// 種類 (「購入」「店」。ARB から取る)。
     kind: String,
     /// たどる先の名前。
     name: String,
@@ -58,10 +58,10 @@ pub fn ReferenceChain(
     }
 }
 
-/// フォームで参照先 (購入、商品、店) を選ぶピッカー。
+/// フォームで参照先 (購入、店) を選ぶピッカー。
 #[component]
 pub fn PickerTile(
-    /// 種類 (「購入」「商品」「店」。ARB から取る)。
+    /// 種類 (「購入」「店」。ARB から取る)。
     kind: String,
     /// 選択中の名前。未選択のときは None。
     #[props(default)]

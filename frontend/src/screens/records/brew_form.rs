@@ -203,7 +203,7 @@ pub fn BrewForm(
         let selected = choice.clone();
         rsx! {
             ListRow {
-                title: choice.product.name.clone(),
+                title: choice.name.clone(),
                 subtitle: Some(rsx! { span { RowValue { text: caption } } }),
                 on_click: Some(EventHandler::new(move |_| {
                     purchase.set(Some(selected.clone()));
@@ -276,7 +276,7 @@ pub fn BrewForm(
                                 }
                                 div { class: "n",
                                     if let Some(purchase) = current_purchase.clone() {
-                                        "{purchase.product.name}"
+                                        "{purchase.name}"
                                     } else {
                                         span { class: "faint", "{t(Key::PurchasePickPlaceholder)}" }
                                     }

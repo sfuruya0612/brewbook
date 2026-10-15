@@ -23,9 +23,6 @@ pub fn ListRow(
     /// 右端の数値か評価。
     #[props(default)]
     trailing: Option<Element>,
-    /// 2 行目の下のタグ (商品の行だけ)。
-    #[props(default)]
-    tags: Option<Element>,
     /// お気に入りか。星の見た目を変える (FR-21)。
     #[props(default = false)]
     favorited: bool,
@@ -88,9 +85,6 @@ pub fn ListRow(
                 div { class: "name", "{title}" }
                 if subtitle.is_some() {
                     div { class: "sub", {subtitle} }
-                }
-                if tags.is_some() {
-                    div { class: "tags", {tags} }
                 }
             }
             if trailing.is_some() {

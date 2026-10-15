@@ -56,7 +56,7 @@ const SEEDS: &[&str] = &[
     "JPY",
     "1.5",
     // 推測の応答 (suggestion::parse_response の成功側)。
-    r#"{"product": {"name": "エチオピア イルガチェフェ", "origin": "エチオピア", "flavor_notes": ["フローラル"]}, "roast": "中煎り", "roast_date": "2026-09-20", "price_amount": 1200, "weight_grams": 200}"#,
+    r#"{"name": "エチオピア イルガチェフェ", "producer": null, "origin": "エチオピア", "region": null, "process": null, "variety": null, "flavor_notes": ["フローラル"], "roast": "中煎り", "roast_date": "2026-09-20", "price_amount": 1200, "weight_grams": 200}"#,
     "```json\n{\"roast\": null}\n```",
     // AI バインディングの応答の形 (suggestion::output_text と parse_response の成功側)。
     r#"{"response": "{\"roast\": \"中煎り\", \"roast_date\": \"2026-09-20\"}"}"#,

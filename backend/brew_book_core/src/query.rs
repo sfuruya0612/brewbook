@@ -4,9 +4,9 @@
 //! 値は必ずプレースホルダ (`?`) で渡し、SQL に値を連結しない。テーブル名と列名はコード内の
 //! 定数だけを使い、利用者の入力は渡せない。
 //!
-//! 一覧と 1 件の取得は共通の関数 ([`list`] と [`find_one`]) を通して組み立て、店と商品と
+//! 一覧と 1 件の取得は共通の関数 ([`list`] と [`find_one`]) を通して組み立て、店と
 //! Flavor Notes のタグの個別のクエリもこのモジュールが持つ。0007 と 0008 と 0010 と 0011 も
-//! このモジュールを使う。
+//! このモジュールを使う。商品の項目は購入が持つ (ADR-0022)。
 
 use crate::cursor::{CursorKey, CursorValue, SortKey, SortOrder};
 use crate::error::ErrorCode;
@@ -29,15 +29,15 @@ pub enum Value {
 /// サジェスト (FR-13) の対象の項目。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SuggestionItem {
-    /// 商品の Producer。
+    /// 購入の Producer (ADR-0022)。
     Producer,
-    /// 商品の Origin。
+    /// 購入の Origin。
     Origin,
-    /// 商品の Region。
+    /// 購入の Region。
     Region,
-    /// 商品の Process。
+    /// 購入の Process。
     Process,
-    /// 商品の Variety。
+    /// 購入の Variety。
     Variety,
     /// 購入の Roast。
     Roast,
@@ -55,8 +55,8 @@ impl SuggestionItem {
             | SuggestionItem::Origin
             | SuggestionItem::Region
             | SuggestionItem::Process
-            | SuggestionItem::Variety => PRODUCTS_TABLE,
-            SuggestionItem::Roast => PURCHASES_TABLE,
+            | SuggestionItem::Variety
+            | SuggestionItem::Roast => PURCHASES_TABLE,
             SuggestionItem::Method | SuggestionItem::GrindSetting => BREWS_TABLE,
         }
     }
@@ -121,8 +121,6 @@ pub const PURCHASE_SORT_KEYS: &[SortKey] = &[
     SortKey::PriceAmount,
     SortKey::WeightGrams,
 ];
-/// 商品の一覧が受け付ける並び順のキー (FR-20)。既定は先頭の `created_at`。
-pub const PRODUCT_SORT_KEYS: &[SortKey] = &[SortKey::CreatedAt, SortKey::Name, SortKey::UpdatedAt];
 /// 店の一覧が受け付ける並び順のキー (FR-20)。既定は先頭の `created_at`。
 pub const SHOP_SORT_KEYS: &[SortKey] = &[SortKey::CreatedAt, SortKey::Name, SortKey::UpdatedAt];
 
@@ -145,9 +143,6 @@ pub struct ListQuery<'a> {
     pub cursor: Option<CursorKey>,
     /// 取得件数。
     pub limit: u32,
-    /// 名前の完全一致の絞り込み (FR-19)。前後の空白を除いた値で、大文字と小文字を区別せず
-    /// 比べる。絞り込まないときは None。商品の一覧だけが指定する。
-    pub name: Option<&'a str>,
 }
 
 /// 1 件の取得のクエリの入力。
@@ -249,7 +244,6 @@ pub fn list(query: &ListQuery<'_>) -> Result<Statement, QueryError> {
             order: query.order,
             favorite_only: query.favorite_only,
             user_id: query.user_id,
-            name: query.name,
         },
         query.cursor.clone(),
         query.limit,
@@ -279,8 +273,6 @@ struct QualifiedList<'a> {
     favorite_only: bool,
     /// 絞り込む利用者の ID。
     user_id: &'a str,
-    /// 名前の完全一致の絞り込み (FR-19)。絞り込まないときは None。
-    name: Option<&'a str>,
 }
 
 /// 別名を付けた一覧の SQL を組み立てる。
@@ -303,15 +295,6 @@ fn list_qualified(
     sql.push_str(&qualified(query.alias, "user_id"));
     sql.push_str(" = ?");
     params.push(Value::Text(query.user_id.to_owned()));
-
-    // 名前の完全一致の絞り込み (FR-19)。値は前後の空白を除いて渡す。
-    // `COLLATE NOCASE` で大文字と小文字を区別せずに比べる (SQLite は ASCII だけを畳む)。
-    if let Some(name) = query.name {
-        sql.push_str(" AND ");
-        sql.push_str(&qualified(query.alias, "name"));
-        sql.push_str(" = ? COLLATE NOCASE");
-        params.push(Value::Text(name.to_owned()));
-    }
 
     // お気に入りだけに絞る (FR-21)。
     if query.favorite_only {
@@ -487,17 +470,14 @@ pub fn update(query: &UpdateQuery<'_>) -> Result<Statement, QueryError> {
 pub const SHOPS_TABLE: &str = "shops";
 /// 店の列の並び。応答の JSON の項目と同じ。
 pub const SHOP_COLUMNS: &str = "id, user_id, name, address, created_at, updated_at, favorited_at";
-/// 商品のテーブル名。
-pub const PRODUCTS_TABLE: &str = "products";
-/// 商品の列の並び。応答の JSON の項目と同じ。
-pub const PRODUCT_COLUMNS: &str = "id, user_id, name, producer, origin, region, process, variety, \
-                                   created_at, updated_at, favorited_at";
 /// 購入のテーブル名。
 pub const PURCHASES_TABLE: &str = "purchases";
-/// 購入の列の並び。応答の JSON の項目と同じ。
-pub const PURCHASE_COLUMNS: &str = "id, user_id, product_id, shop_id, purchased_on, roast, \
-                                    roast_date, price_amount, price_currency, weight_grams, \
-                                    photo_key, created_at, updated_at, favorited_at";
+/// 購入の列の並び。応答の JSON の項目と同じ。商品の項目 (商品名、Producer、Origin、Region、
+/// Process、Variety) も購入が持つ (ADR-0022)。
+pub const PURCHASE_COLUMNS: &str = "id, user_id, shop_id, purchased_on, roast, roast_date, \
+                                    price_amount, price_currency, weight_grams, photo_key, name, \
+                                    producer, origin, region, process, variety, created_at, \
+                                    updated_at, favorited_at";
 /// 抽出のテーブル名。
 pub const BREWS_TABLE: &str = "brews";
 /// 抽出の列の並び。応答の JSON の項目と同じ。
@@ -508,10 +488,10 @@ pub const BREW_COLUMNS: &str = "id, user_id, purchase_id, brewed_at, dose_grams,
 pub const FLAVOR_TAGS_TABLE: &str = "flavor_tags";
 /// Flavor Notes のタグの列の並び。応答の JSON の項目と同じ。
 pub const FLAVOR_TAG_COLUMNS: &str = "id, user_id, name";
-/// 商品と Flavor Notes のタグの対応のテーブル名。
-pub const PRODUCT_FLAVOR_TAGS_TABLE: &str = "product_flavor_tags";
-/// 商品と Flavor Notes のタグの対応の列の並び。応答の JSON の項目と同じ。
-pub const PRODUCT_FLAVOR_TAG_COLUMNS: &str = "user_id, product_id, tag_id";
+/// 購入と Flavor Notes のタグの対応のテーブル名 (ADR-0022)。
+pub const PURCHASE_FLAVOR_TAGS_TABLE: &str = "purchase_flavor_tags";
+/// 購入と Flavor Notes のタグの対応の列の並び。応答の JSON の項目と同じ。
+pub const PURCHASE_FLAVOR_TAG_COLUMNS: &str = "user_id, purchase_id, tag_id";
 /// 利用者のテーブル名。
 pub const USERS_TABLE: &str = "users";
 /// 登録用トークンのテーブル名。
@@ -528,11 +508,10 @@ const USER_ID_COLUMN: &str = "user_id";
 ///
 /// 外部キーの参照元から先に消す順にする (ADR-0006)。カスケード削除は使わない。
 const ACCOUNT_DELETE_TABLES: &[(&str, &str)] = &[
-    (PRODUCT_FLAVOR_TAGS_TABLE, USER_ID_COLUMN),
+    (PURCHASE_FLAVOR_TAGS_TABLE, USER_ID_COLUMN),
     (BREWS_TABLE, USER_ID_COLUMN),
     (PURCHASES_TABLE, USER_ID_COLUMN),
     (FLAVOR_TAGS_TABLE, USER_ID_COLUMN),
-    (PRODUCTS_TABLE, USER_ID_COLUMN),
     (SHOPS_TABLE, USER_ID_COLUMN),
     (SESSIONS_TABLE, USER_ID_COLUMN),
     (PASSKEY_CREDENTIALS_TABLE, USER_ID_COLUMN),
@@ -543,57 +522,31 @@ const ACCOUNT_DELETE_TABLES: &[(&str, &str)] = &[
 /// 1 つのクエリに束縛できる値の数。D1 は 100 個までとする
 /// (202 個を束縛したクエリを D1 が拒否することをローカルで確認した)。
 pub const MAX_BOUND_VALUES: usize = 100;
-/// タグ名を引くクエリは利用者 ID を 2 つ束縛するため、商品 ID は 98 件ずつにする。
-const PRODUCT_IDS_PER_STATEMENT: usize = MAX_BOUND_VALUES - 2;
+/// タグ名を引くクエリは利用者 ID を 2 つ束縛するため、購入 ID は 98 件ずつにする。
+const PURCHASE_IDS_PER_STATEMENT: usize = MAX_BOUND_VALUES - 2;
 
 /// 結合の SQL で使う購入の別名。
 const PURCHASE_ALIAS: &str = "p";
 /// 結合の SQL で使う抽出の別名。
 const BREW_ALIAS: &str = "b";
-/// 結合の SQL で使う商品の別名。
-const PRODUCT_ALIAS: &str = "pr";
 /// 結合の SQL で使う店の別名。
 const SHOP_ALIAS: &str = "sh";
 
-/// 購入と商品と店の結合。商品は INNER JOIN、店は LEFT JOIN で結合し、店が無い購入でも行が返る
-/// (ADR-0006)。結合の条件にも利用者 ID を含める。
+/// 購入と店の結合。店は LEFT JOIN で結合し、店が無い購入でも行が返る (ADR-0006)。
+/// 結合の条件にも利用者 ID を含める。商品の項目は購入が持つため結合しない (ADR-0022)。
 const PURCHASES_FROM: &str = "purchases AS p \
-     INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
      LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id";
-/// 抽出と、購入、商品、店の結合。抽出は購入だけを参照し、商品と店は購入からたどる (ADR-0006)。
+/// 抽出と、購入、店の結合。抽出は購入だけを参照し、店は購入からたどる (ADR-0006)。
 const BREWS_FROM: &str = "brews AS b \
      INNER JOIN purchases AS p ON p.id = b.purchase_id AND p.user_id = b.user_id \
-     INNER JOIN products AS pr ON pr.id = p.product_id AND pr.user_id = p.user_id \
      LEFT JOIN shops AS sh ON sh.id = p.shop_id AND sh.user_id = p.user_id";
 
 /// 店の `INSERT` の列 (`id` と `user_id` を除く)。
 const SHOP_INSERT_COLUMNS: &[&str] = &["name", "address", "created_at", "updated_at"];
 /// 店の `UPDATE` の列。`updated_at` は更新のたびに現在時刻にする (ADR-0006)。
 const SHOP_UPDATE_COLUMNS: &[&str] = &["name", "address", "updated_at"];
-/// 商品の `INSERT` の列 (`id` と `user_id` を除く)。
-const PRODUCT_INSERT_COLUMNS: &[&str] = &[
-    "name",
-    "producer",
-    "origin",
-    "region",
-    "process",
-    "variety",
-    "created_at",
-    "updated_at",
-];
-/// 商品の `UPDATE` の列。
-const PRODUCT_UPDATE_COLUMNS: &[&str] = &[
-    "name",
-    "producer",
-    "origin",
-    "region",
-    "process",
-    "variety",
-    "updated_at",
-];
 /// 購入の `INSERT` の列 (`id` と `user_id` を除く)。`photo_key` は 0009 が扱う。
 const PURCHASE_INSERT_COLUMNS: &[&str] = &[
-    "product_id",
     "shop_id",
     "purchased_on",
     "roast",
@@ -601,12 +554,17 @@ const PURCHASE_INSERT_COLUMNS: &[&str] = &[
     "price_amount",
     "price_currency",
     "weight_grams",
+    "name",
+    "producer",
+    "origin",
+    "region",
+    "process",
+    "variety",
     "created_at",
     "updated_at",
 ];
 /// 購入の `UPDATE` の列。
 const PURCHASE_UPDATE_COLUMNS: &[&str] = &[
-    "product_id",
     "shop_id",
     "purchased_on",
     "roast",
@@ -614,6 +572,12 @@ const PURCHASE_UPDATE_COLUMNS: &[&str] = &[
     "price_amount",
     "price_currency",
     "weight_grams",
+    "name",
+    "producer",
+    "origin",
+    "region",
+    "process",
+    "variety",
     "updated_at",
 ];
 /// 抽出の `INSERT` の列 (`id` と `user_id` を除く)。
@@ -657,10 +621,10 @@ pub struct ShopValues<'a> {
     pub address: Option<&'a str>,
 }
 
-/// 商品の入力の値。NULL は None で表す。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProductValues<'a> {
-    /// 商品名。
+/// 購入の入力の値。NULL は None で表す。商品の項目も購入が持つ (ADR-0022)。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PurchaseValues<'a> {
+    /// 商品名。必須 (FR-9)。
     pub name: &'a str,
     /// 生産者。任意。
     pub producer: Option<&'a str>,
@@ -672,13 +636,6 @@ pub struct ProductValues<'a> {
     pub process: Option<&'a str>,
     /// 品種。任意。
     pub variety: Option<&'a str>,
-}
-
-/// 購入の入力の値。NULL は None で表す。
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct PurchaseValues<'a> {
-    /// 商品の ID。必須 (FR-9)。
-    pub product_id: &'a str,
     /// 店の ID。任意 (店が無い購入がある。ADR-0006)。
     pub shop_id: Option<&'a str>,
     /// 購入日 (`YYYY-MM-DD`、タイムゾーンを持たない。ADR-0002)。
@@ -738,7 +695,6 @@ pub fn shops_list(
         favorite_only,
         cursor,
         limit,
-        name: None,
     })
 }
 
@@ -794,80 +750,7 @@ pub fn shop_update(
     })
 }
 
-/// 商品の一覧を組み立てる。既定の並び順は作成日時の降順と ID の昇順 (FR-20)。
-/// `name` を指定したときは、名前の完全一致 (前後の空白を除き、大文字と小文字を区別しない) で
-/// 絞り込む (FR-19)。
-pub fn products_list(
-    user_id: &str,
-    sort: SortKey,
-    order: SortOrder,
-    favorite_only: bool,
-    cursor: Option<CursorKey>,
-    limit: u32,
-    name: Option<&str>,
-) -> Result<Statement, QueryError> {
-    list(&ListQuery {
-        table: PRODUCTS_TABLE,
-        columns: PRODUCT_COLUMNS,
-        user_id,
-        sort,
-        order,
-        favorite_only,
-        cursor,
-        limit,
-        name,
-    })
-}
-
-/// 商品を 1 件取得する SQL を組み立てる。
-pub fn product_find(user_id: &str, id: &str) -> Statement {
-    find_one(&FindQuery {
-        table: PRODUCTS_TABLE,
-        columns: PRODUCT_COLUMNS,
-        user_id,
-        id,
-    })
-}
-
-/// 商品を挿入する SQL を組み立てる。
-pub fn product_insert(
-    id: &str,
-    user_id: &str,
-    values: &ProductValues<'_>,
-    created_at: &str,
-    updated_at: &str,
-) -> Result<Statement, QueryError> {
-    let mut product_values = product_value_list(values);
-    product_values.push(Value::Text(created_at.to_owned()));
-    product_values.push(Value::Text(updated_at.to_owned()));
-    insert(&InsertQuery {
-        table: PRODUCTS_TABLE,
-        columns: PRODUCT_INSERT_COLUMNS,
-        values: product_values,
-        id,
-        user_id,
-    })
-}
-
-/// 商品を更新する SQL を組み立てる。
-pub fn product_update(
-    id: &str,
-    user_id: &str,
-    values: &ProductValues<'_>,
-    updated_at: &str,
-) -> Result<Statement, QueryError> {
-    let mut product_values = product_value_list(values);
-    product_values.push(Value::Text(updated_at.to_owned()));
-    update(&UpdateQuery {
-        table: PRODUCTS_TABLE,
-        columns: PRODUCT_UPDATE_COLUMNS,
-        values: product_values,
-        id,
-        user_id,
-    })
-}
-
-/// 購入と商品と店を結合した一覧を組み立てる。既定の並び順は購入日の降順と ID の昇順 (FR-9、FR-20)。
+/// 購入と店を結合した一覧を組み立てる。既定の並び順は購入日の降順と ID の昇順 (FR-9、FR-20)。
 pub fn purchases_list(
     user_id: &str,
     sort: SortKey,
@@ -885,14 +768,13 @@ pub fn purchases_list(
             order,
             favorite_only,
             user_id,
-            name: None,
         },
         cursor,
         limit,
     )
 }
 
-/// 購入と商品と店を結合した 1 件の取得の SQL を組み立てる。
+/// 購入と店を結合した 1 件の取得の SQL を組み立てる。
 pub fn purchase_find(user_id: &str, id: &str) -> Statement {
     find_qualified(
         PURCHASES_FROM,
@@ -984,7 +866,7 @@ pub fn set_favorited_at(
     .expect("the favorite columns and values have the same length")
 }
 
-/// 抽出と、購入、商品、店を結合した一覧を組み立てる。既定の並び順は抽出日時の降順と ID の昇順
+/// 抽出と、購入、店を結合した一覧を組み立てる。既定の並び順は抽出日時の降順と ID の昇順
 /// (FR-11、FR-20)。
 pub fn brews_list(
     user_id: &str,
@@ -1003,14 +885,13 @@ pub fn brews_list(
             order,
             favorite_only,
             user_id,
-            name: None,
         },
         cursor,
         limit,
     )
 }
 
-/// 抽出と、購入、商品、店を結合した 1 件の取得の SQL を組み立てる。
+/// 抽出と、購入、店を結合した 1 件の取得の SQL を組み立てる。
 pub fn brew_find(user_id: &str, id: &str) -> Statement {
     find_qualified(BREWS_FROM, &brews_columns(), BREW_ALIAS, user_id, id)
 }
@@ -1183,71 +1064,6 @@ pub fn shop_delete_impact(user_id: &str, id: &str) -> Statement {
     count_by_id(PURCHASES_TABLE, "shop_id", user_id, id)
 }
 
-/// 商品を削除する SQL を組み立てる (0056)。
-pub fn product_delete(user_id: &str, id: &str) -> Statement {
-    delete_by_id(PRODUCTS_TABLE, user_id, id)
-}
-
-/// 商品の購入を全て削除する SQL を組み立てる (0056)。購入に紐づく抽出は先に消す。
-pub fn product_purchases_delete(user_id: &str, product_id: &str) -> Statement {
-    Statement {
-        sql: format!("DELETE FROM {PURCHASES_TABLE} WHERE product_id = ? AND user_id = ?"),
-        params: vec![
-            Value::Text(product_id.to_owned()),
-            Value::Text(user_id.to_owned()),
-        ],
-    }
-}
-
-/// 商品の購入に紐づく抽出を全て削除する SQL を組み立てる (0056)。
-pub fn product_brews_delete(user_id: &str, product_id: &str) -> Statement {
-    Statement {
-        sql: format!(
-            "DELETE FROM {BREWS_TABLE} WHERE user_id = ? AND purchase_id IN \
-             (SELECT id FROM {PURCHASES_TABLE} WHERE product_id = ? AND user_id = ?)"
-        ),
-        params: vec![
-            Value::Text(user_id.to_owned()),
-            Value::Text(product_id.to_owned()),
-            Value::Text(user_id.to_owned()),
-        ],
-    }
-}
-
-/// 商品の購入の写真のキーを引く SQL を組み立てる (0056)。写真の無い購入は含めない。
-pub fn product_purchase_photo_keys(user_id: &str, product_id: &str) -> Statement {
-    Statement {
-        sql: format!(
-            "SELECT photo_key FROM {PURCHASES_TABLE} \
-             WHERE product_id = ? AND user_id = ? AND photo_key IS NOT NULL"
-        ),
-        params: vec![
-            Value::Text(product_id.to_owned()),
-            Value::Text(user_id.to_owned()),
-        ],
-    }
-}
-
-/// 商品の削除で消える購入と抽出の件数を数える SQL を組み立てる (0056)。
-pub fn product_delete_impact(user_id: &str, id: &str) -> Statement {
-    Statement {
-        sql: format!(
-            "SELECT \
-             (SELECT COUNT(*) FROM {PURCHASES_TABLE} WHERE product_id = ? AND user_id = ?) \
-             AS purchases, \
-             (SELECT COUNT(*) FROM {BREWS_TABLE} WHERE user_id = ? AND purchase_id IN \
-             (SELECT id FROM {PURCHASES_TABLE} WHERE product_id = ? AND user_id = ?)) AS brews"
-        ),
-        params: vec![
-            Value::Text(id.to_owned()),
-            Value::Text(user_id.to_owned()),
-            Value::Text(user_id.to_owned()),
-            Value::Text(id.to_owned()),
-            Value::Text(user_id.to_owned()),
-        ],
-    }
-}
-
 /// 購入を削除する SQL を組み立てる (0056)。
 pub fn purchase_delete(user_id: &str, id: &str) -> Statement {
     delete_by_id(PURCHASES_TABLE, user_id, id)
@@ -1290,22 +1106,22 @@ pub fn account_delete(user_id: &str) -> Vec<Statement> {
         .collect()
 }
 
-/// 商品の Flavor Notes のタグ名を引く SQL を、束縛する値の上限に収まるよう分けて組み立てる。
+/// 購入の Flavor Notes のタグ名を引く SQL を、束縛する値の上限に収まるよう分けて組み立てる。
 ///
-/// 返す文の並びは、商品 ID を [`PRODUCT_IDS_PER_STATEMENT`] 件ずつに分けたもの。
-/// 空の並びに対しては空の並びを返す。同じ商品のタグ名は名前の昇順で返す。
-pub fn product_flavor_notes(user_id: &str, product_ids: &[&str]) -> Vec<Statement> {
-    product_ids
-        .chunks(PRODUCT_IDS_PER_STATEMENT)
+/// 返す文の並びは、購入 ID を [`PURCHASE_IDS_PER_STATEMENT`] 件ずつに分けたもの。
+/// 空の並びに対しては空の並びを返す。同じ購入のタグ名は名前の昇順で返す。
+pub fn purchase_flavor_notes(user_id: &str, purchase_ids: &[&str]) -> Vec<Statement> {
+    purchase_ids
+        .chunks(PURCHASE_IDS_PER_STATEMENT)
         .map(|chunk| {
             let mut sql = String::new();
-            sql.push_str("SELECT pft.product_id, t.name FROM ");
-            sql.push_str(PRODUCT_FLAVOR_TAGS_TABLE);
+            sql.push_str("SELECT pft.purchase_id, t.name FROM ");
+            sql.push_str(PURCHASE_FLAVOR_TAGS_TABLE);
             sql.push_str(" AS pft INNER JOIN ");
             sql.push_str(FLAVOR_TAGS_TABLE);
             sql.push_str(
                 " AS t ON t.id = pft.tag_id WHERE pft.user_id = ? AND t.user_id = ? AND \
-                          pft.product_id IN (",
+                          pft.purchase_id IN (",
             );
             for index in 0..chunk.len() {
                 if index > 0 {
@@ -1313,7 +1129,7 @@ pub fn product_flavor_notes(user_id: &str, product_ids: &[&str]) -> Vec<Statemen
                 }
                 sql.push('?');
             }
-            sql.push_str(") ORDER BY t.name ASC, pft.product_id ASC");
+            sql.push_str(") ORDER BY t.name ASC, pft.purchase_id ASC");
 
             let mut params = vec![
                 Value::Text(user_id.to_owned()),
@@ -1325,16 +1141,18 @@ pub fn product_flavor_notes(user_id: &str, product_ids: &[&str]) -> Vec<Statemen
         .collect()
 }
 
-/// 商品の Flavor Notes のタグの対応を全て消す SQL を組み立てる (配列での置き換えの前段)。
-pub fn delete_product_flavor_tags(user_id: &str, product_id: &str) -> Statement {
+/// 購入の Flavor Notes のタグの対応を全て消す SQL を組み立てる。
+///
+/// 配列での置き換えの前段と、購入の削除 (0056) の連鎖で使う。タグの行は残す (ADR-0006)。
+pub fn delete_purchase_flavor_tags(user_id: &str, purchase_id: &str) -> Statement {
     let mut sql = String::new();
     sql.push_str("DELETE FROM ");
-    sql.push_str(PRODUCT_FLAVOR_TAGS_TABLE);
-    sql.push_str(" WHERE product_id = ? AND user_id = ?");
+    sql.push_str(PURCHASE_FLAVOR_TAGS_TABLE);
+    sql.push_str(" WHERE purchase_id = ? AND user_id = ?");
     Statement {
         sql,
         params: vec![
-            Value::Text(product_id.to_owned()),
+            Value::Text(purchase_id.to_owned()),
             Value::Text(user_id.to_owned()),
         ],
     }
@@ -1356,43 +1174,31 @@ pub fn insert_flavor_tag(id: &str, user_id: &str, name: &str) -> Statement {
     }
 }
 
-/// 商品とタグの対応を、タグの名前で挿入する SQL を組み立てる。
+/// 購入とタグの対応を、タグの名前で挿入する SQL を組み立てる。
 ///
 /// タグの ID は利用者と名前で引く。タグの行は [`insert_flavor_tag`] が先に入れる。
-pub fn insert_product_flavor_tag(user_id: &str, product_id: &str, name: &str) -> Statement {
+pub fn insert_purchase_flavor_tag(user_id: &str, purchase_id: &str, name: &str) -> Statement {
     let mut sql = String::new();
     sql.push_str("INSERT INTO ");
-    sql.push_str(PRODUCT_FLAVOR_TAGS_TABLE);
-    sql.push_str(" (user_id, product_id, tag_id) SELECT ?, ?, id FROM ");
+    sql.push_str(PURCHASE_FLAVOR_TAGS_TABLE);
+    sql.push_str(" (user_id, purchase_id, tag_id) SELECT ?, ?, id FROM ");
     sql.push_str(FLAVOR_TAGS_TABLE);
     sql.push_str(" WHERE user_id = ? AND name = ?");
     Statement {
         sql,
         params: vec![
             Value::Text(user_id.to_owned()),
-            Value::Text(product_id.to_owned()),
+            Value::Text(purchase_id.to_owned()),
             Value::Text(user_id.to_owned()),
             Value::Text(name.to_owned()),
         ],
     }
 }
 
-/// 商品の入力の値の並び (商品名、Producer、Origin、Region、Process、Variety)。
-fn product_value_list(values: &ProductValues<'_>) -> Vec<Value> {
-    vec![
-        Value::Text(values.name.to_owned()),
-        optional_text(values.producer),
-        optional_text(values.origin),
-        optional_text(values.region),
-        optional_text(values.process),
-        optional_text(values.variety),
-    ]
-}
-
-/// 購入の入力の値の並び (商品、店、購入日、Roast、Roast Date、価格、通貨コード、重量)。
+/// 購入の入力の値の並び (店、購入日、Roast、Roast Date、価格、通貨コード、重量、商品名、
+/// Producer、Origin、Region、Process、Variety)。
 fn purchase_value_list(values: &PurchaseValues<'_>) -> Vec<Value> {
     vec![
-        Value::Text(values.product_id.to_owned()),
         optional_text(values.shop_id),
         Value::Text(values.purchased_on.to_owned()),
         optional_text(values.roast),
@@ -1400,6 +1206,12 @@ fn purchase_value_list(values: &PurchaseValues<'_>) -> Vec<Value> {
         optional_integer(values.price_amount),
         optional_text(values.price_currency),
         optional_integer(values.weight_grams),
+        Value::Text(values.name.to_owned()),
+        optional_text(values.producer),
+        optional_text(values.origin),
+        optional_text(values.region),
+        optional_text(values.process),
+        optional_text(values.variety),
     ]
 }
 
@@ -1419,21 +1231,19 @@ fn brew_value_list(values: &BrewValues<'_>) -> Vec<Value> {
     ]
 }
 
-/// 購入と商品と店の結合で選択する列の並び。別名は Worker が結果を読むときの項目名になる。
+/// 購入と店の結合で選択する列の並び。別名は Worker が結果を読むときの項目名になる。
 fn purchases_columns() -> String {
     join_columns(&[
         (PURCHASE_ALIAS, PURCHASE_COLUMNS),
-        (PRODUCT_ALIAS, PRODUCT_COLUMNS),
         (SHOP_ALIAS, SHOP_COLUMNS),
     ])
 }
 
-/// 抽出と、購入、商品、店の結合で選択する列の並び。
+/// 抽出と、購入、店の結合で選択する列の並び。
 fn brews_columns() -> String {
     join_columns(&[
         (BREW_ALIAS, BREW_COLUMNS),
         (PURCHASE_ALIAS, PURCHASE_COLUMNS),
-        (PRODUCT_ALIAS, PRODUCT_COLUMNS),
         (SHOP_ALIAS, SHOP_COLUMNS),
     ])
 }

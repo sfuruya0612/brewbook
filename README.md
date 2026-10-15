@@ -349,7 +349,7 @@ ADMIN_ORIGIN=https://brewbook-admin-staging.<サブドメイン>.workers.dev mis
 
 | 対象 | p95 |
 | --- | --- |
-| 店、商品、購入、抽出の一覧と単件の取得 | 200 ms 以内 |
+| 店、購入、抽出の一覧と単件の取得 | 200 ms 以内 |
 | 統計 (FR-18) の 4 経路 | 500 ms 以内 |
 
 Worker はリクエスト 1 件ごとに、経路名と処理時間を JSON の行で Workers Logs に出す (`backend/brew_book/src/logging.rs`)。

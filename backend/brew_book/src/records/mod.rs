@@ -1,5 +1,5 @@
-//! 店と商品と Flavor Notes のタグと、購入と抽出と写真の API (FR-6 から FR-11) と、
-//! 過去の入力値のサジェストの API (FR-13)。
+//! 店と Flavor Notes のタグと、購入と抽出と写真の API (FR-6 から FR-11) と、
+//! 過去の入力値のサジェストの API (FR-13)。商品の項目は購入が持つ (ADR-0022)。
 //!
 //! 入力の検証は `brew_book_core::records`、SQL の組み立ては `brew_book_core::query` が持つ。
 //! ここは経路の処理 (入力の読み取り、D1 の実行、応答の組み立て) だけを行う。
@@ -9,7 +9,6 @@ pub mod brews;
 pub mod maps;
 pub mod photos;
 pub mod place_search;
-pub mod products;
 pub mod purchase_suggestions;
 pub mod purchases;
 pub mod shops;
@@ -24,15 +23,14 @@ use brew_book_core::cursor::{
 };
 use brew_book_core::error::ErrorCode;
 use brew_book_core::query::{self, QueryError};
-use brew_book_core::records::validate_name;
+use brew_book_core::records::{trim_optional, validate_name};
 use worker::d1::D1Database;
 use worker::{console_error, Request, Response, Result};
 
 use crate::db;
 use crate::respond;
 
-use self::products::ProductResponse;
-use self::purchases::PurchaseJoinRow;
+use self::purchases::{PurchaseJoinRow, PurchaseResponse};
 use self::shops::ShopResponse;
 
 /// 一覧のクエリパラメータ (limit、cursor、sort、order、favorite)。
@@ -189,22 +187,6 @@ impl<T> Reference<T> {
     }
 }
 
-/// 参照先の商品を検証する。存在しないか他の利用者のものは 404 (FR-9)。
-pub async fn require_product(
-    d1: &D1Database,
-    user_id: &str,
-    id: &str,
-) -> Result<Reference<ProductResponse>> {
-    let statement = query::product_find(user_id, id);
-    match db::prepared(d1, &statement)?
-        .first::<ProductResponse>(None)
-        .await?
-    {
-        None => Ok(Reference::Rejected(not_found("the product does not exist"))),
-        Some(product) => Ok(Reference::Found(product)),
-    }
-}
-
 /// 参照先の店を検証する。存在しないか他の利用者のものは 404 (FR-9)。
 pub async fn require_shop(
     d1: &D1Database,
@@ -253,16 +235,19 @@ struct CountRow {
     count: i64,
 }
 
-/// 応答の商品に Flavor Notes を付ける (FR-8)。商品のタグは 1 つのクエリでまとめて引く。
+/// 応答の購入に Flavor Notes を付ける (FR-8)。購入のタグは 1 つのまとまりのクエリで引く。
 pub async fn attach_flavor_notes(
     d1: &D1Database,
     user_id: &str,
-    products: &mut [&mut ProductResponse],
+    purchases: &mut [&mut PurchaseResponse],
 ) -> Result<()> {
-    let ids: Vec<&str> = products.iter().map(|product| product.id.as_str()).collect();
-    let notes = flavor_notes_for(d1, user_id, &ids).await?;
-    for product in products {
-        product.flavor_notes = notes.get(&product.id).cloned().unwrap_or_default();
+    let ids: Vec<&str> = purchases
+        .iter()
+        .map(|purchase| purchase.id.as_str())
+        .collect();
+    let mut notes = flavor_notes_for(d1, user_id, &ids).await?;
+    for purchase in purchases {
+        purchase.flavor_notes = notes.remove(&purchase.id).unwrap_or_default();
     }
     Ok(())
 }
@@ -302,7 +287,7 @@ pub async fn read_input<T: serde::de::DeserializeOwned>(req: &mut Request) -> Op
 }
 
 /// 更新の入力の名前を、現在の名前と合わせる。
-/// 入力が無ければ現在の名前を保ち、`null` と空白だけの名前は拒否する (店名と商品名は必須)。
+/// 入力が無ければ現在の名前を保ち、`null` と空白だけの名前は拒否する (店名と購入の商品名は必須)。
 pub fn merge_name(input: Option<Option<String>>, current: String) -> Result<String, Response> {
     match input {
         Some(Some(name)) => validate_name(&name).map_err(|error| invalid_input(error.message())),
@@ -311,19 +296,29 @@ pub fn merge_name(input: Option<Option<String>>, current: String) -> Result<Stri
     }
 }
 
-/// 商品の Flavor Notes のタグを配列で置き換える (FR-8)。
+/// 更新の入力の任意の値を、現在の値と合わせる。
+/// 入力が無ければ現在の値、`null` なら NULL、値があれば前後の空白を除いた値にする。
+pub fn merge_text(input: Option<Option<String>>, current: Option<String>) -> Option<String> {
+    match input {
+        Some(value) => trim_optional(value.as_deref()),
+        None => current,
+    }
+}
+
+/// 購入の Flavor Notes のタグを置き換える文を組み立てる (FR-8、ADR-0022)。
 ///
-/// タグの行は利用者ごとに名前で共有し、参照されなくなっても削除しない。消すのは商品とタグの
-/// 対応だけとし、対応の削除と挿入は 1 つのまとまり (D1 の batch) で実行する。
-pub async fn replace_flavor_notes(
+/// タグの行は利用者ごとに名前で共有し、参照されなくなっても削除しない。消すのは購入とタグの
+/// 対応だけとする。呼び出し側が購入の INSERT または UPDATE と同じ batch (1 トランザクション)
+/// に含めて実行する (購入とタグの対応が途中で止まった状態を残さないため)。
+pub fn replace_flavor_notes_statements(
     d1: &D1Database,
     user_id: &str,
-    product_id: &str,
+    purchase_id: &str,
     names: &[String],
-) -> Result<()> {
+) -> Result<Vec<worker::d1::D1PreparedStatement>> {
     let mut statements = vec![db::prepared(
         d1,
-        &query::delete_product_flavor_tags(user_id, product_id),
+        &query::delete_purchase_flavor_tags(user_id, purchase_id),
     )?];
     for name in names {
         statements.push(db::prepared(
@@ -332,28 +327,22 @@ pub async fn replace_flavor_notes(
         )?);
         statements.push(db::prepared(
             d1,
-            &query::insert_product_flavor_tag(user_id, product_id, name),
+            &query::insert_purchase_flavor_tag(user_id, purchase_id, name),
         )?);
     }
-    db::execute_batch(d1, statements).await
+    Ok(statements)
 }
 
-/// 商品 1 件のタグ名を引く (並びは名前の昇順)。
-pub async fn flavor_notes(d1: &D1Database, user_id: &str, product_id: &str) -> Result<Vec<String>> {
-    let mut notes = flavor_notes_for(d1, user_id, &[product_id]).await?;
-    Ok(notes.remove(product_id).unwrap_or_default())
-}
-
-/// 複数の商品のタグ名をまとめて引く。商品 ID をキーにする。
+/// 複数の購入のタグ名をまとめて引く。購入の ID をキーにする。
 ///
 /// 束縛する値が D1 の上限に収まるよう分けたクエリを、1 つのまとまり (batch) で実行する。
 pub async fn flavor_notes_for(
     d1: &D1Database,
     user_id: &str,
-    product_ids: &[&str],
+    purchase_ids: &[&str],
 ) -> Result<HashMap<String, Vec<String>>> {
     let mut statements = Vec::new();
-    for statement in query::product_flavor_notes(user_id, product_ids) {
+    for statement in query::purchase_flavor_notes(user_id, purchase_ids) {
         statements.push(db::prepared(d1, &statement)?);
     }
     if statements.is_empty() {
@@ -370,7 +359,7 @@ pub async fn flavor_notes_for(
         }
         let rows: Vec<FlavorNoteRow> = result.results()?;
         for row in rows {
-            notes.entry(row.product_id).or_default().push(row.name);
+            notes.entry(row.purchase_id).or_default().push(row.name);
         }
     }
     Ok(notes)
@@ -381,9 +370,9 @@ pub fn internal_error() -> Response {
     respond::error(ErrorCode::Internal, "internal error")
 }
 
-/// 商品のタグの行のうち、応答の組み立てに使う列。
+/// 購入のタグの行のうち、応答の組み立てに使う列。
 #[derive(Debug, serde::Deserialize)]
 struct FlavorNoteRow {
-    product_id: String,
+    purchase_id: String,
     name: String,
 }

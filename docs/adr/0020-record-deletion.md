@@ -2,7 +2,12 @@
 
 Created: 2026-10-08
 Model: DeepSeek V4.1 Flash
-Status: Accepted
+Status: Partially superseded by ADR-0022 (2026-10-14)
+
+ADR-0022 (商品を購入に統合する) が商品の削除の経路 (`DELETE /api/products/:id` と `GET /api/products/:id/delete-impact`)
+と商品の削除の連鎖の決定を置き換えた (2026-10-14)。削除の経路は店、購入、抽出の 3 つ、削除の影響の経路は店と購入の 2 つになり、
+購入の削除は Flavor Notes の対応 (`purchase_flavor_tags`) も消す。他の決定 (物理削除、連鎖削除、影響の件数の表示、操作の置き場所) は残る。
+本文の商品の記述は決定の履歴として残す。
 
 ## 背景
 

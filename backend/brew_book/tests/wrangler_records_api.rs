@@ -1,4 +1,4 @@
-//! 店と商品と Flavor Notes のタグの API の結合テスト (HTTP)。
+//! 店と Flavor Notes のタグの API の結合テスト (HTTP)。
 //!
 //! 一覧と単件の取得、登録、更新、入力の検証、他の利用者の記録の 404、
 //! タグの共有と残存、カーソルの並び順を検査する。記録の内容がログに出ないことも確認する。
@@ -15,22 +15,16 @@ use std::time::Duration;
 use reqwest::blocking::Response;
 use serde_json::{json, Value};
 use support::http::{error_code, read, ApiClient};
-use support::seed::{user_id, Seed, SeededBrew, SeededProduct, SeededPurchase, SeededShop};
+use support::seed::{user_id, Seed, SeededPurchase, SeededShop};
 use support::ServerLease;
 
 /// 下ごしらえに使う時刻 (ISO 8601 UTC の固定長)。
 const T21: &str = "2026-09-21T00:00:00.000Z";
 const T20: &str = "2026-09-20T00:00:00.000Z";
-const T19: &str = "2026-09-19T00:00:00.000Z";
 
 /// 下ごしらえに使う日付。
 const D21: &str = "2026-09-21";
 const D20: &str = "2026-09-20";
-
-/// 下ごしらえに使う抽出日時。
-const B21: &str = "2026-09-21T10:00:00.000Z";
-const B20: &str = "2026-09-20T10:00:00.000Z";
-const B19: &str = "2026-09-19T10:00:00.000Z";
 
 /// このテストファイルの下ごしらえと、テストが使う値。
 struct TestData {
@@ -44,22 +38,13 @@ struct TestData {
     /// 店の書き換えのテストの利用者。
     shop_write_user: String,
     shop_write_session: String,
-    /// 商品の一覧のテストの利用者 (商品 2 件)。
-    product_list_user: String,
-    product_list_session: String,
-    product_list_products: Vec<SeededProduct>,
-    /// 名前の絞り込みのテストの利用者 (FR-19)。
-    name_filter_session: String,
-    name_filter_products: Vec<SeededProduct>,
-    name_filter_other_session: String,
-    /// 商品の書き換えのテストの利用者。
-    product_write_user: String,
-    product_write_session: String,
+    /// タグの一覧のテストの利用者 (購入 2 件がタグを共有する)。
+    tag_list_user: String,
+    tag_list_session: String,
     /// 他の利用者 (404 の検査に使う)。
     other_user: String,
     other_session: String,
     other_shop: SeededShop,
-    other_product: SeededProduct,
     /// 記録が無い利用者のセッション。
     empty_session: String,
     /// 記録の内容のログの検査に使う利用者のセッション。
@@ -70,15 +55,6 @@ struct TestData {
     delete_shop_session: String,
     delete_shop_shop: SeededShop,
     delete_shop_purchases: Vec<SeededPurchase>,
-    /// 商品の削除のテストの利用者 (0056)。購入 2 件 (1 件は写真つき) と抽出 3 件と、
-    /// 同じタグを共有する商品 2 件を持つ。
-    delete_product_session: String,
-    delete_product_product: SeededProduct,
-    delete_product_other_product: SeededProduct,
-    delete_product_purchases: Vec<SeededPurchase>,
-    delete_product_brews: Vec<SeededBrew>,
-    /// 商品の購入に付けた写真のオブジェクトキー (R2 の検査に使う)。
-    delete_product_photo_key: String,
 }
 
 /// 下ごしらえを 1 回だけ組み立てる。
@@ -117,50 +93,30 @@ fn build_data() -> TestData {
     seed.user(&shop_write_user, "shop write user", created);
     let shop_write_session = seed.session(&shop_write_user, future, created);
 
-    // 商品の一覧のテストの利用者。タグは 2 つの商品で共有し、参照されないタグも 1 つ置く。
-    let product_list_user = user_id(3);
-    seed.user(&product_list_user, "product list user", created);
-    let product_list_session = seed.session(&product_list_user, future, created);
-    let product_list_products = vec![
-        seed.product(&product_list_user, "新しい豆", T21, T21),
-        seed.product(&product_list_user, "古い豆", T20, T20),
+    // タグの一覧のテストの利用者。タグは 2 つの購入で共有し、参照されないタグも 1 つ置く
+    // (ADR-0022)。
+    let tag_list_user = user_id(3);
+    seed.user(&tag_list_user, "tag list user", created);
+    let tag_list_session = seed.session(&tag_list_user, future, created);
+    let tag_list_purchases = [
+        seed.purchase(&tag_list_user, "新しい豆", None, D21, T21, T21),
+        seed.purchase(&tag_list_user, "古い豆", None, D20, T20, T20),
     ];
-    let chocolate = seed.flavor_tag(&product_list_user, "chocolate");
-    let berry = seed.flavor_tag(&product_list_user, "berry");
-    seed.flavor_tag(&product_list_user, "vanilla");
-    seed.product_flavor_tag(&product_list_user, &product_list_products[0].id, &chocolate);
-    seed.product_flavor_tag(&product_list_user, &product_list_products[0].id, &berry);
-    seed.product_flavor_tag(&product_list_user, &product_list_products[1].id, &chocolate);
+    let chocolate = seed.flavor_tag(&tag_list_user, "chocolate");
+    let berry = seed.flavor_tag(&tag_list_user, "berry");
+    seed.flavor_tag(&tag_list_user, "vanilla");
+    seed.purchase_flavor_tag(&tag_list_user, &tag_list_purchases[0].id, &chocolate);
+    seed.purchase_flavor_tag(&tag_list_user, &tag_list_purchases[0].id, &berry);
+    seed.purchase_flavor_tag(&tag_list_user, &tag_list_purchases[1].id, &chocolate);
 
-    // 商品の書き換えのテストの利用者。
-    let product_write_user = user_id(4);
-    seed.user(&product_write_user, "product write user", created);
-    let product_write_session = seed.session(&product_write_user, future, created);
-
-    // 名前の絞り込みのテストの利用者 (FR-19)。大文字と小文字の違いと、前後の空白の扱いを
-    // 確かめる商品を置く。並びは作成日時の降順なので、先に作った方が後ろに返る。
-    let name_filter_user = user_id(8);
-    seed.user(&name_filter_user, "name filter user", created);
-    let name_filter_session = seed.session(&name_filter_user, future, created);
-    let name_filter_products = vec![
-        seed.product(&name_filter_user, "Ethiopia Guji", T21, T21),
-        seed.product(&name_filter_user, "Ethiopia", T20, T20),
-        seed.product(&name_filter_user, "ethiopia guji", T19, T19),
-    ];
-    // 他の利用者の同じ名前の商品は、絞り込みでも返らない (FR-5)。
-    let name_filter_other_user = user_id(9);
-    seed.user(&name_filter_other_user, "name filter other user", created);
-    let name_filter_other_session = seed.session(&name_filter_other_user, future, created);
-    seed.product(&name_filter_other_user, "Ethiopia Guji", T21, T21);
-
-    // 他の利用者。店と商品とタグを 1 つずつ持つ。
+    // 他の利用者。店と購入とタグを 1 つずつ持つ。
     let other_user = user_id(5);
     seed.user(&other_user, "other user", created);
     let other_session = seed.session(&other_user, future, created);
     let other_shop = seed.shop(&other_user, "他人の店", None, T21, T21);
-    let other_product = seed.product(&other_user, "他人の豆", T21, T21);
+    let other_purchase = seed.purchase(&other_user, "他人の豆", None, D21, T21, T21);
     let other_tag = seed.flavor_tag(&other_user, "other tag");
-    seed.product_flavor_tag(&other_user, &other_product.id, &other_tag);
+    seed.purchase_flavor_tag(&other_user, &other_purchase.id, &other_tag);
 
     // 記録が無い利用者。
     let empty_user = user_id(6);
@@ -182,12 +138,11 @@ fn build_data() -> TestData {
     let delete_shop_user = user_id(21);
     seed.user(&delete_shop_user, "delete shop user", created);
     let delete_shop_session = seed.session(&delete_shop_user, future, created);
-    let delete_shop_product = seed.product(&delete_shop_user, "削除の店の豆", T21, T21);
     let delete_shop_shop = seed.shop(&delete_shop_user, "削除する店", Some("東京都"), T21, T21);
     let delete_shop_purchases = vec![
         seed.purchase(
             &delete_shop_user,
-            &delete_shop_product.id,
+            "削除の店の豆",
             Some(&delete_shop_shop.id),
             D21,
             T21,
@@ -195,80 +150,11 @@ fn build_data() -> TestData {
         ),
         seed.purchase(
             &delete_shop_user,
-            &delete_shop_product.id,
+            "削除の店の豆",
             Some(&delete_shop_shop.id),
             D20,
             T20,
             T20,
-        ),
-    ];
-
-    // 商品の削除のテストの利用者 (0056)。購入 2 件 (1 件は写真つき) と抽出 3 件と、
-    // 同じタグを共有する商品 2 件を持つ。
-    let delete_product_user = user_id(22);
-    seed.user(&delete_product_user, "delete product user", created);
-    let delete_product_session = seed.session(&delete_product_user, future, created);
-    let delete_product_product = seed.product(&delete_product_user, "削除する豆", T21, T21);
-    let delete_product_other_product = seed.product(&delete_product_user, "残る豆", T20, T20);
-    let shared_tag = seed.flavor_tag(&delete_product_user, "shared");
-    seed.product_flavor_tag(
-        &delete_product_user,
-        &delete_product_product.id,
-        &shared_tag,
-    );
-    seed.product_flavor_tag(
-        &delete_product_user,
-        &delete_product_other_product.id,
-        &shared_tag,
-    );
-    let delete_product_purchases = vec![
-        seed.purchase(
-            &delete_product_user,
-            &delete_product_product.id,
-            None,
-            D21,
-            T21,
-            T21,
-        ),
-        seed.purchase(
-            &delete_product_user,
-            &delete_product_product.id,
-            None,
-            D20,
-            T20,
-            T20,
-        ),
-    ];
-    // 1 件目の購入に写真のキーを付ける (R2 のオブジェクトはテストが置く)。
-    let delete_product_photo_key = format!(
-        "users/{delete_product_user}/purchases/{}/photo.jpg",
-        delete_product_purchases[0].id
-    );
-    seed.raw(&format!(
-        "UPDATE purchases SET photo_key = '{delete_product_photo_key}' WHERE id = '{}'",
-        delete_product_purchases[0].id
-    ));
-    let delete_product_brews = vec![
-        seed.brew(
-            &delete_product_user,
-            &delete_product_purchases[0].id,
-            B21,
-            T21,
-            T21,
-        ),
-        seed.brew(
-            &delete_product_user,
-            &delete_product_purchases[0].id,
-            B20,
-            T20,
-            T20,
-        ),
-        seed.brew(
-            &delete_product_user,
-            &delete_product_purchases[1].id,
-            B19,
-            T19,
-            T19,
         ),
     ];
 
@@ -280,30 +166,17 @@ fn build_data() -> TestData {
         list_old_shop,
         shop_write_user,
         shop_write_session,
-        product_list_user,
-        product_list_session,
-        product_list_products,
-        name_filter_session,
-        name_filter_products,
-        name_filter_other_session,
-        product_write_user,
-        product_write_session,
+        tag_list_user,
+        tag_list_session,
         other_user,
         other_session,
         other_shop,
-        other_product,
         empty_session,
         log_session,
         favorite_filter_session,
         delete_shop_session,
         delete_shop_shop,
         delete_shop_purchases,
-        delete_product_session,
-        delete_product_product,
-        delete_product_other_product,
-        delete_product_purchases,
-        delete_product_brews,
-        delete_product_photo_key,
     }
 }
 
@@ -364,20 +237,6 @@ fn assert_shop(body: &Value, user_id: &str, name: &str, address: Option<&str>) {
 /// ミリ秒だけ待つ。`updated_at` が確実に進むようにする。
 fn sleep_millis(millis: u64) {
     std::thread::sleep(Duration::from_millis(millis));
-}
-
-/// クエリの値を URL に載せる形 (パーセントエンコード) にする。
-/// テストの値には空白と日本語を含めるため、自前でエンコードする。
-fn encode_query(value: &str) -> String {
-    let mut encoded = String::new();
-    for byte in value.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
-            encoded.push(char::from(byte));
-        } else {
-            encoded.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    encoded
 }
 
 mod shops {
@@ -987,760 +846,6 @@ mod shops {
     }
 }
 
-mod products {
-    //! 商品の経路のテスト (FR-7、FR-8、FR-5)。
-
-    use super::*;
-
-    // 商品の一覧 (認証が必要、クエリパラメータあり)。
-
-    #[test]
-    fn wrangler_products_list_ok() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_list_session));
-        let body = assert_status(client.get("/api/products"), 200);
-        let products = body["products"]
-            .as_array()
-            .expect("the response must have products");
-        assert_eq!(products.len(), 2, "{body}");
-        // 作成日時の降順で返る。
-        assert_eq!(products[0]["id"], data.product_list_products[0].id);
-        assert_eq!(products[1]["id"], data.product_list_products[1].id);
-        // 2 つの商品が同じタグを共有し、取得結果にタグ名の配列が含まれる (FR-8)。
-        assert_eq!(products[0]["flavor_notes"], json!(["berry", "chocolate"]));
-        assert_eq!(products[1]["flavor_notes"], json!(["chocolate"]));
-        assert_eq!(products[0]["producer"], Value::Null, "{body}");
-        assert_eq!(body["next_cursor"], Value::Null);
-        // 応答に archived_at は無い。
-        for product in products {
-            assert!(
-                product.get("archived_at").is_none(),
-                "the response must not carry archived_at: {product}"
-            );
-        }
-        // include_archived は未知のパラメータとして無視され、挙動が変わらない。
-        let with_parameter = assert_status(client.get("/api/products?include_archived=true"), 200);
-        assert_eq!(with_parameter, body, "{with_parameter}");
-    }
-
-    #[test]
-    fn wrangler_products_list_ok_with_a_cursor() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_list_session));
-        // カーソルで続きを引く。同じ行が重複せず、並び順が保たれる。
-        let first = assert_status(client.get("/api/products?limit=1"), 200);
-        let products = first["products"].as_array().expect("products");
-        assert_eq!(products.len(), 1, "{first}");
-        assert_eq!(products[0]["id"], data.product_list_products[0].id);
-        let cursor = first["next_cursor"]
-            .as_str()
-            .expect("a full page must carry the next cursor")
-            .to_owned();
-        let second = assert_status(
-            client.get(&format!("/api/products?limit=1&cursor={cursor}")),
-            200,
-        );
-        let products = second["products"].as_array().expect("products");
-        assert_eq!(products.len(), 1, "{second}");
-        assert_eq!(products[0]["id"], data.product_list_products[1].id);
-        let cursor = second["next_cursor"]
-            .as_str()
-            .expect("a full page must carry the next cursor")
-            .to_owned();
-        // 続きの行が無いページは空になり、続きのカーソルも無くなる。
-        let third = assert_status(
-            client.get(&format!("/api/products?limit=1&cursor={cursor}")),
-            200,
-        );
-        assert_eq!(third["products"], json!([]), "{third}");
-        assert_eq!(third["next_cursor"], Value::Null);
-    }
-
-    #[test]
-    fn wrangler_products_list_returns_only_own_records() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let body = assert_status(
-            ApiClient::new(&base_url, Some(&data.other_session)).get("/api/products"),
-            200,
-        );
-        let products = body["products"].as_array().expect("products");
-        assert_eq!(products.len(), 1, "{body}");
-        assert_eq!(products[0]["id"], data.other_product.id);
-        assert_eq!(products[0]["flavor_notes"], json!(["other tag"]));
-
-        let body = assert_status(
-            ApiClient::new(&base_url, Some(&data.empty_session)).get("/api/products"),
-            200,
-        );
-        assert_eq!(body["products"], json!([]), "{body}");
-    }
-
-    #[test]
-    fn wrangler_products_list_invalid_input_400() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_list_session));
-        for query in ["limit=0", "limit=abc", "limit=201", "cursor=x"] {
-            assert_bad_request(client.get(&format!("/api/products?{query}")));
-        }
-        // sort、order、favorite は受け付けない値を 400 にする (FR-20、FR-21)。
-        for query in ["sort=unknown", "order=up", "favorite=yes", "favorite=1"] {
-            assert_bad_request(client.get(&format!("/api/products?{query}")));
-        }
-        // 受け取らないパラメータは未知のパラメータとして無視する (400 にしない)。
-        assert_status(client.get("/api/products?include_archived=1"), 200);
-    }
-
-    #[test]
-    fn wrangler_products_list_sorts_and_filters() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_list_session));
-
-        // 名前の昇順と降順で並ぶ (FR-20)。既定は作成日時の降順。
-        let asc = assert_status(client.get("/api/products?sort=name&order=asc"), 200);
-        let names: Vec<String> = asc["products"]
-            .as_array()
-            .expect("products")
-            .iter()
-            .filter_map(|product| product["name"].as_str().map(str::to_owned))
-            .collect();
-        let mut expected = names.clone();
-        expected.sort();
-        assert_eq!(names, expected, "{asc}");
-        let desc = assert_status(client.get("/api/products?sort=name&order=desc"), 200);
-        let desc_names: Vec<String> = desc["products"]
-            .as_array()
-            .expect("products")
-            .iter()
-            .filter_map(|product| product["name"].as_str().map(str::to_owned))
-            .collect();
-        expected.reverse();
-        assert_eq!(desc_names, expected, "{desc}");
-        // 応答に favorited_at が含まれる (FR-21)。
-        for product in asc["products"].as_array().expect("products") {
-            assert!(product.get("favorited_at").is_some(), "{product}");
-        }
-    }
-
-    #[test]
-    fn wrangler_products_favorite_put_and_delete() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_write_session));
-        let created = assert_status(
-            client.post_json("/api/products", &json!({ "name": "お気に入りの豆" })),
-            200,
-        );
-        let id = created["id"]
-            .as_str()
-            .expect("the id must be present")
-            .to_owned();
-        assert_eq!(created["favorited_at"], Value::Null, "{created}");
-
-        let first = assert_status(client.put(&format!("/api/products/{id}/favorite")), 200);
-        assert!(first["favorited_at"].is_string(), "{first}");
-        let favorited_at = first["favorited_at"].clone();
-        let updated_at = first["updated_at"].clone();
-        let again = assert_status(client.put(&format!("/api/products/{id}/favorite")), 200);
-        assert_eq!(again["favorited_at"], favorited_at, "{again}");
-        assert_eq!(again["updated_at"], updated_at, "{again}");
-
-        let removed = assert_status(client.delete(&format!("/api/products/{id}/favorite")), 200);
-        assert_eq!(removed["favorited_at"], Value::Null, "{removed}");
-        let removed_updated_at = removed["updated_at"].clone();
-        let again = assert_status(client.delete(&format!("/api/products/{id}/favorite")), 200);
-        assert_eq!(again["favorited_at"], Value::Null, "{again}");
-        assert_eq!(again["updated_at"], removed_updated_at, "{again}");
-
-        // お気に入りのみの一覧に反映される (FR-21)。
-        assert_status(client.put(&format!("/api/products/{id}/favorite")), 200);
-        let body = assert_status(client.get("/api/products?favorite=true"), 200);
-        let products = body["products"].as_array().expect("products");
-        assert_eq!(products.len(), 1, "{body}");
-        assert_eq!(products[0]["id"], id, "{body}");
-
-        // 未認証は 401、他の利用者の ID は 404。
-        assert_unauthorized(anonymous(&base_url).put(&format!("/api/products/{id}/favorite")));
-        assert_unauthorized(anonymous(&base_url).delete(&format!("/api/products/{id}/favorite")));
-        let other = ApiClient::new(&base_url, Some(&data.other_session));
-        assert_not_found(other.put(&format!("/api/products/{id}/favorite")));
-        assert_not_found(other.delete(&format!("/api/products/{id}/favorite")));
-    }
-
-    // 名前の絞り込み (FR-19)。
-
-    /// 名前の絞り込みを付けた一覧を引く。
-    fn list_by_name(client: &ApiClient, query: &str) -> Value {
-        assert_status(
-            client.get(&format!("/api/products?name={}", encode_query(query))),
-            200,
-        )
-    }
-
-    #[test]
-    fn wrangler_products_list_filters_by_the_exact_name() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.name_filter_session));
-        // 完全一致で絞る (FR-19)。前方一致ではないため、部分一致の商品は返らない。
-        let body = list_by_name(&client, "Ethiopia");
-        let products = body["products"].as_array().expect("products");
-        assert_eq!(products.len(), 1, "{body}");
-        assert_eq!(products[0]["name"], "Ethiopia");
-        let body = list_by_name(&client, "Guji");
-        assert_eq!(body["products"], json!([]), "{body}");
-        // 一致する商品が無い名前でも 200 を返す (一覧と同じ扱い)。
-        let body = list_by_name(&client, "存在しない豆");
-        assert_eq!(body["products"], json!([]), "{body}");
-    }
-
-    #[test]
-    fn wrangler_products_list_name_ignores_trim_and_case() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.name_filter_session));
-        // 照合は前後の空白を除いて大文字と小文字を区別しない (FR-19)。
-        // 並び順は一覧と同じく作成日時の降順なので、新しい方が先に返る。
-        for query in [
-            "Ethiopia Guji",
-            "  Ethiopia Guji  ",
-            "ethiopia guji",
-            "ETHIOPIA GUJI",
-        ] {
-            let body = list_by_name(&client, query);
-            let products = body["products"].as_array().expect("products");
-            assert_eq!(products.len(), 2, "{query}: {body}");
-            assert_eq!(
-                products[0]["id"], data.name_filter_products[0].id,
-                "{query}"
-            );
-            assert_eq!(
-                products[1]["id"], data.name_filter_products[2].id,
-                "{query}"
-            );
-        }
-    }
-
-    #[test]
-    fn wrangler_products_list_name_returns_only_own_records() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        // 他の利用者の同じ名前の商品は返らない (FR-5)。
-        let own = list_by_name(
-            &ApiClient::new(&base_url, Some(&data.name_filter_session)),
-            "Ethiopia Guji",
-        );
-        assert_eq!(own["products"].as_array().expect("products").len(), 2);
-        let other = list_by_name(
-            &ApiClient::new(&base_url, Some(&data.name_filter_other_session)),
-            "Ethiopia Guji",
-        );
-        let products = other["products"].as_array().expect("products");
-        assert_eq!(products.len(), 1, "{other}");
-        assert_eq!(products[0]["name"], "Ethiopia Guji");
-        // 記録が無い利用者では空になる。
-        let empty = list_by_name(
-            &ApiClient::new(&base_url, Some(&data.empty_session)),
-            "Ethiopia Guji",
-        );
-        assert_eq!(empty["products"], json!([]), "{empty}");
-    }
-
-    #[test]
-    fn wrangler_products_list_name_invalid_input_400() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.name_filter_session));
-        // 絞り込みの名前は空白を除いて空にできない。複数回の指定も受け付けない。
-        for query in ["name=", "name=%20%20", "name=Ethiopia&name=Ethiopia"] {
-            assert_bad_request(client.get(&format!("/api/products?{query}")));
-        }
-    }
-
-    #[test]
-    fn wrangler_products_list_name_must_not_change_the_other_filters() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.name_filter_session));
-        // 名前の絞り込みを付けても、limit は同じように働く (FR-19)。
-        // 受け取らないパラメータは無視される。
-        let body = assert_status(
-            client.get(&format!(
-                "/api/products?limit=1&name={}&include_archived=true",
-                encode_query("Ethiopia Guji")
-            )),
-            200,
-        );
-        let products = body["products"].as_array().expect("products");
-        assert_eq!(products.len(), 1, "{body}");
-        assert_eq!(products[0]["id"], data.name_filter_products[0].id, "{body}");
-        assert!(
-            body["next_cursor"].as_str().is_some(),
-            "a full page must carry the next cursor: {body}"
-        );
-    }
-
-    #[test]
-    fn wrangler_products_list_unauthenticated_401() {
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(anonymous(&base_url).get("/api/products"));
-    }
-
-    // 商品の登録 (認証が必要、入力あり)。
-
-    #[test]
-    fn wrangler_products_create_ok() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_write_session));
-
-        // 商品名以外の項目は NULL で登録できる (FR-7)。
-        let body = assert_status(
-            client.post_json("/api/products", &json!({ "name": "  名前だけの豆  " })),
-            200,
-        );
-        assert_eq!(body["name"], "名前だけの豆", "{body}");
-        assert_eq!(body["user_id"], data.product_write_user);
-        for field in ["producer", "origin", "region", "process", "variety"] {
-            assert_eq!(body[field], Value::Null, "{field}: {body}");
-        }
-        assert_eq!(body["flavor_notes"], json!([]), "{body}");
-        assert!(body.get("archived_at").is_none(), "{body}");
-        assert_timestamp(&body["created_at"]);
-        assert_eq!(body["created_at"], body["updated_at"], "{body}");
-        let id = body["id"].as_str().expect("the id must be present");
-        assert_eq!(id.len(), 36, "the id must be a UUID: {id}");
-
-        // 登録した商品は単件で取得できる。
-        let fetched = assert_status(client.get(&format!("/api/products/{id}")), 200);
-        assert_eq!(fetched, body);
-
-        // 全項目とタグを指定して登録する。自由記述は前後の空白を除き、タグは重複を除いて共有する (FR-7、FR-8)。
-        let body = assert_status(
-            client.post_json(
-                "/api/products",
-                &json!({
-                    "name": "  全部入りの豆  ",
-                    "producer": "  生産者  ",
-                    "origin": "  エチオピア  ",
-                    "region": "  イルガチェフェ  ",
-                    "process": "  ウォッシュト  ",
-                    "variety": "  在来種  ",
-                    "flavor_notes": ["  チョコ  ", "berry", "チョコ", " berry "],
-                }),
-            ),
-            200,
-        );
-        assert_eq!(body["name"], "全部入りの豆", "{body}");
-        assert_eq!(body["producer"], "生産者", "{body}");
-        assert_eq!(body["origin"], "エチオピア", "{body}");
-        assert_eq!(body["region"], "イルガチェフェ", "{body}");
-        assert_eq!(body["process"], "ウォッシュト", "{body}");
-        assert_eq!(body["variety"], "在来種", "{body}");
-        assert_eq!(body["flavor_notes"], json!(["berry", "チョコ"]), "{body}");
-        // タグは利用者ごとに名前で一意にする (FR-8)。
-        let tags = assert_status(client.get("/api/flavor-tags"), 200);
-        let names: Vec<&str> = tags["flavor_tags"]
-            .as_array()
-            .expect("flavor_tags")
-            .iter()
-            .filter_map(|tag| tag["name"].as_str())
-            .collect();
-        assert_eq!(
-            names.iter().filter(|name| **name == "チョコ").count(),
-            1,
-            "the tag must be shared: {tags}"
-        );
-    }
-
-    #[test]
-    fn wrangler_products_create_invalid_input_400() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_write_session));
-        // 商品名は必須で、前後の空白を除いて空なら拒否する (FR-7)。
-        for body in [
-            json!({}),
-            json!({ "name": "" }),
-            json!({ "name": "   " }),
-            json!({ "name": null }),
-            json!({ "producer": "生産者" }),
-            json!({ "name": "豆", "unknown": 1 }),
-            // 空白だけのタグ名は拒否する (FR-8)。
-            json!({ "name": "豆", "flavor_notes": ["チョコ", "  "] }),
-            json!({ "name": "豆", "flavor_notes": [""] }),
-            // タグの配列でない値と `null` は拒否する (タグを付けないときは項目を省くか空の配列)。
-            json!({ "name": "豆", "flavor_notes": "チョコ" }),
-            json!({ "name": "豆", "flavor_notes": [1] }),
-            json!({ "name": "豆", "flavor_notes": null }),
-        ] {
-            assert_bad_request(client.post_json("/api/products", &body));
-        }
-    }
-
-    #[test]
-    fn wrangler_products_create_ok_with_many_flavor_notes() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_write_session));
-        // タグの置き換えは 1 つのまとまり (D1 の batch) で行う。多数のタグでも通ることを確認する。
-        let names: Vec<String> = (0..60).map(|index| format!("tag-{index:02}")).collect();
-        let body = assert_status(
-            client.post_json(
-                "/api/products",
-                &json!({ "name": "タグが多い豆", "flavor_notes": names }),
-            ),
-            200,
-        );
-        let flavor_notes = body["flavor_notes"]
-            .as_array()
-            .expect("flavor_notes")
-            .clone();
-        assert_eq!(flavor_notes.len(), 60, "{body}");
-        assert_eq!(body["flavor_notes"][0], "tag-00");
-        assert_eq!(body["flavor_notes"][59], "tag-59");
-    }
-
-    #[test]
-    fn wrangler_products_create_unauthenticated_401() {
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(
-            anonymous(&base_url).post_json("/api/products", &json!({ "name": "豆" })),
-        );
-    }
-
-    // 商品の単件の取得 (認証が必要、入力なし)。
-
-    #[test]
-    fn wrangler_products_get_ok() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_list_session));
-        let body = assert_status(
-            client.get(&format!(
-                "/api/products/{}",
-                data.product_list_products[0].id
-            )),
-            200,
-        );
-        assert_eq!(body["id"], data.product_list_products[0].id);
-        assert_eq!(body["name"], data.product_list_products[0].name);
-        assert_eq!(body["flavor_notes"], json!(["berry", "chocolate"]));
-        assert!(body.get("archived_at").is_none(), "{body}");
-    }
-
-    #[test]
-    fn wrangler_products_get_unauthenticated_401() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(anonymous(&base_url).get(&format!(
-            "/api/products/{}",
-            data.product_list_products[0].id
-        )));
-    }
-
-    #[test]
-    fn wrangler_products_get_other_user_404() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_list_session));
-        assert_not_found(client.get(&format!("/api/products/{}", data.other_product.id)));
-        assert_not_found(client.get("/api/products/no-such-id"));
-    }
-
-    // 商品の更新 (認証が必要、入力あり)。
-
-    #[test]
-    fn wrangler_products_update_ok() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_write_session));
-        let created = assert_status(
-            client.post_json(
-                "/api/products",
-                &json!({
-                    "name": "変更前の豆",
-                    "producer": "変更前の生産者",
-                    "flavor_notes": ["leftover-check", "shared-check"],
-                }),
-            ),
-            200,
-        );
-        let id = created["id"].as_str().expect("the id must be present");
-        sleep_millis(10);
-
-        // 全項目を更新する (FR-7)。
-        let body = assert_status(
-            client.patch_json(
-                &format!("/api/products/{id}"),
-                &json!({
-                    "name": "  変更後の豆  ",
-                    "producer": "  変更後の生産者  ",
-                    "origin": "  エチオピア  ",
-                    "region": "  イルガチェフェ  ",
-                    "process": "  ウォッシュト  ",
-                    "variety": "  在来種  ",
-                }),
-            ),
-            200,
-        );
-        assert_eq!(body["name"], "変更後の豆", "{body}");
-        assert!(body.get("archived_at").is_none(), "{body}");
-        assert_eq!(body["producer"], "変更後の生産者", "{body}");
-        assert_eq!(body["origin"], "エチオピア", "{body}");
-        assert_eq!(body["region"], "イルガチェフェ", "{body}");
-        assert_eq!(body["process"], "ウォッシュト", "{body}");
-        assert_eq!(body["variety"], "在来種", "{body}");
-        assert_eq!(body["created_at"], created["created_at"]);
-        assert!(
-            body["updated_at"].as_str() > created["updated_at"].as_str(),
-            "updated_at must advance: {body}"
-        );
-        // タグを指定しない更新ではタグは変わらない。
-        assert_eq!(
-            body["flavor_notes"],
-            json!(["leftover-check", "shared-check"]),
-            "{body}"
-        );
-
-        // タグは配列で置き換える (FR-8)。
-        let body = assert_status(
-            client.patch_json(
-                &format!("/api/products/{id}"),
-                &json!({ "flavor_notes": ["shared-check"] }),
-            ),
-            200,
-        );
-        assert_eq!(body["flavor_notes"], json!(["shared-check"]), "{body}");
-        // 置き換えたタグは、単件の取得でも同じ内容になる (応答のエコーだけに頼らない)。
-        let fetched = assert_status(client.get(&format!("/api/products/{id}")), 200);
-        assert_eq!(
-            fetched["flavor_notes"],
-            json!(["shared-check"]),
-            "{fetched}"
-        );
-        // 参照されなくなったタグは削除せず残す (FR-8)。
-        let tags = assert_status(client.get("/api/flavor-tags"), 200);
-        assert!(
-            tags["flavor_tags"]
-                .as_array()
-                .expect("flavor_tags")
-                .iter()
-                .any(|tag| tag["name"] == "leftover-check"),
-            "the unused tag must remain: {tags}"
-        );
-
-        // 空の配列でタグを外せる。任意の項目は null で NULL にできる (FR-7)。
-        let body = assert_status(
-            client.patch_json(
-                &format!("/api/products/{id}"),
-                &json!({ "flavor_notes": [], "producer": null, "origin": null }),
-            ),
-            200,
-        );
-        assert_eq!(body["flavor_notes"], json!([]), "{body}");
-        assert_eq!(body["producer"], Value::Null, "{body}");
-        assert_eq!(body["origin"], Value::Null, "{body}");
-        assert_eq!(body["region"], "イルガチェフェ", "{body}");
-
-        // 単件の取得でも同じ内容が返る。
-        let fetched = assert_status(client.get(&format!("/api/products/{id}")), 200);
-        assert_eq!(fetched, body);
-    }
-
-    #[test]
-    fn wrangler_products_update_invalid_input_400() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.product_write_session));
-        let created = assert_status(
-            client.post_json("/api/products", &json!({ "name": "入力の検査の豆" })),
-            200,
-        );
-        let id = created["id"].as_str().expect("the id must be present");
-        for body in [
-            json!({ "name": "" }),
-            json!({ "name": "   " }),
-            json!({ "name": null }),
-            json!({ "flavor_notes": null }),
-            json!({ "flavor_notes": ["  "] }),
-            json!({ "id": "no-such-id" }),
-            json!({ "created_at": T21 }),
-            json!([1]),
-        ] {
-            assert_bad_request(client.patch_json(&format!("/api/products/{id}"), &body));
-        }
-        let body = assert_status(client.get(&format!("/api/products/{id}")), 200);
-        assert_eq!(body["name"], "入力の検査の豆", "{body}");
-        assert_eq!(body["flavor_notes"], json!([]), "{body}");
-    }
-
-    #[test]
-    fn wrangler_products_update_unauthenticated_401() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(anonymous(&base_url).patch_json(
-            &format!("/api/products/{}", data.product_list_products[0].id),
-            &json!({ "name": "豆" }),
-        ));
-    }
-
-    #[test]
-    fn wrangler_products_update_other_user_404() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_not_found(
-            ApiClient::new(&base_url, Some(&data.product_list_session)).patch_json(
-                &format!("/api/products/{}", data.other_product.id),
-                &json!({ "name": "のっとり" }),
-            ),
-        );
-        assert_not_found(
-            ApiClient::new(&base_url, Some(&data.product_list_session))
-                .patch_json("/api/products/no-such-id", &json!({ "name": "のっとり" })),
-        );
-        let other = assert_status(
-            ApiClient::new(&base_url, Some(&data.other_session))
-                .get(&format!("/api/products/{}", data.other_product.id)),
-            200,
-        );
-        assert_eq!(other["name"], data.other_product.name);
-    }
-
-    // 商品の削除 (0056)。
-
-    #[test]
-    fn wrangler_products_delete_ok_cascades_and_keeps_the_tags() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.delete_product_session));
-
-        // 削除の影響: 消える購入 2 件と抽出 3 件。
-        let impact = assert_status(
-            client.get(&format!(
-                "/api/products/{}/delete-impact",
-                data.delete_product_product.id
-            )),
-            200,
-        );
-        assert_eq!(impact["purchases"], 2, "{impact}");
-        assert_eq!(impact["brews"], 3, "{impact}");
-
-        // 写真のオブジェクトを R2 に置いてから削除する。
-        lease
-            .use_server(|server| {
-                server.put_r2_object(
-                    "brewbook-photos",
-                    &data.delete_product_photo_key,
-                    b"photo-bytes",
-                    "image/jpeg",
-                )
-            })
-            .expect("the photo object must be put");
-
-        // 削除は 204。
-        assert_status(
-            client.delete(&format!("/api/products/{}", data.delete_product_product.id)),
-            204,
-        );
-
-        // 商品、購入、抽出が消え、他の商品のタグの対応は残る (タグの行は消さない。ADR-0006)。
-        assert_not_found(client.get(&format!("/api/products/{}", data.delete_product_product.id)));
-        for purchase in &data.delete_product_purchases {
-            assert_not_found(client.get(&format!("/api/purchases/{}", purchase.id)));
-        }
-        for brew in &data.delete_product_brews {
-            assert_not_found(client.get(&format!("/api/brews/{}", brew.id)));
-        }
-        let other = assert_status(
-            client.get(&format!(
-                "/api/products/{}",
-                data.delete_product_other_product.id
-            )),
-            200,
-        );
-        assert_eq!(other["flavor_notes"], json!(["shared"]), "{other}");
-
-        // 写真のオブジェクトは消えている。
-        let object = lease
-            .use_server(|server| {
-                server.get_r2_object("brewbook-photos", &data.delete_product_photo_key)
-            })
-            .expect("the object must be readable");
-        assert!(object.is_none(), "the photo object must be deleted");
-    }
-
-    #[test]
-    fn wrangler_products_delete_unauthenticated_401() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(
-            anonymous(&base_url)
-                .delete(&format!("/api/products/{}", data.delete_product_product.id)),
-        );
-    }
-
-    #[test]
-    fn wrangler_products_delete_impact_unauthenticated_401() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        assert_unauthorized(anonymous(&base_url).get(&format!(
-            "/api/products/{}/delete-impact",
-            data.delete_product_product.id
-        )));
-    }
-
-    #[test]
-    fn wrangler_products_delete_other_user_404() {
-        let data = data();
-        let lease = server();
-        let base_url = lease.use_server(|server| server.base_url());
-        let client = ApiClient::new(&base_url, Some(&data.delete_product_session));
-        // 他の利用者の商品は消えず、影響の取得も 404 (FR-5)。
-        assert_not_found(client.delete(&format!("/api/products/{}", data.other_product.id)));
-        assert_not_found(client.get(&format!(
-            "/api/products/{}/delete-impact",
-            data.other_product.id
-        )));
-        let other = assert_status(
-            ApiClient::new(&base_url, Some(&data.other_session))
-                .get(&format!("/api/products/{}", data.other_product.id)),
-            200,
-        );
-        assert_eq!(other["name"], data.other_product.name);
-    }
-}
-
 mod flavor_tags {
     //! Flavor Notes のタグの一覧のテスト (FR-8、FR-5)。
 
@@ -1754,16 +859,16 @@ mod flavor_tags {
         let lease = server();
         let base_url = lease.use_server(|server| server.base_url());
         let body = assert_status(
-            ApiClient::new(&base_url, Some(&data.product_list_session)).get("/api/flavor-tags"),
+            ApiClient::new(&base_url, Some(&data.tag_list_session)).get("/api/flavor-tags"),
             200,
         );
         let tags = body["flavor_tags"]
             .as_array()
             .expect("the response must have flavor_tags");
-        // 名前の昇順で返り、どの商品からも参照されていないタグも残る (FR-8)。
+        // 名前の昇順で返り、どの購入からも参照されていないタグも残る (FR-8、ADR-0022)。
         let names: Vec<&str> = tags.iter().filter_map(|tag| tag["name"].as_str()).collect();
         assert_eq!(names, vec!["berry", "chocolate", "vanilla"], "{body}");
-        assert_eq!(tags[0]["user_id"], data.product_list_user);
+        assert_eq!(tags[0]["user_id"], data.tag_list_user);
         let id = tags[0]["id"].as_str().expect("the tag must carry its id");
         assert_eq!(id.len(), 36, "the tag id must be a UUID: {id}");
 
@@ -1830,7 +935,7 @@ mod logging {
         let lease = log_server();
         let base_url = lease.use_server(|server| server.base_url());
         // このリクエストの前の行数を記録し、行数が増えるまで待つ (専用のサーバーなので他のテストの行は混ざらない)。
-        let route_line = "\"route\":\"products_create\"";
+        let route_line = "\"route\":\"purchases_create\"";
         let before = lease.use_server(|server| {
             server
                 .output()
@@ -1838,12 +943,16 @@ mod logging {
                 .filter(|line| line.contains(route_line))
                 .count()
         });
-        // 商品名に印を付けて登録し、その値がログの行に現れないことを確認する。
-        let marker = "MARKER-PRODUCT-NAME-7f3a";
+        // 購入の商品名に印を付けて登録し、その値がログの行に現れないことを確認する (ADR-0022)。
+        let marker = "MARKER-PURCHASE-NAME-7f3a";
         let body = assert_status(
             ApiClient::new(&base_url, Some(&data.log_session)).post_json(
-                "/api/products",
-                &json!({ "name": marker, "producer": "MARKER-PRODUCER-7f3a" }),
+                "/api/purchases",
+                &json!({
+                    "name": marker,
+                    "purchased_on": D21,
+                    "producer": "MARKER-PRODUCER-7f3a",
+                }),
             ),
             200,
         );

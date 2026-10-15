@@ -7,8 +7,9 @@ use std::str::FromStr;
 
 use brew_book_frontend::router::{fallback_destination, route_name, AppRoute, Route, APP_ROUTES};
 
-/// 移行前の Flutter 版と同じ 18 経路 (名前、パターン)。名前はパターンと同じ。
-const FLUTTER_ROUTES: [(&str, &str); 18] = [
+/// 移行前の Flutter 版の 18 経路から商品の 3 経路を除いた 15 経路 (名前、パターン。ADR-0022)。
+/// 名前はパターンと同じ。
+const FLUTTER_ROUTES: [(&str, &str); 15] = [
     ("/login", "/login"),
     ("/register", "/register"),
     ("/", "/"),
@@ -20,9 +21,6 @@ const FLUTTER_ROUTES: [(&str, &str); 18] = [
     ("/purchases/new", "/purchases/new"),
     ("/purchases/:id", "/purchases/:id"),
     ("/purchases/:id/edit", "/purchases/:id/edit"),
-    ("/products", "/products"),
-    ("/products/new", "/products/new"),
-    ("/products/:id/edit", "/products/:id/edit"),
     ("/shops", "/shops"),
     ("/shops/new", "/shops/new"),
     ("/shops/:id/edit", "/shops/:id/edit"),
@@ -30,7 +28,7 @@ const FLUTTER_ROUTES: [(&str, &str); 18] = [
 ];
 
 #[test]
-fn the_ledger_has_the_same_18_routes_as_flutter() {
+fn the_ledger_has_the_15_routes_of_flutter_without_the_products() {
     assert_eq!(APP_ROUTES.len(), FLUTTER_ROUTES.len());
     for (index, (name, pattern)) in FLUTTER_ROUTES.iter().enumerate() {
         let route = APP_ROUTES[index];
@@ -98,12 +96,6 @@ fn a_dynamic_route_is_parsed_with_its_value() {
         }
     );
     assert_eq!(
-        Route::from_str("/products/abc/edit").expect("the route must be parsed"),
-        Route::ProductEdit {
-            id: "abc".to_string()
-        }
-    );
-    assert_eq!(
         Route::from_str("/shops/abc/edit").expect("the route must be parsed"),
         Route::ShopEdit {
             id: "abc".to_string()
@@ -157,9 +149,6 @@ fn every_route_has_the_pattern_as_its_data_route_name() {
         (Route::PurchaseNew {}, "/purchases/new"),
         (Route::PurchaseDetail { id: id() }, "/purchases/:id"),
         (Route::PurchaseEdit { id: id() }, "/purchases/:id/edit"),
-        (Route::Products {}, "/products"),
-        (Route::ProductNew {}, "/products/new"),
-        (Route::ProductEdit { id: id() }, "/products/:id/edit"),
         (Route::Shops {}, "/shops"),
         (Route::ShopNew {}, "/shops/new"),
         (Route::ShopEdit { id: id() }, "/shops/:id/edit"),
@@ -176,7 +165,7 @@ fn every_route_has_the_pattern_as_its_data_route_name() {
         assert_eq!(route_name(&route), expected, "the data-route of {route:?}");
         names.push(expected);
     }
-    // 台帳の 18 経路の名前が全て現れる。
+    // 台帳の 15 経路の名前が全て現れる。
     for route in APP_ROUTES {
         assert!(
             names.contains(&route.name),
