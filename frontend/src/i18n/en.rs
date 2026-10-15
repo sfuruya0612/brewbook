@@ -243,4 +243,5 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "This shop will be deleted. This cannot be undone.", // deleteShopConfirmMessage
     "This shop will be deleted. The shop will be cleared from {count} purchases. This cannot be undone.", // deleteShopConfirmMessageWithPurchases
     "Deleted.",                                   // recordDeletedMessage
+    "Register from this purchase",                // duplicatePurchaseLabel
 ];

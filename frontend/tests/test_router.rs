@@ -117,6 +117,35 @@ fn the_register_route_takes_the_token_from_the_query() {
     );
 }
 
+/// 購入の登録の経路は、引き継ぐ元の購入の ID をクエリから取る (issue 0058)。
+#[test]
+fn the_purchase_new_route_takes_the_source_purchase_from_the_query() {
+    assert_eq!(
+        Route::from_str("/purchases/new?from=p1").expect("the route must be parsed"),
+        Route::PurchaseNew {
+            from: Some("p1".to_string())
+        }
+    );
+    assert_eq!(
+        Route::from_str("/purchases/new").expect("the route must be parsed"),
+        Route::PurchaseNew { from: None }
+    );
+    // 値の無いクエリは空の文字になる (フォームの側で引き継ぐ元が無いものとして扱う)。
+    assert_eq!(
+        Route::from_str("/purchases/new?from=").expect("the route must be parsed"),
+        Route::PurchaseNew {
+            from: Some(String::new())
+        }
+    );
+    assert_eq!(
+        Route::PurchaseNew {
+            from: Some("p1".to_string())
+        }
+        .to_string(),
+        "/purchases/new?from=p1"
+    );
+}
+
 #[test]
 fn an_unknown_path_falls_back_to_the_home() {
     let route = Route::from_str("/unknown/path").expect("the fallback must accept any path");
@@ -146,7 +175,8 @@ fn every_route_has_the_pattern_as_its_data_route_name() {
         (Route::BrewDetail { id: id() }, "/brews/:id"),
         (Route::BrewEdit { id: id() }, "/brews/:id/edit"),
         (Route::Purchases {}, "/purchases"),
-        (Route::PurchaseNew {}, "/purchases/new"),
+        (Route::PurchaseNew { from: None }, "/purchases/new"),
+        (Route::PurchaseNew { from: Some(id()) }, "/purchases/new"),
         (Route::PurchaseDetail { id: id() }, "/purchases/:id"),
         (Route::PurchaseEdit { id: id() }, "/purchases/:id/edit"),
         (Route::Shops {}, "/shops"),

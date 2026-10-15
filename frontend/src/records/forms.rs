@@ -252,6 +252,51 @@ pub fn apply_purchase_suggestion(fields: PurchaseFormFields<'_>, suggestion: &Pu
     }
 }
 
+/// 過去の購入から新規のフォームへ引き継ぐ値 (FR-9、issue 0058)。
+///
+/// 商品の項目 (商品名、生産者、生産国、地域、精製方法、品種、Flavor Notes) と、
+/// 店と焙煎度を引き継ぐ。購入日 (当日にする)、焙煎日、写真、価格、重量、通貨は引き継がない
+/// (購入ごとに変わる値のため。issue 0058 の設計判断)。
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PurchasePrefill {
+    /// 商品名。
+    pub name: String,
+    /// 生産者。
+    pub producer: String,
+    /// 生産国。
+    pub origin: String,
+    /// 地域。
+    pub region: String,
+    /// 精製方法。
+    pub process: String,
+    /// 品種。
+    pub variety: String,
+    /// Flavor Notes のタグ (重複を除いたもの)。
+    pub flavor_notes: Vec<String>,
+    /// 店。
+    pub shop: Option<Shop>,
+    /// 焙煎度。
+    pub roast: String,
+}
+
+/// 過去の購入から引き継ぐ値を組む (issue 0058)。
+///
+/// None の項目は空の入力にする。Flavor Notes は [`dedup_tags`] で整える (保存時の検証と
+/// 同じ形にするため)。
+pub fn purchase_prefill(purchase: &Purchase) -> PurchasePrefill {
+    PurchasePrefill {
+        name: purchase.name.clone(),
+        producer: purchase.producer.clone().unwrap_or_default(),
+        origin: purchase.origin.clone().unwrap_or_default(),
+        region: purchase.region.clone().unwrap_or_default(),
+        process: purchase.process.clone().unwrap_or_default(),
+        variety: purchase.variety.clone().unwrap_or_default(),
+        flavor_notes: dedup_tags(&purchase.flavor_notes),
+        shop: purchase.shop.clone(),
+        roast: purchase.roast.clone().unwrap_or_default(),
+    }
+}
+
 /// 抽出のフォームの入力。
 pub struct BrewFormValues<'a> {
     /// 選択中の購入。必須 (FR-11)。

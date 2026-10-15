@@ -242,5 +242,6 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "店を削除",                             // deleteShopConfirmTitle
     "この店を削除します。取り消せません。", // deleteShopConfirmMessage
     "この店を削除します。購入 {count} 件の店の指定が外れます。取り消せません。", // deleteShopConfirmMessageWithPurchases
-    "削除しました。", // recordDeletedMessage
+    "削除しました。",       // recordDeletedMessage
+    "この購入をもとに登録", // duplicatePurchaseLabel
 ];

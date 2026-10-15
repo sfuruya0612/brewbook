@@ -114,6 +114,10 @@
   .row .fav .iconbtn { width: 36px; height: 36px; }
   .row .fav .icon { font-size: 22px; color: var(--ink-muted); }
   .row .fav.on .icon { color: var(--crema-ink); }
+  /* 星の左の操作 (この購入をもとに登録。issue 0058)。星と同じ大きさで置く。 */
+  .row .act { flex: none; display: flex; align-items: center; }
+  .row .act .iconbtn { width: 36px; height: 36px; }
+  .row .act .icon { font-size: 22px; color: var(--ink-muted); }
   .thumb { width: 44px; height: 44px; border-radius: var(--radius-sm); background: var(--paper-sunken); flex: none; display: flex; align-items: center; justify-content: center; color: var(--ink-faint); overflow: hidden; }
   .thumb svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; }
   .thumb .icon { font-size: 22px; color: var(--ink-faint); }

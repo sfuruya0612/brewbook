@@ -3,7 +3,8 @@
 //! 購入と抽出の登録と編集のフォームを実際に描き、日付は date input、時刻は time input で、
 //! 値が `YYYY-MM-DD` と `HH:MM` になることを検査する。ブラウザで動かすため `frontend:test-web`
 //! (wasm-bindgen-test) で実行する。表示の形式 (ブラウザの言語による yyyy/mm/dd などの見え方)
-//! は検査しない。内部の値の形式だけを確かめる。
+//! は検査しない。内部の値の形式だけを確かめる。過去の購入をもとにした登録のフォーム
+//! (引き継ぐ値、元の購入が無いとき、読み込みの失敗と再試行) も検査する (issue 0058)。
 
 #![cfg(target_arch = "wasm32")]
 
@@ -44,6 +45,9 @@ thread_local! {
 
     /// フォームを閉じたか (破棄の確認の検査に使う)。
     static FORM_CLOSED: Cell<bool> = const { Cell::new(false) };
+
+    /// フォームが保存できたか (引き継いだ登録の保存の検査に使う。issue 0058)。
+    static FORM_SAVED: Cell<bool> = const { Cell::new(false) };
 }
 
 /// フォームの依存を組む。API は thread_local の偽の送信の実装を使う。
@@ -77,6 +81,10 @@ fn forms_services() -> (RecordServices, AuthServices) {
 enum TestRoute {
     #[route("/purchases/new", PurchaseNewRoute)]
     PurchaseNew {},
+    #[route("/purchases/new-from", PurchaseNewFromRoute)]
+    PurchaseNewFrom {},
+    #[route("/purchases/new-from-empty", PurchaseNewFromEmptyRoute)]
+    PurchaseNewFromEmpty {},
     #[route("/purchases/:id/edit", PurchaseEditRoute)]
     PurchaseEdit { id: String },
     #[route("/brews/new", BrewNewRoute)]
@@ -91,6 +99,34 @@ enum TestRoute {
 fn PurchaseNewRoute() -> Element {
     rsx! {
         PurchaseForm { id: None }
+    }
+}
+
+/// 購入 `p1` をもとにした登録のフォーム (閉じる動きと保存の動きを受け取る。issue 0058)。
+#[component]
+fn PurchaseNewFromRoute() -> Element {
+    rsx! {
+        PurchaseForm {
+            id: None,
+            from: Some("p1".to_string()),
+            on_close: Some(EventHandler::new(|_| {
+                FORM_CLOSED.with(|cell| cell.set(true));
+            })),
+            on_saved: Some(EventHandler::new(|_| {
+                FORM_SAVED.with(|cell| cell.set(true));
+            })),
+        }
+    }
+}
+
+/// 空の ID をもとにした登録のフォーム (`/purchases/new?from=` の形。issue 0058)。
+#[component]
+fn PurchaseNewFromEmptyRoute() -> Element {
+    rsx! {
+        PurchaseForm {
+            id: None,
+            from: Some(String::new()),
+        }
     }
 }
 
@@ -237,6 +273,75 @@ fn purchase_json() -> serde_json::Value {
     })
 }
 
+/// 項目の揃った購入の応答 (引き継ぎの検査用。issue 0058)。
+fn filled_purchase_json() -> serde_json::Value {
+    json!({
+        "id": "p1",
+        "shop_id": "s1",
+        "name": "Ethiopia Guji",
+        "producer": "Producer",
+        "origin": "Ethiopia",
+        "region": "Guji",
+        "process": "Natural",
+        "variety": "Heirloom",
+        "flavor_notes": ["berry", "floral"],
+        "purchased_on": "2026-10-01",
+        "roast": "Medium",
+        "roast_date": "2026-09-20",
+        "price_amount": 1980,
+        "price_currency": "USD",
+        "weight_grams": 200,
+        "photo_key": "photos/p1",
+        "created_at": "2026-10-01T00:00:00.000Z",
+        "updated_at": "2026-10-01T00:00:00.000Z",
+        "favorited_at": "2026-10-02T00:00:00.000Z",
+        "shop": {
+            "id": "s1",
+            "name": "Shop One",
+            "address": null,
+            "created_at": "2026-10-01T00:00:00.000Z",
+            "updated_at": "2026-10-01T00:00:00.000Z",
+            "favorited_at": null,
+        },
+    })
+}
+
+/// 404 の応答 (元の購入が無いとき)。
+fn not_found_json() -> String {
+    json!({"error": {"code": "not_found", "message": "x"}}).to_string()
+}
+
+/// ラベルの欄の input を探す。ラベルの先頭の文字で比べる (必須の印は数えない)。
+fn field_input(root: &web_sys::Element, label: &str) -> web_sys::Element {
+    elements(root, ".form .field")
+        .into_iter()
+        .find(|field| {
+            field
+                .query_selector(".lbl")
+                .ok()
+                .flatten()
+                .and_then(|lbl| lbl.first_child())
+                .and_then(|text| text.text_content())
+                .is_some_and(|text| text.trim() == label)
+        })
+        .and_then(|field| field.query_selector("input").ok().flatten())
+        .unwrap_or_else(|| panic!("the field {label} must have an input"))
+}
+
+/// Flavor Notes のチップの文字 (先頭の文字だけ。削除のアイコンの文字は数えない)。
+fn chip_labels(root: &web_sys::Element) -> Vec<String> {
+    elements(root, ".form .chips .chip")
+        .iter()
+        .map(|chip| {
+            chip.first_child()
+                .and_then(|text| text.text_content())
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        })
+        .collect()
+}
+
 /// 抽出の応答 (`2026-10-01T00:30:00.000Z` は +540 分で 2026-10-01 09:30)。
 fn brew_json() -> serde_json::Value {
     json!({
@@ -274,6 +379,234 @@ async fn the_purchase_new_form_draws_the_dates_with_the_native_picker() {
     assert_eq!(count(&root, ".form .field .help"), 2);
     assert!(dates.iter().all(has_no_placeholder));
     assert_eq!(count(&root, "input[type='date'] ~ .icon"), 0);
+}
+
+/// 過去の購入をもとにした登録のフォームは、商品の項目と店と焙煎度を引き継ぎ、購入日は当日、
+/// 焙煎日、写真、価格、重量は空にする。引き継いだだけでは変更に数えず、確認なしで閉じる
+/// (issue 0058)。
+#[wasm_bindgen_test]
+async fn the_purchase_form_from_a_purchase_prefills_the_product_fields_the_shop_and_the_roast() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    FORM_CLOSED.with(|cell| cell.set(false));
+    let transport = Rc::new(FakeTransport::new(vec![FakeTransport::response(
+        200,
+        &filled_purchase_json().to_string(),
+    )]));
+    let root = mount_form("/purchases/new-from", transport.clone()).await;
+
+    // 元の購入を読む。題は登録のまま。
+    assert_eq!(transport.requests().len(), 1);
+    assert_eq!(transport.requests()[0].path, "/api/purchases/p1");
+    assert_eq!(transport.requests()[0].method.as_str(), "GET");
+    let title = select(&root, ".appbar .ttl")
+        .text_content()
+        .unwrap_or_default();
+    assert_eq!(title.trim(), "Log a purchase");
+    assert_eq!(count(&root, ".banner"), 0);
+
+    // 商品の項目と店と焙煎度を引き継ぐ。
+    assert_eq!(
+        input_value(&field_input(&root, "Product name")),
+        "Ethiopia Guji"
+    );
+    assert_eq!(input_value(&field_input(&root, "Producer")), "Producer");
+    assert_eq!(input_value(&field_input(&root, "Origin")), "Ethiopia");
+    assert_eq!(input_value(&field_input(&root, "Region")), "Guji");
+    assert_eq!(input_value(&field_input(&root, "Process")), "Natural");
+    assert_eq!(input_value(&field_input(&root, "Variety")), "Heirloom");
+    assert_eq!(
+        chip_labels(&root),
+        vec!["berry".to_string(), "floral".to_string()]
+    );
+    let shop = select(&root, ".form .picker .n")
+        .text_content()
+        .unwrap_or_default();
+    assert_eq!(shop.trim(), "Shop One");
+    assert_eq!(input_value(&field_input(&root, "Roast")), "Medium");
+
+    // 購入日は当日、焙煎日、価格、重量は空、写真は無い。通貨は既定値。
+    let dates = elements(&root, "input[type='date']");
+    assert_eq!(input_value(&dates[0]), "2026-09-25");
+    assert_eq!(input_value(&dates[1]), "");
+    assert_eq!(input_value(&field_input(&root, "Price")), "");
+    assert_eq!(input_value(&field_input(&root, "Weight")), "");
+    assert_eq!(count(&root, ".form .photo img"), 0);
+    let currency = select(&root, ".form select");
+    assert_eq!(
+        currency
+            .unchecked_ref::<web_sys::HtmlSelectElement>()
+            .value(),
+        "JPY"
+    );
+
+    // 引き継いだだけの状態は変更に数えず、確認を出さずに閉じる。
+    click(&select(&root, "button[aria-label='Cancel']"));
+    settle().await;
+    assert_eq!(count(&root, ".dialog"), 0);
+    assert!(
+        FORM_CLOSED.with(|cell| cell.get()),
+        "the prefilled form without changes must close"
+    );
+}
+
+/// 引き継いだ後に値を変えると、閉じる前に確認を出す (issue 0058、0054)。
+#[wasm_bindgen_test]
+async fn the_prefilled_purchase_form_confirms_before_discarding_the_changes() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    FORM_CLOSED.with(|cell| cell.set(false));
+    let transport = Rc::new(FakeTransport::new(vec![FakeTransport::response(
+        200,
+        &filled_purchase_json().to_string(),
+    )]));
+    let root = mount_form("/purchases/new-from", transport).await;
+    type_value(&field_input(&root, "Product name"), "Ethiopia Guji 2");
+    settle().await;
+    click(&select(&root, "button[aria-label='Cancel']"));
+    settle().await;
+    assert_eq!(count(&root, ".dialog"), 1);
+    assert!(!FORM_CLOSED.with(|cell| cell.get()));
+    click(&select(&root, ".dialog .acts .btn.primary"));
+    settle().await;
+    assert!(FORM_CLOSED.with(|cell| cell.get()));
+}
+
+/// 引き継いだ登録のフォームの保存は、新しい購入の登録 (POST) になり、元の購入は更新しない
+/// (issue 0058)。
+#[wasm_bindgen_test]
+async fn the_prefilled_purchase_form_saves_a_new_purchase() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    FORM_SAVED.with(|cell| cell.set(false));
+    let mut created = filled_purchase_json();
+    created["id"] = serde_json::json!("p2");
+    let transport = Rc::new(FakeTransport::new(vec![
+        FakeTransport::response(200, &filled_purchase_json().to_string()),
+        FakeTransport::response(201, &created.to_string()),
+    ]));
+    let root = mount_form("/purchases/new-from", transport.clone()).await;
+    assert_eq!(
+        input_value(&field_input(&root, "Product name")),
+        "Ethiopia Guji"
+    );
+    click(&select(&root, ".appbar .acts .btn.primary"));
+    settle().await;
+    let requests = transport.requests();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[1].method.as_str(), "POST");
+    assert_eq!(requests[1].path, "/api/purchases");
+    assert!(
+        FORM_SAVED.with(|cell| cell.get()),
+        "the prefilled form must report the save"
+    );
+}
+
+/// 空の ID (`/purchases/new?from=`) は引き継ぐ元が無いものとして扱い、何も読まずに空の
+/// 登録のフォームになる (issue 0058)。
+#[wasm_bindgen_test]
+async fn the_purchase_form_from_an_empty_source_is_empty_without_a_request() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let transport = Rc::new(FakeTransport::new(vec![]));
+    let root = mount_form("/purchases/new-from-empty", transport.clone()).await;
+    assert_eq!(transport.requests().len(), 0);
+    assert_eq!(count(&root, ".banner"), 0);
+    assert_eq!(count(&root, ".empty"), 0);
+    assert_eq!(count(&root, ".form"), 1);
+    let title = select(&root, ".appbar .ttl")
+        .text_content()
+        .unwrap_or_default();
+    assert_eq!(title.trim(), "Log a purchase");
+    assert_eq!(input_value(&field_input(&root, "Product name")), "");
+}
+
+/// 元の購入が無いとき (404) は空の登録のフォームになり、案内は出ない (issue 0058)。
+#[wasm_bindgen_test]
+async fn the_purchase_form_from_a_missing_purchase_is_empty_without_a_banner() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let transport = Rc::new(FakeTransport::new(vec![FakeTransport::response(
+        404,
+        &not_found_json(),
+    )]));
+    let root = mount_form("/purchases/new-from", transport.clone()).await;
+    assert_eq!(transport.requests().len(), 1);
+    assert_eq!(count(&root, ".banner"), 0);
+    assert_eq!(count(&root, ".form"), 1);
+    assert_eq!(input_value(&field_input(&root, "Product name")), "");
+    assert_eq!(chip_labels(&root), Vec::<String>::new());
+    let shop = select(&root, ".form .picker .n")
+        .text_content()
+        .unwrap_or_default();
+    assert_eq!(shop.trim(), "No shop");
+    let dates = elements(&root, "input[type='date']");
+    assert_eq!(input_value(&dates[0]), "2026-09-25");
+}
+
+/// 404 以外の失敗では空のフォームの上に再試行のバナーを出し、再試行で引き継ぐ
+/// (issue 0058)。
+#[wasm_bindgen_test]
+async fn the_purchase_form_from_a_failed_load_retries_and_then_prefills() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let transport = Rc::new(FakeTransport::new(vec![
+        FakeTransport::response(500, "{}"),
+        FakeTransport::response(200, &filled_purchase_json().to_string()),
+    ]));
+    let root = mount_form("/purchases/new-from", transport.clone()).await;
+    // 空のフォームと再試行のバナー。
+    assert_eq!(count(&root, ".form"), 1);
+    assert_eq!(count(&root, ".form .banner"), 1);
+    assert_eq!(count(&root, ".form .banner .act"), 1);
+    assert_eq!(input_value(&field_input(&root, "Product name")), "");
+
+    // 再試行で読み直し、引き継ぐ。
+    click(&select(&root, ".form .banner .act"));
+    settle().await;
+    assert_eq!(transport.requests().len(), 2);
+    assert_eq!(transport.requests()[1].path, "/api/purchases/p1");
+    assert_eq!(count(&root, ".banner"), 0);
+    assert_eq!(
+        input_value(&field_input(&root, "Product name")),
+        "Ethiopia Guji"
+    );
+    assert_eq!(input_value(&field_input(&root, "Roast")), "Medium");
+}
+
+/// 失敗の後に入力を始めていたら、再試行で読み直しても入力を上書きしない (issue 0058)。
+#[wasm_bindgen_test]
+async fn the_purchase_form_retry_does_not_overwrite_the_typed_values() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let transport = Rc::new(FakeTransport::new(vec![
+        FakeTransport::response(500, "{}"),
+        FakeTransport::response(200, &filled_purchase_json().to_string()),
+    ]));
+    let root = mount_form("/purchases/new-from", transport.clone()).await;
+    assert_eq!(count(&root, ".form .banner"), 1);
+    type_value(&field_input(&root, "Product name"), "Typed");
+    settle().await;
+
+    click(&select(&root, ".form .banner .act"));
+    settle().await;
+    assert_eq!(transport.requests().len(), 2);
+    assert_eq!(count(&root, ".banner"), 0);
+    assert_eq!(input_value(&field_input(&root, "Product name")), "Typed");
+    assert_eq!(input_value(&field_input(&root, "Producer")), "");
+    assert_eq!(chip_labels(&root), Vec::<String>::new());
+    assert_eq!(input_value(&field_input(&root, "Roast")), "");
+    // 入力は変更に数えたまま。
+    click(&select(&root, "button[aria-label='Cancel']"));
+    settle().await;
+    assert_eq!(count(&root, ".dialog"), 1);
 }
 
 /// 購入の編集のフォームが、読み込んだ購入日と焙煎日を date input で描く (完了条件 1、3)。

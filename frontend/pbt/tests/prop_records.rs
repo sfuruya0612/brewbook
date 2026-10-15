@@ -6,8 +6,8 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use brew_book_frontend::records::{
-    apply_purchase_suggestion, dedup_tags, PurchaseFormFields, PurchaseSuggestion, RecordError,
-    RecordList, SuggestionState,
+    apply_purchase_suggestion, dedup_tags, purchase_prefill, Purchase, PurchaseFormFields,
+    PurchaseSuggestion, RecordError, RecordList, Shop, SuggestionState,
 };
 use proptest::prelude::*;
 
@@ -35,7 +35,101 @@ fn op() -> impl Strategy<Value = Op> {
     ]
 }
 
+/// 任意の店。
+fn shop() -> impl Strategy<Value = Shop> {
+    (
+        "[a-z0-9]{1,8}",
+        "[a-z ]{1,12}",
+        prop::option::of("[a-z ]{0,12}"),
+    )
+        .prop_map(|(id, name, address)| Shop {
+            id,
+            name,
+            address,
+            created_at: "2026-10-01T00:00:00.000Z".to_string(),
+            updated_at: "2026-10-01T00:00:00.000Z".to_string(),
+            favorited_at: None,
+        })
+}
+
+/// 任意の購入 (引き継ぎの性質の確認に使う。issue 0058)。
+fn purchase() -> impl Strategy<Value = Purchase> {
+    let texts = (
+        "[a-z ]{1,12}",
+        prop::option::of("[a-z ]{0,8}"),
+        prop::option::of("[a-z ]{0,8}"),
+        prop::option::of("[a-z ]{0,8}"),
+        prop::option::of("[a-z ]{0,8}"),
+        prop::option::of("[a-z ]{0,8}"),
+        prop::collection::vec("[ a-z]{0,6}", 0..8),
+        prop::option::of("[a-z ]{0,8}"),
+    );
+    let numbers = (
+        prop::option::of("2026-[01][0-9]-[0-3][0-9]"),
+        prop::option::of(0..100_000_i64),
+        prop::option::of("[A-Z]{3}"),
+        prop::option::of(0..5_000_i64),
+        prop::option::of("[a-z/]{1,12}"),
+        prop::option::of(shop()),
+    );
+    (texts, numbers).prop_map(
+        |(
+            (name, producer, origin, region, process, variety, flavor_notes, roast),
+            (roast_date, price_amount, price_currency, weight_grams, photo_key, shop),
+        )| Purchase {
+            id: "p1".to_string(),
+            shop_id: shop.as_ref().map(|shop| shop.id.clone()),
+            name,
+            producer,
+            origin,
+            region,
+            process,
+            variety,
+            flavor_notes,
+            purchased_on: "2026-10-01".to_string(),
+            roast,
+            roast_date,
+            price_amount,
+            price_currency,
+            weight_grams,
+            photo_key,
+            created_at: "2026-10-01T00:00:00.000Z".to_string(),
+            updated_at: "2026-10-01T00:00:00.000Z".to_string(),
+            favorited_at: None,
+            shop,
+        },
+    )
+}
+
 proptest! {
+    /// 引き継ぐ値は商品の項目と店と焙煎度をそのまま写し (None は空)、Flavor Notes は
+    /// 正規化する。購入ごとに変わる項目 (購入日、焙煎日、価格、通貨、重量、写真) は
+    /// 引き継ぐ値に現れない (issue 0058)。
+    #[test]
+    fn the_prefill_copies_the_product_fields_and_nothing_else(source in purchase()) {
+        let prefill = purchase_prefill(&source);
+        prop_assert_eq!(&prefill.name, &source.name);
+        prop_assert_eq!(&prefill.producer, &source.producer.clone().unwrap_or_default());
+        prop_assert_eq!(&prefill.origin, &source.origin.clone().unwrap_or_default());
+        prop_assert_eq!(&prefill.region, &source.region.clone().unwrap_or_default());
+        prop_assert_eq!(&prefill.process, &source.process.clone().unwrap_or_default());
+        prop_assert_eq!(&prefill.variety, &source.variety.clone().unwrap_or_default());
+        prop_assert_eq!(&prefill.flavor_notes, &dedup_tags(&source.flavor_notes));
+        prop_assert_eq!(&prefill.shop, &source.shop);
+        prop_assert_eq!(&prefill.roast, &source.roast.clone().unwrap_or_default());
+        // 同じ商品の項目を持つ 2 つの購入は、購入ごとに変わる項目が違っても同じ値を引き継ぐ。
+        let mut other = source.clone();
+        other.id = "p2".to_string();
+        other.purchased_on = "2026-10-02".to_string();
+        other.roast_date = None;
+        other.price_amount = None;
+        other.price_currency = None;
+        other.weight_grams = None;
+        other.photo_key = None;
+        other.favorited_at = Some("2026-10-02T00:00:00.000Z".to_string());
+        prop_assert_eq!(purchase_prefill(&other), prefill);
+    }
+
     /// 読み込み中の要求は重ねない。
     #[test]
     fn a_page_is_never_requested_twice_at_once(ops in prop::collection::vec(op(), 0..40)) {

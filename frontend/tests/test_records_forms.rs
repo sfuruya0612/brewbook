@@ -5,9 +5,9 @@
 
 use brew_book_frontend::i18n::Key;
 use brew_book_frontend::records::{
-    apply_purchase_suggestion, dedup_tags, validate_brew_form, validate_purchase_form,
-    validate_shop_form, BrewFormValues, Purchase, PurchaseFormFields, PurchaseFormValues,
-    PurchaseSuggestion, SuggestionState,
+    apply_purchase_suggestion, dedup_tags, purchase_prefill, validate_brew_form,
+    validate_purchase_form, validate_shop_form, BrewFormValues, Purchase, PurchaseFormFields,
+    PurchaseFormValues, PurchasePrefill, PurchaseSuggestion, Shop, SuggestionState,
 };
 
 /// 購入を作る。
@@ -404,6 +404,68 @@ fn the_highlight_splits_the_matched_prefix() {
     assert_eq!(
         state.highlight("深煎り"),
         (String::new(), "深煎り".to_string())
+    );
+}
+
+/// 過去の購入から引き継ぐのは商品の項目と店と焙煎度だけで、購入日、焙煎日、価格、重量、
+/// 写真は引き継がない (issue 0058)。
+#[test]
+fn the_prefill_copies_the_product_fields_the_shop_and_the_roast_only() {
+    let shop = Shop {
+        id: "s1".to_string(),
+        name: "店".to_string(),
+        address: Some("住所".to_string()),
+        created_at: "2026-10-01T00:00:00.000Z".to_string(),
+        updated_at: "2026-10-01T00:00:00.000Z".to_string(),
+        favorited_at: None,
+    };
+    let mut source = purchase("p1");
+    source.shop_id = Some("s1".to_string());
+    source.producer = Some("生産者".to_string());
+    source.origin = Some("Ethiopia".to_string());
+    source.region = Some("Guji".to_string());
+    source.process = Some("Natural".to_string());
+    source.variety = Some("Heirloom".to_string());
+    source.flavor_notes = vec![
+        " berry ".to_string(),
+        String::new(),
+        "berry".to_string(),
+        "floral".to_string(),
+    ];
+    source.roast = Some("中煎り".to_string());
+    source.roast_date = Some("2026-09-20".to_string());
+    source.price_amount = Some(1980);
+    source.price_currency = Some("USD".to_string());
+    source.weight_grams = Some(200);
+    source.photo_key = Some("photos/p1".to_string());
+    source.favorited_at = Some("2026-10-02T00:00:00.000Z".to_string());
+    source.shop = Some(shop.clone());
+
+    assert_eq!(
+        purchase_prefill(&source),
+        PurchasePrefill {
+            name: "豆".to_string(),
+            producer: "生産者".to_string(),
+            origin: "Ethiopia".to_string(),
+            region: "Guji".to_string(),
+            process: "Natural".to_string(),
+            variety: "Heirloom".to_string(),
+            flavor_notes: vec!["berry".to_string(), "floral".to_string()],
+            shop: Some(shop),
+            roast: "中煎り".to_string(),
+        }
+    );
+}
+
+/// 項目の無い購入からの引き継ぎは、商品名だけを持ち、他は空 (issue 0058)。
+#[test]
+fn the_prefill_of_a_bare_purchase_has_only_the_name() {
+    assert_eq!(
+        purchase_prefill(&purchase("p1")),
+        PurchasePrefill {
+            name: "豆".to_string(),
+            ..PurchasePrefill::default()
+        }
     );
 }
 

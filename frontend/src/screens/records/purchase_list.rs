@@ -1,7 +1,8 @@
 //! 購入の一覧の画面 (FR-9)。
 //!
 //! 行から購入の詳細を開く。幅 840 px 以上では一覧と詳細を 2 段組にし、行を押すと右の面に
-//! 詳細やフォームを出す。
+//! 詳細やフォームを出す。行の星の左の操作と詳細の操作から、その購入をもとにした新規の
+//! フォームを開く (issue 0058)。
 
 use dioxus::prelude::*;
 use dioxus_router::navigator;
@@ -11,7 +12,7 @@ use crate::records::display::{purchase_price_text, purchase_row_subtitle, purcha
 use crate::records::{record_error_key, RecordServices, RecordsApi};
 use crate::router::Route;
 use crate::screens::ScreenAppBar;
-use crate::ui::{Fab, ListRow, ListThumb, NavigationRail, RowValue, WideLayout};
+use crate::ui::{Fab, ListRow, ListRowAction, ListThumb, NavigationRail, RowValue, WideLayout};
 
 use super::{
     clear_notice_after, mark_records_changed, rail_items, use_wide_layout, RecordListView,
@@ -45,7 +46,22 @@ pub fn PurchaseListScreen() -> Element {
     let wide = use_wide_layout();
     let mut selected = use_signal(|| None::<String>);
     let mut creating = use_signal(|| false);
+    // 右の面の新規のフォームが引き継ぐ元の購入の ID (issue 0058)。Fab からは None。
+    let mut creating_from = use_signal(|| None::<String>);
     let mut editing = use_signal(|| false);
+
+    // その購入をもとに新規のフォームを開く (issue 0058)。広い画面では右の面に出し、
+    // 狭い画面では登録の画面へ進む。
+    let duplicate = EventHandler::new(move |from: String| {
+        if wide() {
+            creating_from.set(Some(from));
+            creating.set(true);
+            selected.set(None);
+            editing.set(false);
+        } else {
+            let _ = navigator.push(Route::PurchaseNew { from: Some(from) });
+        }
+    });
 
     let load_services = services.clone();
     let load = RecordLoader::new(move |cursor, options| {
@@ -70,6 +86,7 @@ pub fn PurchaseListScreen() -> Element {
             purchase_price_text(&purchase).unwrap_or_else(|| t(Key::UnsetLabel).to_string());
         let id = purchase.id.clone();
         let click_id = id.clone();
+        let duplicate_id = id.clone();
         let selected_now = selected() == Some(id);
         let favorited = purchase.favorited_at.is_some();
         let favorite_id = purchase.id.clone();
@@ -88,6 +105,11 @@ pub fn PurchaseListScreen() -> Element {
                         div { class: "t-value", "{weight}" }
                         div { class: "t-caption muted", "{price}" }
                     }
+                }),
+                action: Some(ListRowAction {
+                    icon: "content_copy".to_string(),
+                    label: t(Key::DuplicatePurchaseLabel).to_string(),
+                    on_press: EventHandler::new(move |_| duplicate.call(duplicate_id.clone())),
                 }),
                 favorited,
                 on_favorite: Some(EventHandler::new(move |_| {
@@ -117,8 +139,14 @@ pub fn PurchaseListScreen() -> Element {
 
     let detail = if wide() {
         if creating() {
+            // 引き継ぐ元の購入が変わったらフォームを作り直し、前の購入の値を残さない
+            // (Fab からの空の新規も同じ。issue 0058)。
+            let from = creating_from();
+            let form_key = from.clone().unwrap_or_default();
             Some(rsx! {
                 PurchaseForm {
+                    key: "{form_key}",
+                    from,
                     embedded: true,
                     on_close: EventHandler::new(move |_| creating.set(false)),
                     on_saved: EventHandler::new(move |_| creating.set(false)),
@@ -137,9 +165,10 @@ pub fn PurchaseListScreen() -> Element {
             } else {
                 Some(rsx! {
                     PurchaseDetail {
-                        id,
+                        id: id.clone(),
                         embedded: true,
                         on_edit: EventHandler::new(move |_| editing.set(true)),
+                        on_duplicate: EventHandler::new(move |_| duplicate.call(id.clone())),
                         on_deleted: EventHandler::new(move |_| selected.set(None)),
                     }
                 })
@@ -166,11 +195,12 @@ pub fn PurchaseListScreen() -> Element {
                 icon: Some("add".to_string()),
                 onclick: move |_| {
                     if wide() {
+                        creating_from.set(None);
                         creating.set(true);
                         selected.set(None);
                         editing.set(false);
                     } else {
-                        let _ = navigator.push(Route::PurchaseNew {});
+                        let _ = navigator.push(Route::PurchaseNew { from: None });
                     }
                 },
             }

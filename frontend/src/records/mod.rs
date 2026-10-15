@@ -36,9 +36,9 @@ pub use display::{
     rating_text, shop_row_subtitle,
 };
 pub use forms::{
-    apply_purchase_suggestion, dedup_tags, optional_text, save_target, validate_brew_form,
-    validate_purchase_form, validate_shop_form, BrewFormErrors, BrewFormValues, PurchaseFormErrors,
-    PurchaseFormFields, PurchaseFormValues, SaveTarget,
+    apply_purchase_suggestion, dedup_tags, optional_text, purchase_prefill, save_target,
+    validate_brew_form, validate_purchase_form, validate_shop_form, BrewFormErrors, BrewFormValues,
+    PurchaseFormErrors, PurchaseFormFields, PurchaseFormValues, PurchasePrefill, SaveTarget,
 };
 pub use inputs::{BrewInput, PurchaseInput, ShopInput};
 pub use list::{PageRequest, RecordList, LOAD_MORE_THRESHOLD};

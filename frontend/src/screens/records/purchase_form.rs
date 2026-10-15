@@ -11,10 +11,11 @@ use dioxus_router::navigator;
 use crate::i18n::{current_language, t, Key};
 use crate::records::values::format_day;
 use crate::records::{
-    apply_purchase_suggestion, currency_option_label, currency_options, save_target,
-    validate_purchase_form, ConvertedImage, PurchaseFormErrors, PurchaseFormFields,
-    PurchaseFormValues, RecordError, RecordServices, RecordsApi, SaveTarget, Shop,
-    SuggestionTarget, DEFAULT_CURRENCY, MAX_PHOTO_BYTES, MAX_PHOTO_LONG_SIDE,
+    apply_purchase_suggestion, currency_option_label, currency_options, purchase_prefill,
+    record_error_not_found, save_target, validate_purchase_form, ConvertedImage,
+    PurchaseFormErrors, PurchaseFormFields, PurchaseFormValues, RecordError, RecordServices,
+    RecordsApi, SaveTarget, Shop, SuggestionTarget, DEFAULT_CURRENCY, MAX_PHOTO_BYTES,
+    MAX_PHOTO_LONG_SIDE,
 };
 use crate::screens::ScreenAppBar;
 use crate::ui::{
@@ -27,11 +28,11 @@ use super::{
     RecordLoader, RecordPickerSheet, SuggestionField,
 };
 
-/// 購入の登録 (FR-9)。
+/// 購入の登録 (FR-9)。`from` は引き継ぐ元の購入の ID (`/purchases/new?from=<id>`。issue 0058)。
 #[component]
-pub fn PurchaseFormScreen() -> Element {
+pub fn PurchaseFormScreen(from: Option<String>) -> Element {
     rsx! {
-        PurchaseForm {}
+        PurchaseForm { from }
     }
 }
 
@@ -50,6 +51,11 @@ pub fn PurchaseForm(
     #[props(default)]
     id: Option<String>,
 
+    /// 新規の登録で引き継ぐ元の購入の ID (issue 0058)。商品の項目と店と焙煎度を引き継ぎ、
+    /// 購入日は当日、焙煎日、写真、価格、重量は空のままにする。`id` があるときは使わない。
+    #[props(default)]
+    from: Option<String>,
+
     /// 2 段組の右の面に出すか。
     #[props(default = false)]
     embedded: bool,
@@ -66,6 +72,9 @@ pub fn PurchaseForm(
     let mut revision = use_context::<Signal<u64>>();
     let mut notice = use_context::<Signal<Option<String>>>();
     let navigator = navigator();
+
+    // `/purchases/new?from=` のように空の ID は引き継ぐ元が無いものとして扱う (issue 0058)。
+    let from = from.filter(|value| !value.is_empty());
 
     // 購入日は端末のタイムゾーンでの当日を既定値にする (FR-9)。
     let today = services.clock.now().date();
@@ -91,7 +100,7 @@ pub fn PurchaseForm(
     let mut errors = use_signal(PurchaseFormErrors::default);
     let mut save_error = use_signal(|| None::<RecordError>);
     let mut load_error = use_signal(|| None::<RecordError>);
-    let mut loading = use_signal(|| id.is_some());
+    let mut loading = use_signal(|| id.is_some() || from.is_some());
     let mut busy = use_signal(|| false);
     let mut picker_open = use_signal(|| false);
     let mut suggesting = use_signal(|| false);
@@ -101,14 +110,47 @@ pub fn PurchaseForm(
     let mut dirty = use_signal(|| false);
     let mut discard_open = use_signal(|| false);
 
-    // 編集のために現在の値を読み込む。再試行でも同じ処理を呼ぶ。
+    // 編集のために現在の値を読み込む。再試行でも同じ処理を呼ぶ。新規の登録で `from` が
+    // あるときは、元の購入を読んで引き継ぐ値を入れる (issue 0058)。
     let reload_services = services.clone();
     let reload_id = id.clone();
+    let reload_from = from.clone();
     let reload = EventHandler::new(move |_| {
+        let api = RecordsApi::new(reload_services.api.clone());
         let Some(id) = reload_id.clone() else {
+            let Some(from_id) = reload_from.clone() else {
+                return;
+            };
+            spawn(async move {
+                // 入力を始めた後の再試行は、入力を隠さず、引き継ぐ値も入れない (issue 0058)。
+                let untouched = !dirty();
+                loading.set(untouched);
+                load_error.set(None);
+                match api.purchase(&from_id).await {
+                    Ok(purchase) => {
+                        if untouched {
+                            let prefill = purchase_prefill(&purchase);
+                            name.set(prefill.name);
+                            producer.set(prefill.producer);
+                            origin.set(prefill.origin);
+                            region.set(prefill.region);
+                            process.set(prefill.process);
+                            variety.set(prefill.variety);
+                            tags.set(prefill.flavor_notes);
+                            shop.set(prefill.shop);
+                            roast.set(prefill.roast);
+                            // 引き継いだだけの状態は変更に数えない (issue 0058)。
+                            dirty.set(false);
+                        }
+                    }
+                    // 元の購入が既に無いときは空のフォームにし、案内は出さない (issue 0058)。
+                    Err(failure) if record_error_not_found(&failure) => {}
+                    Err(failure) => load_error.set(Some(failure)),
+                }
+                loading.set(false);
+            });
             return;
         };
-        let api = RecordsApi::new(reload_services.api.clone());
         spawn(async move {
             loading.set(true);
             load_error.set(None);
@@ -424,7 +466,13 @@ pub fn PurchaseForm(
     let retry = EventHandler::new(move |_| reload.call(()));
     let retry_save = EventHandler::new(move |_| save.call(()));
     let failure = save_error();
-    let load_failure = load_error();
+    // 編集の読み込みの失敗はフォームの代わりに出し、引き継ぎの読み込みの失敗は空のフォームの
+    // 上に出す (issue 0058)。
+    let (load_failure, prefill_failure) = match load_error() {
+        Some(failure) if id.is_some() => (Some(failure), None),
+        Some(failure) => (None, Some(failure)),
+        None => (None, None),
+    };
     let photo_failure = photo_error();
     let language = current_language();
     let uploaded = !remove_photo() && photo_key().is_some();
@@ -465,6 +513,9 @@ pub fn PurchaseForm(
                     }
                 } else {
                     div { class: "form",
+                        if let Some(failure) = prefill_failure {
+                            {retryable_banner(&failure, retry)}
+                        }
                         if errors().has_errors() {
                             Banner { message: t(Key::ErrorValidation).to_string() }
                         }

@@ -1,7 +1,8 @@
 //! 購入の詳細の画面 (FR-9、FR-10、UC-6)。
 //!
 //! 店をたどれるようにし、写真の差し替えと削除ができる (FR-10)。幅 840 px 以上の
-//! 2 段組では `embedded` を true にし、右の面に出す。
+//! 2 段組では `embedded` を true にし、右の面に出す。帯の右端の操作はお気に入り、
+//! この購入をもとに登録 (issue 0058)、編集、削除の順。
 
 use dioxus::prelude::*;
 use dioxus_router::navigator;
@@ -45,6 +46,11 @@ pub fn PurchaseDetail(
     /// 編集を開く動き。無いときは編集の経路を上に積む。
     #[props(default)]
     on_edit: Option<EventHandler<()>>,
+
+    /// この購入をもとに新規のフォームを開く動き (issue 0058)。無いときは登録の経路
+    /// (`/purchases/new?from=<id>`) を上に積む。
+    #[props(default)]
+    on_duplicate: Option<EventHandler<()>>,
 
     /// 削除できたときの動き。無いときは前の画面へ戻る。
     #[props(default)]
@@ -236,6 +242,7 @@ pub fn PurchaseDetail(
             }
         });
     });
+    let duplicate_id = id.clone();
     let actions = current.as_ref().map(|_| {
         let favorite_name = if favorited { "star" } else { "star_border" }.to_string();
         let favorite_label = t(if favorited {
@@ -249,6 +256,18 @@ pub fn PurchaseDetail(
                 name: favorite_name,
                 label: favorite_label,
                 onclick: move |_| favorite.call(()),
+            }
+            IconButton {
+                name: "content_copy".to_string(),
+                label: t(Key::DuplicatePurchaseLabel).to_string(),
+                onclick: move |_| match on_duplicate {
+                    Some(handler) => handler.call(()),
+                    None => {
+                        let _ = navigator.push(Route::PurchaseNew {
+                            from: Some(duplicate_id.clone()),
+                        });
+                    }
+                },
             }
             IconButton {
                 name: "edit".to_string(),

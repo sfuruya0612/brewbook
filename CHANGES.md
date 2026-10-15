@@ -86,6 +86,10 @@
   - @sfuruya0612
 - [ADD] 店、商品、購入、抽出の記録を削除できるようにする
   - @sfuruya0612
+- [ADD] 購入の一覧と詳細から、過去の購入の商品の項目と店と焙煎度を引き継いだ新しい購入を登録できるようにする
+  - @sfuruya0612
+- [CHANGE] 商品を購入に統合し、購入が商品名、Producer、Origin、Region、Process、Variety、Flavor Notes を直接持つようにする
+  - @sfuruya0612
 
 ### misc
 
@@ -134,6 +138,4 @@
 - [ADD] main への push で本番へ自動デプロイし、デプロイの直前に D1 のマイグレーションを適用する Workers Builds の設定手順を追加する
   - @sfuruya0612
 - [FIX] Workers Builds のビルドで wrangler をインストールできるように、mise.toml に node を追加する
-  - @sfuruya0612
-- [CHANGE] 商品を購入に統合し、購入が商品名、Producer、Origin、Region、Process、Variety、Flavor Notes を直接持つようにする
   - @sfuruya0612

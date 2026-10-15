@@ -301,6 +301,34 @@ impl Seed {
         )
     }
 
+    /// 購入の行を入れる。Roast だけを指定し、他の商品の項目は NULL にする (過去の購入をもとに
+    /// した登録の E2E の下ごしらえに使う。issue 0058)。
+    // 下ごしらえの引数はテーブルの列をそのまま受ける (テストが列を選んで投入できるようにする)。
+    #[allow(clippy::too_many_arguments)]
+    pub fn purchase_with_roast(
+        &mut self,
+        user_id: &str,
+        name: &str,
+        shop_id: Option<&str>,
+        purchased_on: &str,
+        roast: &str,
+        created_at: &str,
+        updated_at: &str,
+    ) -> SeededPurchase {
+        self.purchase_with_texts(
+            user_id,
+            name,
+            shop_id,
+            purchased_on,
+            PurchaseTexts {
+                roast: Some(roast),
+                ..PurchaseTexts::default()
+            },
+            created_at,
+            updated_at,
+        )
+    }
+
     /// 購入の行を入れる。Producer、Origin、Region、Process、Variety、Roast を指定できる
     /// (サジェストの下ごしらえに使う)。
     // 下ごしらえの引数はテーブルの列をそのまま受ける (テストが列を選んで投入できるようにする)。

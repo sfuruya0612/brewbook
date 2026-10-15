@@ -9,6 +9,19 @@ use dioxus::prelude::*;
 use crate::i18n::{t, Key};
 use crate::ui::{is_activation_key, Icon, IconButton};
 
+/// 一覧の行の操作 (星の左のアイコンボタン。issue 0058)。
+///
+/// 行を押す動きとは別の操作 (この購入をもとに登録など) を 1 つ置く。押しても行は押されない。
+#[derive(Clone, PartialEq)]
+pub struct ListRowAction {
+    /// アイコンの名前 (Material Icons Outlined のリガチャ)。
+    pub icon: String,
+    /// 読み上げ用の名前 (`aria-label`)。
+    pub label: String,
+    /// 押したときの動き。
+    pub on_press: EventHandler<()>,
+}
+
 /// 一覧の行。
 #[component]
 pub fn ListRow(
@@ -23,6 +36,9 @@ pub fn ListRow(
     /// 右端の数値か評価。
     #[props(default)]
     trailing: Option<Element>,
+    /// 星の左の操作。無いときは置かない (issue 0058)。
+    #[props(default)]
+    action: Option<ListRowAction>,
     /// お気に入りか。星の見た目を変える (FR-21)。
     #[props(default = false)]
     favorited: bool,
@@ -42,6 +58,19 @@ pub fn ListRow(
     }
     let class = classes.join(" ");
     let interactive = on_click.is_some();
+    let action = action.map(|action| {
+        let handler = action.on_press;
+        rsx! {
+            div { class: "act",
+                IconButton {
+                    name: action.icon,
+                    label: action.label,
+                    stop_propagation: true,
+                    onclick: move |_| handler.call(()),
+                }
+            }
+        }
+    });
     let favorite = on_favorite.map(|handler| {
         let class = if favorited { "fav on" } else { "fav" };
         let name = if favorited { "star" } else { "star_border" }.to_string();
@@ -90,6 +119,7 @@ pub fn ListRow(
             if trailing.is_some() {
                 div { class: "side", {trailing} }
             }
+            {action}
             {favorite}
         }
     }

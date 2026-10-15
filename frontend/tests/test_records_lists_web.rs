@@ -1,8 +1,9 @@
 //! 一覧の並び替えとお気に入りのブラウザテスト (0051、FR-20、FR-21)。
 //!
 //! 3 つの一覧のツールバーと、行の星と、抽出と購入の詳細と、店の編集の星を実際に描き、
-//! 操作で送るクエリと経路、行の押下 (詳細を開く) との分離を検査する。ブラウザで動かすため
-//! `frontend:test-web` (wasm-bindgen-test) で実行する。
+//! 操作で送るクエリと経路、行の押下 (詳細を開く) との分離を検査する。購入の行と詳細の
+//! 「この購入をもとに登録」が 2 段組の右の面に引き継いだフォームを出すことも検査する
+//! (issue 0058)。ブラウザで動かすため `frontend:test-web` (wasm-bindgen-test) で実行する。
 
 #![cfg(target_arch = "wasm32")]
 
@@ -305,6 +306,11 @@ fn elements(root: &web_sys::Element, selector: &str) -> Vec<web_sys::Element> {
         }
     }
     found
+}
+
+/// input の値を読む。
+fn input_value(element: &web_sys::Element) -> String {
+    element.unchecked_ref::<web_sys::HtmlInputElement>().value()
 }
 
 /// キーを押す (キーダウンだけを送る。実際のブラウザの既定の動作は合成のイベントでは起きない)。
@@ -716,18 +722,199 @@ async fn the_detail_screens_have_the_star() {
         Some("Remove from favorites")
     );
 
-    // 購入の詳細: 星と編集の 2 つ (評価の推移の取得も待つ)。
+    // 購入の詳細: 星、この購入をもとに登録、編集、削除の 4 つ (評価の推移の取得も待つ。
+    // issue 0058)。
     let (root, _) = mount_detail(
         "/purchases/b1",
         vec![response(&purchase), response(&json!({"ratings": []}))],
     )
     .await;
-    assert_eq!(count(&root, ".appbar .acts > .iconbtn"), 3);
+    let icons = elements(&root, ".appbar .acts > .iconbtn");
     assert_eq!(
-        select(&root, ".appbar .acts > .iconbtn")
+        icons
+            .iter()
+            .map(|icon| icon.get_attribute("aria-label").unwrap_or_default())
+            .collect::<Vec<_>>(),
+        vec![
+            "Add to favorites".to_string(),
+            "Register from this purchase".to_string(),
+            "Edit".to_string(),
+            "Delete".to_string(),
+        ]
+    );
+}
+
+/// 購入の行だけに「この購入をもとに登録」の操作があり、抽出と店の行には無い (issue 0058)。
+#[wasm_bindgen_test]
+async fn only_the_purchase_rows_have_the_duplicate_action() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let purchase = purchase_json("b1", "Beans", None);
+    let (root, _) = mount_at(
+        "/purchases",
+        vec![response(
+            &json!({"purchases": [purchase.clone()], "next_cursor": null}),
+        )],
+    )
+    .await;
+    assert_eq!(count(&root, ".row .act .iconbtn"), 1);
+    assert_eq!(
+        select(&root, ".row .act .iconbtn")
             .get_attribute("aria-label")
             .as_deref(),
-        Some("Add to favorites")
+        Some("Register from this purchase")
+    );
+    // 操作は星の左に置く。
+    let side = elements(&root, ".row > div");
+    let classes: Vec<String> = side.iter().map(|element| element.class_name()).collect();
+    let act = classes.iter().position(|class| class == "act");
+    let fav = classes.iter().position(|class| class.starts_with("fav"));
+    assert!(act < fav, "{classes:?}");
+
+    for (path, body) in [
+        (
+            "/",
+            json!({"brews": [brew_json("w1", &purchase, None)], "next_cursor": null}),
+        ),
+        (
+            "/shops",
+            json!({"shops": [shop_json("s1", "Shop", None)], "next_cursor": null}),
+        ),
+    ] {
+        let (root, _) = mount_at(path, vec![response(&body)]).await;
+        assert_eq!(count(&root, ".row"), 1, "{path}");
+        assert_eq!(count(&root, ".row .act"), 0, "{path}");
+    }
+}
+
+/// 2 段組では、行の「この購入をもとに登録」が右の面に引き継いだ登録のフォームを出し、
+/// 詳細は開かない (issue 0058)。
+#[wasm_bindgen_test]
+async fn the_row_action_opens_the_prefilled_form_in_the_wide_pane() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let mut purchase = purchase_json("b1", "Beans", None);
+    purchase["roast"] = json!("Medium");
+    purchase["flavor_notes"] = json!(["berry"]);
+    let (root, transport) = mount_at(
+        "/purchases",
+        vec![
+            response(&json!({"purchases": [purchase.clone()], "next_cursor": null})),
+            // 右の面のフォームが元の購入を読む。
+            response(&purchase),
+            // 操作が行の押下を発火させた場合に、詳細の読み込みで止まらないようにする。
+            response(&purchase),
+            response(&json!({"ratings": []})),
+        ],
+    )
+    .await;
+    click(&select(&root, ".row .act .iconbtn"));
+    settle().await;
+    // 右の面は登録のフォーム (詳細ではない)。元の購入を 1 回読む。
+    assert_eq!(count(&root, ".wide-detail .detail"), 0);
+    assert_eq!(count(&root, ".wide-detail .form"), 1);
+    assert_eq!(count(&root, ".opened-detail"), 0);
+    assert_eq!(transport.requests().len(), 2);
+    assert_eq!(transport.requests()[1].path, "/api/purchases/b1");
+    let title = select(&root, ".wide-detail .appbar .ttl")
+        .text_content()
+        .unwrap_or_default();
+    assert_eq!(title.trim(), "Log a purchase");
+    assert_eq!(
+        input_value(&select(&root, ".wide-detail .form input.in")),
+        "Beans"
+    );
+    assert_eq!(count(&root, ".wide-detail .form .chips .chip"), 1);
+    // 一覧の行は選択されない。
+    assert_eq!(count(&root, ".row.selected"), 0);
+}
+
+/// 2 段組で、引き継いだ登録のフォームを開いたまま別の行の操作を押すと、その購入の値で
+/// フォームを作り直す。Fab を押すと空の新規のフォームになる (issue 0058)。
+#[wasm_bindgen_test]
+async fn the_row_action_rebuilds_the_wide_form_for_another_purchase() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let first = purchase_json("b1", "Beans", None);
+    let second = purchase_json("b2", "Other beans", None);
+    let (root, transport) = mount_at(
+        "/purchases",
+        vec![
+            response(&json!({"purchases": [first.clone(), second.clone()], "next_cursor": null})),
+            // 1 つ目の行の操作で元の購入を読む。
+            response(&first),
+            // 2 つ目の行の操作で元の購入を読む。
+            response(&second),
+        ],
+    )
+    .await;
+    let actions = elements(&root, ".row .act .iconbtn");
+    assert_eq!(actions.len(), 2);
+    click(&actions[0]);
+    settle().await;
+    assert_eq!(
+        input_value(&select(&root, ".wide-detail .form input.in")),
+        "Beans"
+    );
+    click(&actions[1]);
+    settle().await;
+    assert_eq!(transport.requests().len(), 3);
+    assert_eq!(transport.requests()[2].path, "/api/purchases/b2");
+    assert_eq!(
+        input_value(&select(&root, ".wide-detail .form input.in")),
+        "Other beans"
+    );
+    // Fab は空の新規のフォームにする (元の購入は読まない)。
+    click(&select(&root, ".fab"));
+    settle().await;
+    assert_eq!(count(&root, ".wide-detail .form"), 1);
+    assert_eq!(transport.requests().len(), 3);
+    assert_eq!(
+        input_value(&select(&root, ".wide-detail .form input.in")),
+        ""
+    );
+}
+
+/// 2 段組では、詳細の「この購入をもとに登録」が右の面を引き継いだ登録のフォームに替える
+/// (issue 0058)。
+#[wasm_bindgen_test]
+async fn the_detail_action_replaces_the_wide_pane_with_the_prefilled_form() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let purchase = purchase_json("b1", "Beans", None);
+    let (root, transport) = mount_at(
+        "/purchases",
+        vec![
+            response(&json!({"purchases": [purchase.clone()], "next_cursor": null})),
+            response(&purchase),
+            response(&json!({"ratings": []})),
+            // 右の面のフォームが元の購入を読む。
+            response(&purchase),
+        ],
+    )
+    .await;
+    click(&select(&root, ".row"));
+    settle().await;
+    assert_eq!(count(&root, ".wide-detail .detail"), 1);
+    let icons = elements(&root, ".wide-detail .appbar .acts > .iconbtn");
+    assert_eq!(icons.len(), 4);
+    assert_eq!(
+        icons[1].get_attribute("aria-label").as_deref(),
+        Some("Register from this purchase")
+    );
+    click(&icons[1]);
+    settle().await;
+    assert_eq!(count(&root, ".wide-detail .detail"), 0);
+    assert_eq!(count(&root, ".wide-detail .form"), 1);
+    assert_eq!(transport.requests().len(), 4);
+    assert_eq!(transport.requests()[3].path, "/api/purchases/b1");
+    assert_eq!(
+        input_value(&select(&root, ".wide-detail .form input.in")),
+        "Beans"
     );
 }
 
@@ -808,8 +995,8 @@ async fn the_purchase_delete_shows_the_brew_count_and_deletes_on_the_confirmatio
     )
     .await;
     let icons = elements(&root, ".appbar .acts > .iconbtn");
-    assert_eq!(icons.len(), 3);
-    click(&icons[2]);
+    assert_eq!(icons.len(), 4);
+    click(&icons[3]);
     settle().await;
     // 削除の影響を引いてから、件数入りの確認を出す。
     assert_eq!(transport.requests().len(), 3);

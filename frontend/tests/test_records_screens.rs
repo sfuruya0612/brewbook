@@ -15,7 +15,7 @@ use brew_book_frontend::screens::records::{
     purchase_detail::{PurchaseDetailScreen, PurchaseDetailScreenProps},
     purchase_form::{
         PurchaseEditScreen, PurchaseEditScreenProps, PurchaseForm, PurchaseFormProps,
-        PurchaseFormScreen,
+        PurchaseFormScreen, PurchaseFormScreenProps,
     },
     purchase_list::PurchaseListScreen,
     shop_form::{ShopEditScreen, ShopEditScreenProps, ShopForm, ShopFormProps, ShopFormScreen},
@@ -45,7 +45,7 @@ fn the_record_screens_have_the_expected_props() {
     let _: fn(BrewEditScreenProps) -> Element = BrewEditScreen;
     let _: fn(BrewDetailScreenProps) -> Element = BrewDetailScreen;
     let _: fn() -> Element = PurchaseListScreen;
-    let _: fn() -> Element = PurchaseFormScreen;
+    let _: fn(PurchaseFormScreenProps) -> Element = PurchaseFormScreen;
     let _: fn(PurchaseEditScreenProps) -> Element = PurchaseEditScreen;
     let _: fn(PurchaseDetailScreenProps) -> Element = PurchaseDetailScreen;
     let _: fn() -> Element = ShopListScreen;
@@ -89,11 +89,17 @@ fn the_record_screens_have_the_expected_props() {
     assert!(shop_form.id.is_none());
     let purchase_form = PurchaseFormProps {
         id: None,
+        from: None,
         embedded: false,
         on_close: None,
         on_saved: None,
     };
     assert!(purchase_form.id.is_none());
+    // 登録の画面は引き継ぐ元の購入の ID をクエリから受ける (issue 0058)。
+    let purchase_new = PurchaseFormScreenProps {
+        from: Some("p1".to_string()),
+    };
+    assert_eq!(purchase_new.from.as_deref(), Some("p1"));
     let purchase_detail = PurchaseDetailScreenProps {
         id: "b1".to_string(),
     };
@@ -109,7 +115,7 @@ fn the_record_routes_are_wired_to_the_record_screens() {
         ("/brews/:id", "BrewDetailScreen"),
         ("/brews/:id/edit", "BrewEditScreen"),
         ("/purchases", "PurchaseListScreen"),
-        ("/purchases/new", "PurchaseFormScreen"),
+        ("/purchases/new?:from", "PurchaseFormScreen"),
         ("/purchases/:id", "PurchaseDetailScreen"),
         ("/purchases/:id/edit", "PurchaseEditScreen"),
         ("/shops", "ShopListScreen"),

@@ -36,6 +36,10 @@ const CREATED: &str = "2026-09-01T00:00:00.000Z";
 const FUTURE: &str = "2099-01-01T00:00:00.000Z";
 /// 下ごしらえした購入の商品名 (0057)。
 const PURCHASE_NAME: &str = "E2E Beans";
+/// 下ごしらえした購入の焙煎度 (過去の購入をもとにした登録の確認に使う。issue 0058)。
+const PURCHASE_ROAST: &str = "E2E Medium";
+/// 下ごしらえした店の名前。
+const SHOP_NAME: &str = "E2E の店";
 /// 推測の差し替えが返す商品名と生産者とタグ (FR-19、0057)。
 const SUGGESTED_NAME: &str = "E2E Suggested Beans";
 const SUGGESTED_PRODUCER: &str = "E2E Suggested Producer";
@@ -61,12 +65,13 @@ fn wrangler_web_routes_registration_login_and_brew_save_ok() {
     let user = seed::user_id(1);
     seed.user(&user, "E2E の利用者", CREATED);
     let token = seed.registration_token(&user, FUTURE);
-    let shop = seed.shop(&user, "E2E の店", None, CREATED, CREATED);
-    let purchase = seed.purchase(
+    let shop = seed.shop(&user, SHOP_NAME, None, CREATED, CREATED);
+    let purchase = seed.purchase_with_roast(
         &user,
         PURCHASE_NAME,
         Some(&shop.id),
         PURCHASED_ON,
+        PURCHASE_ROAST,
         CREATED,
         CREATED,
     );
@@ -280,6 +285,11 @@ async fn run_steps(
     // 購入の登録で写真を選ぶと、推測した商品の項目がフォームに入ることを確かめる (FR-19、0057)。
     suggestion_fills_the_form(browser).await?;
     println!("suggestion: the suggested name, producer, and tag are filled in the purchase form");
+
+    // 幅 390 px では、購入の行の「この購入をもとに登録」が引き継いだ登録の画面へ進むことを
+    // 確かめる (issue 0058)。
+    duplicate_from_the_list_and_the_detail(browser, fixture).await?;
+    println!("duplicate: the row action opens the prefilled purchase form");
 
     // 設定の画面のログアウトでも、ログイン画面へ戻ることを確かめる (0043)。
     logout_from_settings(browser).await?;
@@ -866,6 +876,85 @@ async fn suggestion_fills_the_form(browser: &E2eBrowser) -> Result<(), String> {
     wait_input_value(browser, "Product name", SUGGESTED_NAME).await?;
     wait_input_value(browser, "Producer", SUGGESTED_PRODUCER).await?;
     browser.wait_text(SUGGESTED_TAG).await?;
+    Ok(())
+}
+
+/// 幅 390 px の購入の一覧の行と購入の詳細のヘッダーの「この購入をもとに登録」を押すと
+/// `/purchases/new?from=<id>` へ進み、商品名、店、焙煎度が引き継がれることを確かめる (issue 0058)。
+///
+/// 1 列の表示にするため、窓を 390 px にしたうえで、表示の領域を CDP の端末の計測の上書きで
+/// 390 px にする (`form_layouts` と同じ仕掛け。窓の大きさは OS の下限に丸められる)。
+async fn duplicate_from_the_list_and_the_detail(
+    browser: &E2eBrowser,
+    fixture: &Fixture,
+) -> Result<(), String> {
+    browser.set_window_size(390, 844).await?;
+    browser.set_viewport_size(390, 844).await?;
+    let result = async {
+        check_duplicate_from_the_list(browser, fixture).await?;
+        check_duplicate_from_the_detail(browser, fixture).await
+    }
+    .await;
+    let cleared = browser.clear_viewport_size().await;
+    result.and(cleared)
+}
+
+/// 購入の一覧の行の操作から引き継いだ登録のフォームへ進む。
+async fn check_duplicate_from_the_list(
+    browser: &E2eBrowser,
+    fixture: &Fixture,
+) -> Result<(), String> {
+    browser.goto("/purchases").await?;
+    browser.wait_route("/purchases").await?;
+    browser
+        .wait_selector(".row .act .iconbtn[aria-label='Register from this purchase']")
+        .await?;
+    browser
+        .click_selector(".row .act .iconbtn[aria-label='Register from this purchase']")
+        .await?;
+    wait_prefilled_purchase_form(browser, fixture, "the row action").await
+}
+
+/// 購入の詳細のヘッダーの操作から引き継いだ登録のフォームへ進む。
+async fn check_duplicate_from_the_detail(
+    browser: &E2eBrowser,
+    fixture: &Fixture,
+) -> Result<(), String> {
+    browser
+        .goto(&format!("/purchases/{}", fixture.purchase_id))
+        .await?;
+    browser.wait_route("/purchases/:id").await?;
+    browser
+        .wait_selector(".appbar .acts .iconbtn[aria-label='Register from this purchase']")
+        .await?;
+    browser
+        .click_selector(".appbar .acts .iconbtn[aria-label='Register from this purchase']")
+        .await?;
+    wait_prefilled_purchase_form(browser, fixture, "the detail action").await
+}
+
+/// `/purchases/new?from=<id>` に着き、商品名、焙煎度、店が元の購入の値で入るまで待つ。
+async fn wait_prefilled_purchase_form(
+    browser: &E2eBrowser,
+    fixture: &Fixture,
+    action: &str,
+) -> Result<(), String> {
+    browser.wait_route("/purchases/new").await?;
+    let path = browser.current_path().await?;
+    let search = browser
+        .eval_string("return window.location.search")
+        .await?
+        .unwrap_or_default();
+    let expected = format!("?from={}", fixture.purchase_id);
+    if path != "/purchases/new" || search != expected {
+        return Err(format!(
+            "{action} must open /purchases/new{expected} but opened {path}{search}"
+        ));
+    }
+    browser.wait_text("Log a purchase").await?;
+    wait_input_value(browser, "Product name", PURCHASE_NAME).await?;
+    wait_input_value(browser, "Roast", PURCHASE_ROAST).await?;
+    browser.wait_text(SHOP_NAME).await?;
     Ok(())
 }
 

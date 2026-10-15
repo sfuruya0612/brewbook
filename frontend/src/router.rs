@@ -85,9 +85,9 @@ pub enum Route {
     /// 購入の一覧 (FR-9)。
     #[route("/purchases", PurchaseListScreen)]
     Purchases {},
-    /// 購入の登録 (FR-9)。
-    #[route("/purchases/new", PurchaseFormScreen)]
-    PurchaseNew {},
+    /// 購入の登録 (FR-9)。`from` は引き継ぐ元の購入の ID (issue 0058)。
+    #[route("/purchases/new?:from", PurchaseFormScreen)]
+    PurchaseNew { from: Option<String> },
     /// 購入の詳細 (FR-9、FR-10、FR-18)。
     #[route("/purchases/:id", PurchaseDetailScreen)]
     PurchaseDetail { id: String },
@@ -131,7 +131,7 @@ pub fn route_name(route: &Route) -> &'static str {
         Route::BrewDetail { .. } => "/brews/:id",
         Route::BrewEdit { .. } => "/brews/:id/edit",
         Route::Purchases {} => "/purchases",
-        Route::PurchaseNew {} => "/purchases/new",
+        Route::PurchaseNew { .. } => "/purchases/new",
         Route::PurchaseDetail { .. } => "/purchases/:id",
         Route::PurchaseEdit { .. } => "/purchases/:id/edit",
         Route::Shops {} => "/shops",

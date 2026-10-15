@@ -6,7 +6,8 @@
 - 購入の行: 左に 44 px の写真 (無ければ `paper-sunken` にカメラの印)、商品名、購入日と店、右端に重量と価格 (`mono`)。
 - 店の行: 店名と住所。住所が無ければ「住所は未設定」を `ink-muted` で。
 - 右端に星のボタン (`iconbtn`) を置く (0051)。お気に入りは `crema-ink` の塗り、未設定は `ink-muted` の輪郭。押すとお気に入りを付け外しし、行の押下 (詳細を開く) と Enter と Space は発火しない (FR-21)。選択のシートでは星を出さない。
+- 購入の行は星の左に「この購入をもとに登録」のアイコンボタン (`content_copy`、`ink-muted`、36 px) を置く (issue 0058)。押すと、その購入の商品の項目と店と焙煎度を引き継いだ購入の登録を開く (幅 840 px 以上では右の面、未満では `/purchases/new?from=<id>`)。行の押下は発火しない。抽出と店の行には置かない。
 - 高さは 64 px 以上、内側は `space-3` と `space-4`、下端に `line` の罫線。行の地は `paper`。押すと詳細へ。
 - 広い画面で選択中の行は `roast-soft` の地。
 - 末尾までスクロールしたら次の 50 件を読む。読み込み中は最後の行の下に「読み込み中」を `caption` で。
-- Dioxus では `frontend/src/ui/list_row.rs` で `.list` と `.row` のクラスを組む。行の高さは 64 px 以上、内側は `space-3` と `space-4`、下端に `line` の罫線。写真は `.thumb` (`radius-sm` で切り抜く)。
+- Dioxus では `frontend/src/ui/list_row.rs` で `.list` と `.row` のクラスを組む。行の高さは 64 px 以上、内側は `space-3` と `space-4`、下端に `line` の罫線。写真は `.thumb` (`radius-sm` で切り抜く)。星の左の操作は `.act` (`ListRowAction`)、星は `.fav`。
