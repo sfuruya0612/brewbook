@@ -2,6 +2,7 @@
 
 Created: 2026-10-07
 Model: DeepSeek V4.1 Flash
+Completed: 2026-10-16
 
 ## 背景
 
@@ -145,6 +146,18 @@ Model: DeepSeek V4.1 Flash
 - ブラウザテストの候補の選択の検査を、店名と住所の両方を確かめるように変えた
   (2 番目の候補を選ぶと店名が「丸山珈琲 中目黒店」になる)。
 - PRD の FR-22 の受け入れ基準と、デザインの `RecordForms` の説明を直した。
+
+## 追記 (2026-10-16、staging での確認)
+
+staging へのデプロイで、実在の店名から住所の候補が返ることを確認した。
+
+- 確認には staging の利用者 (ふるしょ) の検証用セッションを 1 つ発行し (sessions に 1 行を追加)、確認の後に削除した。
+- `GET /api/maps/config` は 200 で `embed_api_key` (39 文字) を返した。
+- `GET /api/place-search?q=丸山珈琲&lang=ja` は 200 で候補 5 件を返した。
+  候補は丸山珈琲 小諸店 (住所は「日本、〒384-0092 長野県小諸市平原１１５２−１」)、丸山珈琲 軽井沢本店、丸山珈琲 ハルニレテラス店、丸山珈琲軽井沢バイパス店、丸山珈琲 リゾナーレ八ヶ岳店で、5 件とも住所付きである。
+  Worker の呼び出しはアプリのオリジンの `Referer` を付けており、Google のリファラの制限で拒否されずに通った。
+- Maps Embed API の URL (取得したキーと `q=丸山珈琲`) を staging の `Referer` 付きで取得し、200 を確認した。
+- close の時点の実装の補足: Secret は `GOOGLE_MAPS_API_KEY` の 1 つを使い (「## 解決方法」と「## 検証」の `GOOGLE_PLACES_API_KEY` と `GOOGLE_MAPS_EMBED_API_KEY` は追記 (2026-10-08) の決定より前の記述である)、`backend/brew_book_core/tests/test_maps.rs` の単体テストは 11 件である (551407b が `the_referer_header_is_the_origin_with_a_slash` を足した。「## 解決方法」と「## 検証」の 10 件はその前の記述である)。
 
 ## 関連
 
