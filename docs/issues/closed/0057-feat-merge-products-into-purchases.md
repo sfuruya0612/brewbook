@@ -2,6 +2,7 @@
 
 Created: 2026-10-14
 Model: Claude Fable 5.1
+Completed: 2026-10-16
 
 ## 背景
 
@@ -288,6 +289,24 @@ close は staging の項目の承認後に行う (完了条件の「0055 と同�
 - ローカルの D1 での 0005 の確認とスクリーンショット比較の結果は「## 追記」の「ローカルの D1 での確認」と「検査の結果」に記録した。
   購入 3 件が残り、抽出が購入を参照したまま残り、`PRAGMA foreign_key_check` が空で、適用の前の購入の無い商品の件数は 1 である。
   E2E のスクリーンショット比較は 55 件で、意図した差分で原本を更新した。
+
+### staging への適用と確認 (2026-10-16)
+
+所有者の承認の後、staging への適用と確認を行った。
+
+- 適用の前に件数を数えた (2026-10-16 04:44)。
+  購入の無い商品は 0、products は 1、purchases は 1、brews は 1、購入のある商品のタグの対応は 0 である。
+- `mise run db-migrate-staging` で 0005 を適用した (20 commands executed successfully。`d1_migrations` の `applied_at` は 2026-10-15T19:45:03Z)。
+- 適用の後に確認した。
+  purchases は 1、brews は 1、purchase_flavor_tags は 0 で、`PRAGMA foreign_key_check` は空である。
+  `products`、`product_flavor_tags`、`purchases_merged` は無い。
+  購入 1 件は商品名「イルガチェフ」を持ち、producer、origin、roast は null である (元の商品が値を持たないため)。
+  purchases と brews の件数は適用の前後で変わらず、購入のある商品のタグの対応の件数 (0) と purchase_flavor_tags の件数 (0) は一致した。
+- `mise run deploy-staging` でデプロイした (管理者は 2026-10-16 04:50、利用者向けは 2026-10-16 04:57。`wrangler deployments list` で確認)。
+- 実写真 (IMG_5466.jpg。3024x4032 の JPEG で約 880 KB) を `POST /api/purchase-suggestions` に送り、200 で新しい形の応答を確認した。
+  応答は `name` が EL ORIGEN、`producer` が David Bedoya、`origin` が COLOMBIA、`region` が Quindio、`process` が Anaerobic Washed、`variety` が Papayo、`flavor_notes` が 6 件の配列 (Red Currant、Plum、Loquat、Hint of Tropical Almond、Brown sugar、Syrupy) で、`roast`、`roast_date`、`price_amount`、`weight_grams` は null である。
+  `product` の入れ子は無く、推測できない項目は null、`flavor_notes` は配列である (PRD の成功指標の FR-19 の確認)。
+- 確認には検証用セッションを 1 つ発行し (sessions に 1 行を追加)、確認の後に削除した。
 
 ## 検証
 
