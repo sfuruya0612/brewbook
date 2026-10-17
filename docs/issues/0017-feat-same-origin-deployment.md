@@ -59,18 +59,11 @@ Backend は CORS を許可せず、状態を変更する API は `Origin` ヘッ
   CanvasKit で問題がある場合は skwasm への変更を ADR-0007 の改訂として提案する (ADR-0007 の結果)。
 - 採らない案: 別ホスト名の Pages と Workers (CORS とトークンの管理が必要になり、Relying Party ID も一致しない。ADR-0005)、Worker から Pages をプロキシする (Static Assets で足りる。ADR-0005)、開発時だけ CORS を許可する (本番と構成が変わる)。
 
-## 調査タスク
+## 完了条件
 
-2026-09-25 に実装と自動テストを完了した (ローカルの `mise run check` は通過)。実装は 4eff521 (本体)、31d9550 (実装詳細の乖離) に記録し、その後のレビューの指摘への対応 (CI のジョブの上限を 60 分に延長、`Origin` を URL として正規化して比べる形と境界値の単体テスト、`r2_cors.rs` のコメントの修正) を加えた。
-
-確認できた完了条件: 画面と API が同じオリジンから配信され、`/`、`/register`、`/brews/new`、`/stats` が `index.html` を 200 で返すことと `/api/*` が Worker の JSON を返すこと (`wrangler_same_origin_api.rs`)、別オリジンと `Origin` の無い変更が 403 になること (同テストと `test_origin.rs`)、既存の結合テストが同一オリジンの `Origin` 付きで成功すること、CORS のヘッダが無いこと、R2 の CORS に端末の開発オリジンと本番のオリジンが含まれること (`r2_cors.rs`)、ログインから抽出の保存までの統合テスト 1 本 (`wrangler_same_origin_e2e.rs`)、`mise run dev` の起動での同一オリジン配信 (`/register` が 200 の HTML、`/api/passkeys` が JSON)、初回ロードの転送量の測定と判断 (下の「## 初回ロードの転送量」)。
-
-残るのは次の確認である。
-
-- `mise run deploy` を実行し、`brewbook.<アカウントのサブドメイン>.workers.dev` で画面と API が 1 回のデプロイで更新されることと、画面の表示、登録用リンクからのパスキーの登録、ログイン、抽出の保存、写真のアップロードを確認する。
-- `mise run r2-setup` で実環境の R2 のバケットに CORS を適用し、アプリのオリジンから写真を PUT できることを確認する。
-- リリース後に Workers Logs の保持期間の全量で p95 を集計し、成功指標 (一覧と単件は 200 ms、統計は 500 ms) を満たすことを確認する。
-- デプロイの前に、`wrangler.toml` の `[vars]` の `RP_ID` と `ORIGIN`、`cors.json` の本番のオリジンを、実際の workers.dev のサブドメインの値へ置き換える (README のデプロイ手順 1)。
+- 本番 (brewbook.phack.workers.dev) で、画面の表示、登録用リンクからのパスキーの登録、ログイン、抽出の保存、購入の写真のアップロードが動作することを確認し、結果を issue 本文に記録する。
+- 一覧と単件の経路の p95 が 200 ms 以内、統計の 4 経路の p95 が 500 ms 以内であることを、本番の Workers Logs の保持期間の全量の集計で確認し、結果を issue 本文に記録する。
+- `mise run check` が通過する。
 
 ## 関連
 
@@ -123,3 +116,10 @@ CanvasKit は日本語の表示に必要な Noto Sans JP のサブセットを `
 - リリース後の p95 の集計
 
 再開の条件: Cloudflare のアカウントの資格情報が使える環境で、所有者がデプロイ手順 (README) に従って `mise run deploy`、`mise run r2-setup`、p95 の集計を実行し、結果を本 issue に記録する。`CHANGES.md` の `[ADD]` エントリはこの pending への移動のコミットに含める (close のときに重ねて追記しない)。
+
+2026-10-17 の所有者の回答により、次のとおり決着し、pending から昇格した。
+
+- 本番と staging のデプロイは Workers Builds (main への push) で自動化されており、最新の main (cb06b28) が 2026-10-16 に両環境へデプロイされている (Workers Builds の成功と wrangler deployments の確認)。「1 回のデプロイで画面と API が更新される」は満たされている。
+- p95 の集計は所有者が Cloudflare ダッシュボードの Workers Logs (Query Builder) で行い、結果を本 issue に記録する。
+- 本番の R2 の CORS と写真のアップロードは所有者が確認する。
+- 実装と自動テストは 4eff521 と 31d9550 で完了しており、同一オリジン配信、`Origin` の検証、CORS のヘッダが無いこと、R2 の CORS の検査、ログインから抽出の保存までの統合テスト、初回ロードの転送量はローカルで確認済みである。
