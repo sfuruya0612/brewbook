@@ -57,29 +57,10 @@ ADR-0008 は、利用者の作成と登録用トークンの発行 (PRD の FR-1
   結合テストは 0001 のハーネスと同じ方式で、管理者 Worker の `wrangler dev` をテストが起動する。
 - 採らない案: 管理者用の CLI (所有者が Web 画面を選んだ。ADR-0008)、利用者向けの Worker の `/admin/*` を Access で保護する (workers.dev ではパス単位の保護ができない。ADR-0008)、Access の JWT の検証 (rsa 相当の依存が増える。ADR-0008)、Basic 認証 (パスワードの管理が必要になる。ADR-0008)。
 
-## 調査タスク
+## 完了条件
 
-2026-09-26 に実装と自動テストを完了した (ローカルの `mise run check` は通過)。実装は edc3ac1 (本体)、735681a (実装詳細の乖離) と、レビューの指摘への対応 (管理者側の `SELECT *` の検査、既定ポートの境界値の検査、利用者向けの応答の状態コードの検査、`mise run dev-admin` の追加) に記録した。
-
-確認できた完了条件:
-
-- FR-17 の受け入れ基準: `wrangler_admin_api.rs` の 7 件が、一覧 (表示名、作成日時、パスキーの数)、表示名を入力した利用者の作成 (前後の空白を除く)、範囲外の表示名の 400、トークンの発行 (有効期限 24 時間、ハッシュだけの保存)、再発行で古いリンクが無効になること、存在しない利用者の 404、リンクが発行直後の応答に 1 回だけ含まれることを確認した。`test_html.rs` が一覧とリンクの HTML エスケープを、`test_input.rs` が表示名の検証 (1 文字以上 50 文字以下、メッセージは英語) を確認した。
-- 管理者 Worker が扱うテーブルと SQL: `backend/brew_book_admin/tests/test_queries.rs` の 5 件が、SQL の列挙から users、registration_tokens、passkey_credentials の 3 つだけであることと、取得 (`SELECT`) に `SELECT *` を使わないことを確認した。利用者向けの SQL は `backend/brew_book/tests/test_queries.rs` の 6 件が、取得 (SELECT) に表示名 (`display_name`) が現れないことと `SELECT *` を使わないことを確認した (`d1_check` の検証用の INSERT は表示名を入れるため、検査は取得に限る)。
-- 経路の台帳とテストの照合: `test_routes.rs` が台帳とテストの識別子を照合し、全経路に正常系、入力を持つ経路に入力不正 400 のテストがあることを検査する (成功指標の管理者 Worker の分)。
-- `Origin` の検証: `wrangler_admin_api.rs` の `wrangler_admin_origin_403` が別オリジンと `Origin` の無いフォームの送信で 403 を、`backend/brew_book_admin/tests/test_origin.rs` の 8 件が境界値 (scheme、host、port、既定のポート) を確認した。
-- 利用者向けの応答に表示名が含まれないこと: `wrangler_display_name.rs` が表示名を持つ利用者で利用者向けの全経路を呼び、どの応答の本文にも `display_name` と表示名の値が含まれないことと、セッションを消す経路以外は有効なセッションで到達できること (401 と 500 でないこと) を確認した。
-- 依存: 管理者 Worker の依存は `serde` と `worker` (d1)、開発依存は `reqwest` と `serde_json` で、利用者向けの Worker と同じ組である (ADR-0001)。
-- `deploy-admin` と `verify-deploy` のタスクを実装した (`verify-deploy` は `ADMIN_ORIGIN` の GET / と POST /users の 302 を検査し、302 でなければ失敗する)。ローカルの確認用に `mise run dev-admin` を追加した。
-- README に Access の設定手順を書いた (Worker 単位の保護、所有者のメールアドレスのポリシー、One-time PIN、利用者向けの Worker には設定しないこと、アカウント全体の Worker を既定で保護する設定を使わないこと)。
-- `mise run check`: exit 0 (ベースラインからの新たな失敗は無し)。
-
-残るのは、Cloudflare のアカウントの資格情報が要る次の確認である。
-
-- デプロイの前に、`backend/brew_book_admin/wrangler.toml` の `[vars]` の `APP_ORIGIN` を実際の利用者向けの Worker のオリジンへ置き換える。
-- `mise run deploy-admin` を実行し、`brewbook-admin.<アカウントのサブドメイン>.workers.dev` で管理者画面が配信されることを確認する。
-- Cloudflare の管理画面で Worker 単位の Cloudflare Access の保護と、所有者のメールアドレスだけを許可するポリシーを設定する (Zero Trust の Free プラン、One-time PIN)。**デプロイした直後に設定する** (設定が終わるまで管理者画面の URL を共有しない。Access の設定だけが管理者 Worker の安全性を担う)。
-- `ADMIN_ORIGIN=https://brewbook-admin.<サブドメイン>.workers.dev mise run verify-deploy` を実行し、認証なしの `GET /` と `POST /users` が Access のログイン画面へ 302 でリダイレクトされることを確認する (302 でなければ失敗する)。
-- Access を設定した後、所有者がログインして利用者の作成と登録用トークンの発行を行い、利用者向けの画面から登録できることを確認する。
+- 本番と staging の管理者 Worker に対して `mise run verify-deploy` を実行し、認証なしの GET / と POST /users が Access のログイン画面へ 302 でリダイレクトされ、タスクが成功する。
+- `mise run check` が通過する。
 
 ## 関連
 
@@ -113,3 +94,9 @@ ADR-0008 は、利用者の作成と登録用トークンの発行 (PRD の FR-1
 - 所有者による、利用者の作成、登録用トークンの発行、利用者向けの画面からの登録の確認
 
 再開の条件: Cloudflare のアカウントの資格情報が使える環境で、所有者がデプロイ手順 (README) に従って上記の 5 つを実行し、結果を本 issue に記録する。`CHANGES.md` の `[ADD]` エントリはこの pending への移動のコミットに含める (close のときに重ねて追記しない)。
+
+2026-10-17 の所有者の回答により、次のとおり決着し、pending から昇格した。
+
+- デプロイ (brewbook-admin と brewbook-admin-staging) と Cloudflare Access の保護は完了している (2026-10-17 に両方の管理者 URL への未認証の GET が Access のログイン画面へ 302 になることを確認)。
+- `mise run verify-deploy` の実環境での実行 (GET / と POST /users の 302 の検査) は本 issue の処理で行う。
+- 利用者の作成、登録用トークンの発行、利用者向けの画面からの登録は所有者が確認済みである。
