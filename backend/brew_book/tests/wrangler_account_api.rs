@@ -647,7 +647,8 @@ fn wrangler_account_delete_removes_the_assumed_scale_of_the_r2_objects_by_cursor
             .expect("the object of the other user must be placed");
     });
 
-    // 削除する。想定規模のオブジェクトの削除を待つ。
+    // 削除する。想定規模のオブジェクトの削除を待つ
+    // (削除は 1 ページ分のキーをまとめる複数キーの削除で行う。0012)。
     let client = ApiClient::with_timeout(&base_url, Some(&data.scale_session), SCALE_TIMEOUT);
     let started = Instant::now();
     let response = client.delete("/api/account");

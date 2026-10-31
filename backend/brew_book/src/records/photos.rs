@@ -295,7 +295,7 @@ pub async fn delete(env: &Env, session: &Session, id: Option<&str>) -> Result<Re
     purchases::respond_fetched(&d1, &session.user_id, id).await
 }
 
-/// 指定したキーのオブジェクトを R2 から削除する。記録の削除だけが使う (0056)。
+/// 指定したキーのオブジェクトを R2 から削除する。記録の削除 (0056) とアカウント削除 (FR-15) が使う。
 ///
 /// R2 の複数キーの削除は 1 回に最大 1,000 キーのため、それを超えるときは分けて呼ぶ。
 /// 同じキーの削除は繰り返しても成功するため、途中で失敗しても利用者が再試行できる。
@@ -319,8 +319,10 @@ const MAX_DELETE_KEYS_PER_CALL: usize = 1_000;
 ///
 /// 紐づけ済み (`users/<利用者 ID>/`) と紐づけ前 (`pending/<利用者 ID>/`) の両方を対象にする。
 /// 一覧は 1 回で返る件数に上限があるため、カーソルを繰り返して全件を削除する
-/// (想定規模では 1 利用者あたり 3,000 件まであり得る)。同じキーの削除は繰り返しても成功するため、
-/// 途中で失敗しても、セッションが有効なうちに利用者が再試行できる (設計判断)。
+/// (想定規模では 1 利用者あたり 3,000 件まであり得る)。削除は 1 ページ分のキーを
+/// 複数キーの削除 (1 回に最大 1,000 キー) でまとめて行い、サブリクエストの呼び出しを抑える (0012)。
+/// 同じキーの削除は繰り返しても成功するため、途中で失敗しても、セッションが有効なうちに
+/// 利用者が再試行できる (設計判断)。
 pub async fn delete_user_objects(env: &Env, user_id: &str) -> Result<()> {
     let bucket = env.bucket(PHOTOS_BINDING)?;
     for prefix in [photo::user_prefix(user_id), photo::pending_prefix(user_id)] {
@@ -331,9 +333,13 @@ pub async fn delete_user_objects(env: &Env, user_id: &str) -> Result<()> {
                 list = list.cursor(value);
             }
             let page = list.execute().await?;
-            for object in page.objects() {
-                bucket.delete(&object.key()).await?;
-            }
+            // 1 ページ分のキーをまとめて消す (delete_objects が 1 回 1,000 キーずつに分ける)。
+            let keys = page
+                .objects()
+                .iter()
+                .map(|object| object.key())
+                .collect::<Vec<_>>();
+            delete_objects(env, &keys).await?;
             if !page.truncated() {
                 break;
             }

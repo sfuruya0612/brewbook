@@ -35,6 +35,10 @@ ADR-0003 は、R2 の `users/<利用者 ID>/` と `pending/<利用者 ID>/` の�
   D1 の削除は batch で 1 トランザクションなので、途中の状態は残らない。
   採らない案: 非同期の削除ジョブにする (利用者が 20 人以下で 1 回の batch に収まる。ADR-0002 の batch の範囲で足りる)、論理削除にする (PRD の FR-15 は全データの削除を求める)、D1 の削除を先に行う (R2 の削除に失敗すると認証が失われて再試行できない)。
 
+## 調査結果 (2026-10-17)
+
+0057 (ADR-0022) が `products` と `product_flavor_tags` を `purchases` と `purchase_flavor_tags` に統合したため、設計判断の表にある `products` と `product_flavor_tags` は現在のスキーマに無い (最終スキーマは 10 テーブル)。削除の対象の実装の正は `backend/brew_book_core/src/query.rs` の `ACCOUNT_DELETE_TABLES` と `account_delete` が返す 10 文であり、設計判断の表と実装詳細の乖離の「11 文」の記載は統合前の履歴である。
+
 ## 完了条件
 
 - アカウント削除の R2 の削除が複数キーの削除 (`Bucket::delete_multiple`、1 回に最大 1,000 キー) で行われ、想定規模 (1 利用者あたり購入 3,000 件、users/ と pending/ の合計 6,000 件) の全件削除が成功することを自動テストで確認する。
