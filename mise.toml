@@ -17,7 +17,10 @@ ripgrep = "15.2.0"
 # E2E (frontend:test-same-origin) と、パスキーの結合テスト (backend:test-integration) が使う。
 # 版は CI の Chrome for Testing に揃える
 # (ブラウザ本体はリポジトリのツールチェーンに含められないため、CI はワークフローで同じ版を入れる)。
-chromedriver = "154.0.8037.57"
+# ChromeDriver はメジャー版がブラウザと一致しないとセッションを作れない。手元の Chrome が
+# 自動更新されてメジャー版がずれたら、ここを Chrome の版に合わせて上げ、ワークフローの
+# Chrome for Testing も同じ版にする (issue 0033)。
+chromedriver = "157.0.8103.15"
 # Dioxus CLI (dx)。Frontend のビルドに使う (ADR-0017)。mise registry に dioxus の項目が無いため、
 # GitHub のリリースのバイナリ (dx-aarch64-apple-darwin.tar.gz など) を github バックエンドで入れる。
 # 2026-10-02 の手元の計測では、バイナリの取得が 4.1 秒 (30.7 MB) で、ソースからのビルド

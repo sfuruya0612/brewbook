@@ -31,7 +31,7 @@ jobs:
       - name: Install Chrome for Testing
         run: |
           curl -fsSL -o chrome-for-testing.zip \
-            "https://storage.googleapis.com/chrome-for-testing-public/154.0.8037.57/linux64/chrome-linux64.zip"
+            "https://storage.googleapis.com/chrome-for-testing-public/157.0.8103.15/linux64/chrome-linux64.zip"
           unzip -q chrome-for-testing.zip
           # chromedriver が探す名前 (google-chrome) で PATH の先頭に置く。Runner 上の ChromeDriver は
           # /opt/google/chrome/chrome も直接使うため、そのパスも同じ実体にする。
