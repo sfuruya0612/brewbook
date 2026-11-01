@@ -579,7 +579,7 @@ mod purchase_and_brew_queries {
         p.photo_key AS p_photo_key, p.name AS p_name, p.producer AS p_producer, \
         p.origin AS p_origin, p.region AS p_region, p.process AS p_process, \
         p.variety AS p_variety, p.created_at AS p_created_at, p.updated_at AS p_updated_at, \
-        p.favorited_at AS p_favorited_at";
+        p.favorited_at AS p_favorited_at, p.taste_profile AS p_taste_profile";
     /// 店の列の別名。
     const SHOP_COLUMNS: &str = "sh.id AS sh_id, sh.user_id AS sh_user_id, sh.name AS sh_name, \
         sh.address AS sh_address, sh.created_at AS sh_created_at, sh.updated_at AS sh_updated_at, \
@@ -890,6 +890,25 @@ mod purchase_and_brew_queries {
             query::purchase_insert(SHOP_ID, USER_ID, &purchase_values(None), AT, AT).unwrap();
         assert_eq!(statement.params[6], Value::Null);
         assert_eq!(statement.params[7], Value::Null);
+    }
+
+    #[test]
+    fn a_taste_profile_is_saved_on_the_purchase_without_touching_updated_at() {
+        let statement =
+            query::purchase_set_taste_profile(SHOP_ID, USER_ID, r#"{"summary":"明るい酸"}"#)
+                .unwrap();
+        assert_eq!(
+            statement.sql,
+            "UPDATE purchases SET taste_profile = ? WHERE id = ? AND user_id = ?"
+        );
+        assert_eq!(
+            statement.params,
+            vec![
+                Value::Text(r#"{"summary":"明るい酸"}"#.to_owned()),
+                Value::Text(SHOP_ID.to_owned()),
+                Value::Text(USER_ID.to_owned()),
+            ]
+        );
     }
 
     #[test]

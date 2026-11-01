@@ -43,6 +43,7 @@ fn purchase_json(id: &str, shop_id: Option<&str>) -> Value {
         "process": null,
         "variety": null,
         "flavor_notes": [],
+        "taste_profile": null,
         "purchased_on": "2026-10-01",
         "roast": null,
         "roast_date": null,
@@ -160,6 +161,47 @@ fn the_list_options_are_sent_as_the_query_parameters() {
     assert_eq!(
         transport.last_request().path,
         "/api/purchases?limit=50&order=desc"
+    );
+}
+
+/// 保存済みの味と特徴の推定を購入の応答から読む (FR-24)。
+#[test]
+fn a_purchase_reads_the_saved_taste_profile() {
+    let mut body = purchase_json("b1", None);
+    body["taste_profile"] = json!({
+        "summary": "明るい酸と桃のような甘さ。",
+        "flavor_notes": ["ピーチ"],
+        "acidity": "明るい柑橘の酸",
+        "sweetness": "桃のような甘さ",
+        "bitterness": null,
+        "body": "軽い",
+        "aroma": "ジャスミン",
+        "brewing_method": "V60",
+        "grind_setting": "中細",
+        "process_description": "ナチュラル精製。",
+        "region_characteristics": "花の香り。",
+    });
+    let (api, _) = with_response(body);
+    let purchase = block_on(api.purchase("b1")).expect("the purchase must be read");
+    let profile = purchase
+        .taste_profile
+        .expect("the taste profile must be read");
+    assert_eq!(profile.summary, "明るい酸と桃のような甘さ。");
+    assert_eq!(profile.flavor_notes, vec!["ピーチ".to_string()]);
+    assert_eq!(profile.acidity.as_deref(), Some("明るい柑橘の酸"));
+    assert_eq!(profile.sweetness.as_deref(), Some("桃のような甘さ"));
+    assert_eq!(profile.bitterness, None);
+    assert_eq!(profile.body.as_deref(), Some("軽い"));
+    assert_eq!(profile.aroma.as_deref(), Some("ジャスミン"));
+    assert_eq!(profile.brewing_method.as_deref(), Some("V60"));
+    assert_eq!(profile.grind_setting.as_deref(), Some("中細"));
+    assert_eq!(
+        profile.process_description.as_deref(),
+        Some("ナチュラル精製。")
+    );
+    assert_eq!(
+        profile.region_characteristics.as_deref(),
+        Some("花の香り。")
     );
 }
 
@@ -378,6 +420,47 @@ fn the_purchase_suggestion_sends_the_jpeg_and_reads_the_response() {
     assert_eq!(request.body, vec![1, 2, 3]);
 }
 
+/// 味と特徴の推定は本文を送らず、言語をクエリで渡し、応答を読む (FR-24)。
+#[test]
+fn the_taste_profile_is_requested_without_a_body() {
+    let (api, transport) = with_response(json!({
+        "summary": "明るい酸と桃のような甘さ。",
+        "flavor_notes": ["ピーチ", "ジャスミン"],
+        "acidity": "明るい柑橘の酸",
+        "sweetness": "桃のような甘さ",
+        "bitterness": null,
+        "body": "軽い",
+        "aroma": "ジャスミン",
+        "brewing_method": "V60",
+        "grind_setting": "中細",
+        "process_description": "ナチュラル精製。",
+        "region_characteristics": "花の香り。",
+    }));
+    let profile = block_on(api.taste_profile("b1", "ja")).expect("the profile must be read");
+    assert_eq!(profile.summary, "明るい酸と桃のような甘さ。");
+    assert_eq!(profile.flavor_notes, vec!["ピーチ", "ジャスミン"]);
+    assert_eq!(profile.acidity.as_deref(), Some("明るい柑橘の酸"));
+    assert_eq!(profile.sweetness.as_deref(), Some("桃のような甘さ"));
+    assert_eq!(profile.bitterness, None);
+    assert_eq!(profile.body.as_deref(), Some("軽い"));
+    assert_eq!(profile.aroma.as_deref(), Some("ジャスミン"));
+    assert_eq!(profile.brewing_method.as_deref(), Some("V60"));
+    assert_eq!(profile.grind_setting.as_deref(), Some("中細"));
+    assert_eq!(
+        profile.process_description.as_deref(),
+        Some("ナチュラル精製。")
+    );
+    assert_eq!(
+        profile.region_characteristics.as_deref(),
+        Some("花の香り。")
+    );
+    let request = transport.last_request();
+    assert_eq!(request.method, Method::Post);
+    assert_eq!(request.path, "/api/purchases/b1/taste-profile?lang=ja");
+    assert_eq!(request.content_type, None);
+    assert!(request.body.is_empty());
+}
+
 #[test]
 fn the_suggestions_query_is_encoded_and_the_values_are_read() {
     let (api, transport) = with_response(json!({"values": ["中煎り", "深煎り"]}));
@@ -463,6 +546,19 @@ fn a_broken_response_is_a_format_error() {
 
     let (api, _) = with_response(json!({"embed_api_key": 1}));
     let error = block_on(api.maps_config()).expect_err("the response must be rejected");
+    assert!(matches!(error, RecordError::Format(_)), "{error:?}");
+
+    // 味と特徴の推定の応答の形の違反も形式の誤りにする (FR-24)。
+    let (api, _) = with_response(json!({"summary": 1, "flavor_notes": []}));
+    let error = block_on(api.taste_profile("b1", "ja")).expect_err("the response must be rejected");
+    assert!(matches!(error, RecordError::Format(_)), "{error:?}");
+
+    let (api, _) = with_response(json!({"flavor_notes": []}));
+    let error = block_on(api.taste_profile("b1", "ja")).expect_err("the response must be rejected");
+    assert!(matches!(error, RecordError::Format(_)), "{error:?}");
+
+    let (api, _) = with_response(json!({"summary": "まとめ", "flavor_notes": "x"}));
+    let error = block_on(api.taste_profile("b1", "ja")).expect_err("the response must be rejected");
     assert!(matches!(error, RecordError::Format(_)), "{error:?}");
 }
 

@@ -164,12 +164,21 @@ pub fn PurchaseListScreen() -> Element {
                 })
             } else {
                 Some(rsx! {
-                    PurchaseDetail {
-                        id: id.clone(),
-                        embedded: true,
-                        on_edit: EventHandler::new(move |_| editing.set(true)),
-                        on_duplicate: EventHandler::new(move |_| duplicate.call(id.clone())),
-                        on_deleted: EventHandler::new(move |_| selected.set(None)),
+                    // 1 件の一覧として鍵を付け、別の購入を選んだら詳細を作り直す。
+                    for current in [id.clone()] {
+                        {
+                            let duplicate_id = current.clone();
+                            rsx! {
+                                PurchaseDetail {
+                                    key: "{current}",
+                                    id: current,
+                                    embedded: true,
+                                    on_edit: EventHandler::new(move |_| editing.set(true)),
+                                    on_duplicate: EventHandler::new(move |_| duplicate.call(duplicate_id.clone())),
+                                    on_deleted: EventHandler::new(move |_| selected.set(None)),
+                                }
+                            }
+                        }
                     }
                 })
             }

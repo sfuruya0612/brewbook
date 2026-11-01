@@ -1,9 +1,9 @@
 //! マイグレーションの SQL と、ADR-0018 が定める最終スキーマの照合。
 //!
-//! 0001、0002、0003、0004、0005 を順に適用した最終スキーマを読み、次を確認する。
+//! 0001、0002、0003、0004、0005、0006 を順に適用した最終スキーマを読み、次を確認する。
 //!
-//! - 10 テーブルの列が ADR-0018 の表 (ADR-0022 による商品の統合を反映したもの) と一致する
-//!   (過不足のどちらも許さない)。
+//! - 10 テーブルの列が ADR-0018 の表 (ADR-0022 による商品の統合と、ADR-0023 による
+//!   `taste_profile` の追加を反映したもの) と一致する (過不足のどちらも許さない)。
 //! - ADR-0006 の参照 (外部キー) がある。
 //! - 設計判断の UNIQUE 制約 (利用者ごとのタグ名、全利用者で一意の credential_id) がある。
 //! - 複合インデックス (利用者 ID、並び順のキー、ID) があり、`archived_at` を含まない。
@@ -25,9 +25,10 @@ const MIGRATIONS: &[&str] = &[
     "migrations/0003_remove_archive.sql",
     "migrations/0004_add_favorites.sql",
     "migrations/0005_merge_products_into_purchases.sql",
+    "migrations/0006_add_purchase_taste_profile.sql",
 ];
 
-/// ADR-0018 の 10 テーブルと列 (ADR-0022 の統合の後)。列の順は ADR-0018 の表に合わせる。
+/// ADR-0018 の 10 テーブルと列 (ADR-0022 の統合と ADR-0023 の推定の追加の後)。列の順は ADR-0018 の表に合わせる。
 const EXPECTED_TABLES: &[(&str, &[&str])] = &[
     ("users", &["id", "display_name", "created_at"]),
     (
@@ -94,6 +95,7 @@ const EXPECTED_TABLES: &[(&str, &[&str])] = &[
             "created_at",
             "updated_at",
             "favorited_at",
+            "taste_profile",
         ],
     ),
     (

@@ -164,6 +164,8 @@ enum DetailRoute {
     BrewDetail { id: String },
     #[route("/purchases/:id", RealPurchaseDetailRoute)]
     PurchaseDetail { id: String },
+    #[route("/taste-remount", TasteRemountRoute)]
+    TasteRemount {},
     #[route("/shops/new", RealShopNewRoute)]
     ShopNew {},
     #[route("/shops/:id/edit", RealShopEditRoute)]
@@ -188,6 +190,21 @@ fn RealBrewDetailRoute(id: String) -> Element {
 fn RealPurchaseDetailRoute(id: String) -> Element {
     rsx! {
         PurchaseDetailScreen { id }
+    }
+}
+
+/// 購入を切り替えたときに、前の購入の AI の結果が残らないかを確かめる探り。
+#[component]
+fn TasteRemountRoute() -> Element {
+    let mut id = use_signal(|| "b1".to_string());
+    rsx! {
+        PurchaseDetailScreen { id: id() }
+        button {
+            class: "switch-purchase",
+            r#type: "button",
+            onclick: move |_| id.set("b2".to_string()),
+            "Switch"
+        }
     }
 }
 
@@ -380,6 +397,7 @@ fn purchase_json(id: &str, name: &str, favorited_at: Option<&str>) -> Value {
         "process": null,
         "variety": null,
         "flavor_notes": [],
+        "taste_profile": null,
         "purchased_on": "2026-10-01",
         "roast": null,
         "roast_date": null,
@@ -391,6 +409,23 @@ fn purchase_json(id: &str, name: &str, favorited_at: Option<&str>) -> Value {
         "updated_at": "2026-10-01T00:00:00.000Z",
         "favorited_at": favorited_at,
         "shop": null,
+    })
+}
+
+/// 味と特徴の推定の応答の JSON (FR-24)。
+fn taste_profile_json(summary: &str) -> Value {
+    json!({
+        "summary": summary,
+        "flavor_notes": [],
+        "acidity": null,
+        "sweetness": null,
+        "bitterness": null,
+        "body": null,
+        "aroma": null,
+        "brewing_method": null,
+        "grind_setting": null,
+        "process_description": null,
+        "region_characteristics": null,
     })
 }
 
@@ -744,6 +779,222 @@ async fn the_detail_screens_have_the_star() {
     );
 }
 
+/// 保存済みの AI の推定は、購入の詳細を開いたときに表示する (FR-24)。
+#[wasm_bindgen_test]
+async fn the_purchase_detail_shows_the_saved_taste_profile_on_open() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let mut purchase = purchase_json("b1", "Beans", None);
+    purchase["taste_profile"] = taste_profile_json("Saved profile.");
+    let (root, transport) = mount_detail(
+        "/purchases/b1",
+        vec![response(&purchase), response(&json!({"ratings": []}))],
+    )
+    .await;
+    // 保存済みの推定は購入の応答に含まれるため、AI を呼ばずに表示する。
+    assert_eq!(transport.requests().len(), 2);
+    assert_eq!(
+        select(&root, ".taste-profile .taste-summary")
+            .text_content()
+            .as_deref(),
+        Some("Saved profile.")
+    );
+    let button = select(&root, ".taste-profile .btn");
+    assert!(
+        button
+            .text_content()
+            .unwrap_or_default()
+            .contains("Ask again"),
+        "the saved profile must offer regeneration"
+    );
+}
+
+/// 購入の詳細の「AI に聞く」で、味と特徴の推定をその場で表示する (FR-24)。
+#[wasm_bindgen_test]
+async fn the_purchase_detail_shows_the_ai_taste_profile_on_demand() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let purchase = purchase_json("b1", "Beans", None);
+    let (root, transport) = mount_detail(
+        "/purchases/b1",
+        vec![
+            response(&purchase),
+            response(&json!({"ratings": []})),
+            response(&json!({
+                "summary": "Bright acidity and peach-like sweetness.",
+                "flavor_notes": ["Peach", "Jasmine"],
+                "acidity": "Bright citrus",
+                "sweetness": "Peach",
+                "bitterness": "Low",
+                "body": "Light",
+                "aroma": "Jasmine",
+                "brewing_method": "V60 pour over",
+                "grind_setting": "Medium fine",
+                "process_description": "Natural process keeps fruit sweetness.",
+                "region_characteristics": "Floral and bright acidity.",
+            })),
+        ],
+    )
+    .await;
+    // 画面を開いただけでは AI を呼ばない (無料枠を消費しない)。
+    assert_eq!(count(&root, ".taste-profile .taste-summary"), 0);
+    assert_eq!(transport.requests().len(), 2);
+
+    let button = select(&root, ".taste-profile .btn");
+    click(&button);
+    settle().await;
+
+    // 言語をクエリで渡し、本文は送らない (FR-24)。
+    assert_eq!(transport.requests().len(), 3);
+    let request = &transport.requests()[2];
+    assert_eq!(request.method.as_str(), "POST");
+    assert_eq!(request.path, "/api/purchases/b1/taste-profile?lang=en");
+    assert!(request.body.is_empty());
+
+    assert_eq!(
+        select(&root, ".taste-profile .taste-summary")
+            .text_content()
+            .as_deref(),
+        Some("Bright acidity and peach-like sweetness.")
+    );
+    assert_eq!(count(&root, ".taste-profile .taste-notes .chip"), 2);
+    // 空でない特徴だけを帳簿に並べる。
+    let labels: Vec<String> = elements(&root, ".taste-profile .ledger .k")
+        .iter()
+        .filter_map(|element| element.text_content())
+        .collect();
+    assert_eq!(
+        labels,
+        vec![
+            "Acidity".to_string(),
+            "Sweetness".to_string(),
+            "Bitterness".to_string(),
+            "Body".to_string(),
+            "Aroma".to_string(),
+            "About the process".to_string(),
+            "Regional character".to_string(),
+            "Recommended brewing method".to_string(),
+            "Recommended grind".to_string(),
+        ]
+    );
+    let text = select(&root, ".taste-profile")
+        .text_content()
+        .unwrap_or_default();
+    assert!(text.contains("V60 pour over"));
+    assert!(text.contains("Medium fine"));
+    assert!(text.contains("Natural process keeps fruit sweetness."));
+    assert!(text.contains("Floral and bright acidity."));
+    assert!(text.contains("Estimated by AI"));
+}
+
+/// 味と特徴の推定に失敗したときは案内を出し、再試行で回復できる (FR-24)。
+#[wasm_bindgen_test]
+async fn the_ai_taste_profile_failure_can_be_retried() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let purchase = purchase_json("b1", "Beans", None);
+    let (root, transport) = mount_detail(
+        "/purchases/b1",
+        vec![
+            response(&purchase),
+            response(&json!({"ratings": []})),
+            FakeTransport::response(
+                500,
+                &json!({"error": {"code": "internal_error", "message": "failed"}}).to_string(),
+            ),
+            response(&json!({
+                "summary": "Retried profile.",
+                "flavor_notes": [],
+                "acidity": null,
+                "sweetness": null,
+                "bitterness": null,
+                "body": null,
+                "aroma": null,
+            })),
+        ],
+    )
+    .await;
+    assert_eq!(count(&root, ".taste-profile .btn"), 1);
+
+    let button = select(&root, ".taste-profile .btn");
+    click(&button);
+    settle().await;
+    assert_eq!(count(&root, ".taste-profile .banner"), 1);
+    assert!(select(&root, ".taste-profile .banner")
+        .text_content()
+        .unwrap_or_default()
+        .contains("Could not estimate"));
+
+    let retry = select(&root, ".taste-profile .banner .act");
+    click(&retry);
+    settle().await;
+    assert_eq!(transport.requests().len(), 4);
+    assert_eq!(
+        select(&root, ".taste-profile .taste-summary")
+            .text_content()
+            .as_deref(),
+        Some("Retried profile.")
+    );
+}
+
+/// 購入を切り替えたら、前の購入の AI の推定は残らず、次の購入ではもう一度呼ぶ (FR-24)。
+#[wasm_bindgen_test]
+async fn the_ai_taste_profile_is_lost_when_the_purchase_changes() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let first = purchase_json("b1", "First beans", None);
+    let second = purchase_json("b2", "Second beans", None);
+    let (root, transport) = mount_detail(
+        "/taste-remount",
+        vec![
+            response(&first),
+            response(&json!({"ratings": []})),
+            response(&taste_profile_json("First profile.")),
+            response(&second),
+            response(&json!({"ratings": []})),
+            response(&taste_profile_json("Second profile.")),
+        ],
+    )
+    .await;
+
+    click(&select(&root, ".taste-profile .btn"));
+    settle().await;
+    assert_eq!(
+        select(&root, ".taste-profile .taste-summary")
+            .text_content()
+            .as_deref(),
+        Some("First profile.")
+    );
+    // 初期の購入と評価、AI の推定の 3 回。
+    assert_eq!(transport.requests().len(), 3);
+
+    click(&select(&root, ".switch-purchase"));
+    settle().await;
+    // 切り替えで購入と評価を読み直すが、AI は呼ばない。前の推定も消える。
+    let paths: Vec<String> = transport
+        .requests()
+        .iter()
+        .map(|request| format!("{} {}", request.method.as_str(), request.path))
+        .collect();
+    assert_eq!(transport.requests().len(), 5, "{paths:?}");
+    assert_eq!(transport.requests()[3].path, "/api/purchases/b2");
+    assert_eq!(count(&root, ".taste-profile .taste-summary"), 0);
+
+    click(&select(&root, ".taste-profile .btn"));
+    settle().await;
+    assert_eq!(transport.requests().len(), 6);
+    assert_eq!(
+        select(&root, ".taste-profile .taste-summary")
+            .text_content()
+            .as_deref(),
+        Some("Second profile.")
+    );
+}
+
 /// 購入の行だけに「この購入をもとに登録」の操作があり、抽出と店の行には無い (issue 0058)。
 #[wasm_bindgen_test]
 async fn only_the_purchase_rows_have_the_duplicate_action() {
@@ -915,6 +1166,104 @@ async fn the_detail_action_replaces_the_wide_pane_with_the_prefilled_form() {
     assert_eq!(
         input_value(&select(&root, ".wide-detail .form input.in")),
         "Beans"
+    );
+}
+
+/// 2 段組で別の購入の行を選ぶと、右の面の詳細を作り直し、前の AI の推定を残さない (FR-24)。
+#[wasm_bindgen_test]
+async fn the_wide_detail_resets_the_taste_profile_when_another_row_is_selected() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let first = purchase_json("b1", "First beans", None);
+    let second = purchase_json("b2", "Second beans", None);
+    let (root, transport) = mount_at(
+        "/purchases",
+        vec![
+            response(&json!({"purchases": [first.clone(), second.clone()], "next_cursor": null})),
+            response(&first),
+            response(&json!({"ratings": []})),
+            response(&taste_profile_json("First profile.")),
+            response(&second),
+            response(&json!({"ratings": []})),
+            response(&taste_profile_json("Second profile.")),
+        ],
+    )
+    .await;
+    let rows = elements(&root, ".row");
+    assert_eq!(rows.len(), 2);
+    click(&rows[0]);
+    settle().await;
+    assert_eq!(count(&root, ".wide-detail .detail"), 1);
+
+    click(&select(&root, ".wide-detail .taste-profile .btn"));
+    settle().await;
+    assert_eq!(transport.requests().len(), 4);
+    assert_eq!(
+        select(&root, ".wide-detail .taste-summary")
+            .text_content()
+            .as_deref(),
+        Some("First profile.")
+    );
+
+    click(&rows[1]);
+    settle().await;
+    assert_eq!(transport.requests().len(), 6);
+    assert_eq!(transport.requests()[4].path, "/api/purchases/b2");
+    assert_eq!(count(&root, ".wide-detail .taste-summary"), 0);
+
+    click(&select(&root, ".wide-detail .taste-profile .btn"));
+    settle().await;
+    assert_eq!(transport.requests().len(), 7);
+    assert_eq!(
+        select(&root, ".wide-detail .taste-summary")
+            .text_content()
+            .as_deref(),
+        Some("Second profile.")
+    );
+}
+
+/// 2 段組で別の抽出の行を選ぶと、右の面の詳細を作り直す (FR-11)。
+#[wasm_bindgen_test]
+async fn the_wide_brew_detail_rebuilds_for_another_row() {
+    install_styles();
+    set_theme("paper");
+    set_language(Language::English);
+    let first_purchase = purchase_json("b1", "First beans", None);
+    let second_purchase = purchase_json("b2", "Second beans", None);
+    let first = brew_json("w1", &first_purchase, None);
+    let second = brew_json("w2", &second_purchase, None);
+    let (root, transport) = mount_at(
+        "/",
+        vec![
+            response(&json!({"brews": [first.clone(), second.clone()], "next_cursor": null})),
+            response(&first),
+            response(&second),
+        ],
+    )
+    .await;
+    let rows = elements(&root, ".row");
+    assert_eq!(rows.len(), 2);
+    click(&rows[0]);
+    settle().await;
+    assert_eq!(transport.requests().len(), 2);
+    assert_eq!(transport.requests()[1].path, "/api/brews/w1");
+    assert_eq!(
+        select(&root, ".wide-detail .detail-head .name")
+            .text_content()
+            .as_deref(),
+        Some("First beans")
+    );
+
+    click(&rows[1]);
+    settle().await;
+    assert_eq!(transport.requests().len(), 3);
+    assert_eq!(transport.requests()[2].path, "/api/brews/w2");
+    assert_eq!(
+        select(&root, ".wide-detail .detail-head .name")
+            .text_content()
+            .as_deref(),
+        Some("Second beans")
     );
 }
 

@@ -90,6 +90,12 @@
   - @sfuruya0612
 - [CHANGE] 商品を購入に統合し、購入が商品名、Producer、Origin、Region、Process、Variety、Flavor Notes を直接持つようにする
   - @sfuruya0612
+- [ADD] 購入の豆の情報から AI が推定した味と特徴を購入の詳細に表示し、保存する
+  - @sfuruya0612
+- [ADD] AI の推定におすすめの淹れ方、挽き目、精製方法の説明、地域の特色を加える
+  - @sfuruya0612
+- [FIX] 2 段組で別の抽出を選ぶと右の面の詳細が前の抽出のままになる不具合を直す
+  - @sfuruya0612
 
 ### misc
 

@@ -17,6 +17,7 @@ use brew_book_core::records::{
     trim_optional, validate_count, validate_currency, validate_day, validate_flavor_notes,
     validate_name,
 };
+use brew_book_core::taste::TasteProfile;
 use serde::{Deserialize, Serialize};
 use worker::d1::D1Database;
 use worker::{Env, Request, Response, Result};
@@ -57,6 +58,8 @@ pub struct PurchaseResponse {
     pub favorited_at: Option<String>,
     /// Flavor Notes のタグ名。並びは名前の昇順 (FR-8)。
     pub flavor_notes: Vec<String>,
+    /// AI が推定した味と特徴。未生成のときは null (FR-24)。
+    pub taste_profile: Option<TasteProfile>,
     /// 店。店が無い購入では null になる (FR-9)。
     pub shop: Option<ShopResponse>,
 }
@@ -92,6 +95,8 @@ pub(super) struct PurchaseJoinRow {
     pub(super) p_created_at: String,
     pub(super) p_updated_at: String,
     pub(super) p_favorited_at: Option<String>,
+    /// AI が推定した味と特徴の JSON 文字列。未生成のときは None (FR-24)。
+    pub(super) p_taste_profile: Option<String>,
     pub(super) sh_id: Option<String>,
     pub(super) sh_user_id: Option<String>,
     pub(super) sh_name: Option<String>,
@@ -104,6 +109,10 @@ pub(super) struct PurchaseJoinRow {
 impl PurchaseJoinRow {
     /// 応答に組み立てる。Flavor Notes は別のクエリで引くため、ここでは空にする。
     pub(super) fn into_response(self) -> PurchaseResponse {
+        let taste_profile = self
+            .p_taste_profile
+            .as_deref()
+            .and_then(|text| serde_json::from_str::<TasteProfile>(text).ok());
         PurchaseResponse {
             id: self.p_id,
             user_id: self.p_user_id,
@@ -125,6 +134,7 @@ impl PurchaseJoinRow {
             updated_at: self.p_updated_at,
             favorited_at: self.p_favorited_at,
             flavor_notes: Vec::new(),
+            taste_profile,
             // 店は LEFT JOIN のため、店が無いときは全ての列が NULL になる。
             shop: self.sh_id.map(|id| ShopResponse {
                 id,

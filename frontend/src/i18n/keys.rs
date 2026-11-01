@@ -3,11 +3,12 @@
 //! 移行前の Flutter 版の ARB (`frontend/lib/l10n/app_ja.arb` と `app_en.arb`。0045 で削除) の
 //! 221 キーから作る (0051 で並び替えとお気に入りの 8 キー、0054 で抽出方法の例と破棄の確認の
 //! 4 キー、0055 で住所の検索と地図の 4 キー、0056 で記録の削除の 13 キーを足し、0057 で
-//! 商品の 13 キーを消し、0058 でこの購入をもとに登録の 1 キーを足した)。表
+//! 商品の 13 キーを消し、0058 でこの購入をもとに登録の 1 キーを足し、0059 で味と特徴の推定の
+//! 12 キーを足し、0060 でおすすめの淹れ方、挽き目、精製方法の説明、地域の特色の 4 キーを足した)。表
 //! ([`super::ja`] と [`super::en`]) はこの添字で引く。キーの順序は ARB と同じにしていた。
 
 /// キーの数。
-pub const KEY_COUNT: usize = 238;
+pub const KEY_COUNT: usize = 254;
 
 /// 翻訳のキー (FR-16)。
 ///
@@ -490,6 +491,38 @@ pub enum Key {
     RecordDeletedMessage,
     /// `duplicatePurchaseLabel`。
     DuplicatePurchaseLabel,
+    /// `tasteProfileTitle`。
+    TasteProfileTitle,
+    /// `tasteProfileDescription`。
+    TasteProfileDescription,
+    /// `tasteProfileButton`。
+    TasteProfileButton,
+    /// `tasteProfileRefreshButton`。
+    TasteProfileRefreshButton,
+    /// `tasteProfileLoading`。
+    TasteProfileLoading,
+    /// `tasteProfileFailed`。
+    TasteProfileFailed,
+    /// `tasteProfileDisclaimer`。
+    TasteProfileDisclaimer,
+    /// `tasteAcidity`。
+    TasteAcidity,
+    /// `tasteSweetness`。
+    TasteSweetness,
+    /// `tasteBitterness`。
+    TasteBitterness,
+    /// `tasteBody`。
+    TasteBody,
+    /// `tasteAroma`。
+    TasteAroma,
+    /// `tasteBrewingMethod`。
+    TasteBrewingMethod,
+    /// `tasteGrindSetting`。
+    TasteGrindSetting,
+    /// `tasteProcessDescription`。
+    TasteProcessDescription,
+    /// `tasteRegionCharacteristics`。
+    TasteRegionCharacteristics,
 }
 
 impl Key {
@@ -733,6 +766,22 @@ impl Key {
         Key::DeleteShopConfirmMessageWithPurchases,
         Key::RecordDeletedMessage,
         Key::DuplicatePurchaseLabel,
+        Key::TasteProfileTitle,
+        Key::TasteProfileDescription,
+        Key::TasteProfileButton,
+        Key::TasteProfileRefreshButton,
+        Key::TasteProfileLoading,
+        Key::TasteProfileFailed,
+        Key::TasteProfileDisclaimer,
+        Key::TasteAcidity,
+        Key::TasteSweetness,
+        Key::TasteBitterness,
+        Key::TasteBody,
+        Key::TasteAroma,
+        Key::TasteBrewingMethod,
+        Key::TasteGrindSetting,
+        Key::TasteProcessDescription,
+        Key::TasteRegionCharacteristics,
     ];
 
     /// 表の添字。

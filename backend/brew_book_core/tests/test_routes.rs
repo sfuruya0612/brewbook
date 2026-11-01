@@ -153,7 +153,8 @@ fn test_requirements_follow_the_auth_and_input_flags() {
 #[test]
 fn the_ledger_marks_the_staging_routes() {
     // 正常系を CI で実行できない経路を確かめる。
-    // 写真からの推測は Workers AI の推論 (FR-19)、住所の補完は Google の呼び出し (FR-22) を要する。
+    // 写真からの推測は Workers AI の推論 (FR-19)、住所の補完は Google の呼び出し (FR-22)、
+    // 味と特徴の推定は Workers AI の推論 (FR-24) を要する。
     let route = ROUTES
         .iter()
         .find(|route| route.name == "purchase_suggestions")
@@ -174,9 +175,22 @@ fn the_ledger_marks_the_staging_routes() {
     assert!(route.auth_required);
     assert!(route.has_input);
 
+    let route = ROUTES
+        .iter()
+        .find(|route| route.name == "purchases_taste_profile")
+        .expect("the ledger must have the taste profile route");
+    assert_eq!(route.ok_test, OkTest::Staging);
+    assert_eq!(route.pattern, "/api/purchases/:id/taste-profile");
+    assert_eq!(route.method, Method::Post);
+    assert!(route.auth_required);
+    assert!(route.has_input);
+
     // それ以外の経路は CI で正常系を実行する。
     for route in ROUTES {
-        if route.name != "purchase_suggestions" && route.name != "place_search" {
+        if route.name != "purchase_suggestions"
+            && route.name != "place_search"
+            && route.name != "purchases_taste_profile"
+        {
             assert_eq!(
                 route.ok_test,
                 OkTest::Ci,

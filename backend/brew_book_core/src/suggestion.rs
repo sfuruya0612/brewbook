@@ -158,7 +158,7 @@ fn push_base64(out: &mut String, bytes: &[u8]) {
 ///
 /// 最初の `{` から順に、そこで始まる JSON を読めるか試す。説明文の中の `{` や、
 /// 壊れた JSON の後に続くオブジェクトを飛ばせるようにするためである。
-fn first_json_object(text: &str) -> Option<serde_json::Value> {
+pub(crate) fn first_json_object(text: &str) -> Option<serde_json::Value> {
     for (index, byte) in text.bytes().enumerate() {
         if byte != b'{' {
             continue;

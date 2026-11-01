@@ -1,5 +1,6 @@
 //! 店と Flavor Notes のタグと、購入と抽出と写真の API (FR-6 から FR-11) と、
-//! 過去の入力値のサジェストの API (FR-13)。商品の項目は購入が持つ (ADR-0022)。
+//! 過去の入力値のサジェストの API (FR-13) と、豆の情報からの味と特徴の推定 (FR-24) を持つ。
+//! 商品の項目は購入が持つ (ADR-0022)。
 //!
 //! 入力の検証は `brew_book_core::records`、SQL の組み立ては `brew_book_core::query` が持つ。
 //! ここは経路の処理 (入力の読み取り、D1 の実行、応答の組み立て) だけを行う。
@@ -10,6 +11,7 @@ pub mod maps;
 pub mod photos;
 pub mod place_search;
 pub mod purchase_suggestions;
+pub mod purchase_taste;
 pub mod purchases;
 pub mod shops;
 pub mod stats;

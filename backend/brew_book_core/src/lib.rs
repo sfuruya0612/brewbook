@@ -17,4 +17,5 @@ pub mod records;
 pub mod routes;
 pub mod stats;
 pub mod suggestion;
+pub mod taste;
 pub mod webauthn;

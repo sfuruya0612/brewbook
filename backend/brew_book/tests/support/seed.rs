@@ -369,6 +369,22 @@ impl Seed {
         }
     }
 
+    /// 購入に AI の推定の JSON を入れる (FR-24 の下ごしらえ)。
+    pub fn set_purchase_taste_profile(
+        &mut self,
+        user_id: &str,
+        purchase_id: &str,
+        profile: &str,
+    ) -> &mut Self {
+        self.push(format!(
+            "UPDATE purchases SET taste_profile = {} WHERE id = {} AND user_id = {}",
+            literal(profile),
+            literal(purchase_id),
+            literal(user_id)
+        ));
+        self
+    }
+
     /// 抽出の行を入れる。数値の項目は入れず、NULL のままにする。
     pub fn brew(
         &mut self,

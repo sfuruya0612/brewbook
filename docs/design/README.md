@@ -53,7 +53,7 @@ brewbook は、自宅で淹れたコーヒーを記録する Web アプリ (Flut
 - 部品は `AppBar`、`Button`、`Field`、`Chip`、`Rating`、`ListRow`、`Ledger`、`ReferenceTile`、`Feedback`、`Charts` の 10 種。それぞれのガイドラインが、Flutter のどのウィジェットで作るかを示す。
 - 画面は `Auth`、`Home`、`BrewForm`、`Detail`、`Lists`、`RecordForms`、`Stats`、`Settings`、`WideLayout`。ルーターに登録する画面 (ログイン、登録、ホーム、抽出の詳細と入力、購入の一覧と詳細と入力、店の一覧と入力、統計、設定) を全て覆う。
 - 一覧はどの記録も同じ `ListRow` で並べる。1 行目は名前、2 行目は日付 (等幅) と参照先、右端は数値か評価。アーカイブ済みは文字を `ink-muted` に落として「アーカイブ済み」のバッジを付ける。
-- 詳細は `Ledger` (項目名と値の表) と `ReferenceTile` (購入から店へたどる連鎖) の 2 つで組む。
+- 詳細は `Ledger` (項目名と値の表) と `ReferenceTile` (購入から店へたどる連鎖) で組む。購入の詳細は、その間に AI が推定した味と特徴の節 (FR-24) を置く。まとめ、Flavor Notes のタグ、特徴の表、AI の推定である旨の注記を出し、推定は「AI に聞く」を押したときだけ行う。保存済みの推定は購入の応答に含め、画面を開いたときに表示する。
 - グラフは fl_chart で描き、色は `chart-count` (件数と金額) と `chart-grams` (グラム) の 2 つだけ。通貨はグラフを分けて表し、色で分けない。
 - `components/bundle.css` は上の部品の CSS の参照 (クラス名と寸法)。プレビューはこれと同じものを埋め込んでいる。
 

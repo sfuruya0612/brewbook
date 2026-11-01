@@ -1,4 +1,4 @@
-//! 記録の API の応答の型 (FR-6 から FR-13)。
+//! 記録の API の応答の型 (FR-6 から FR-13) と、豆の情報からの味と特徴の推定 (FR-24)。
 //!
 //! 項目名はスキーマの列名に対応させ、API の応答をそのまま表す。画面はこの型から表示を作る。
 //! 日付と日時は API の形式の文字列のまま保持し、端末のタイムゾーンへの変換は表示の直前に行う
@@ -64,6 +64,8 @@ pub struct Purchase {
     pub variety: Option<String>,
     /// Flavor Notes のタグ名 (名前の昇順。FR-8)。
     pub flavor_notes: Vec<String>,
+    /// AI が推定した味と特徴。未生成のときは None (FR-24)。
+    pub taste_profile: Option<TasteProfile>,
     /// 購入日 (`YYYY-MM-DD`)。
     pub purchased_on: String,
     /// 焙煎度。
@@ -94,6 +96,9 @@ impl Purchase {
         let shop = optional_object(json, "shop")?
             .map(|shop| Shop::from_json(&shop))
             .transpose()?;
+        let taste_profile = optional_object(json, "taste_profile")?
+            .map(|profile| TasteProfile::from_json(&profile))
+            .transpose()?;
         Ok(Self {
             id: string_field(json, "id")?,
             shop_id: optional_string(json, "shop_id")?,
@@ -104,6 +109,7 @@ impl Purchase {
             process: optional_string(json, "process")?,
             variety: optional_string(json, "variety")?,
             flavor_notes: string_list(json, "flavor_notes")?,
+            taste_profile,
             purchased_on: string_field(json, "purchased_on")?,
             roast: optional_string(json, "roast")?,
             roast_date: optional_string(json, "roast_date")?,
@@ -220,6 +226,52 @@ impl PurchaseSuggestion {
             roast_date: optional_string(json, "roast_date")?,
             price_amount: optional_i64(json, "price_amount")?,
             weight_grams: optional_i64(json, "weight_grams")?,
+        })
+    }
+}
+
+/// 購入の豆の情報から推定した味と特徴 (FR-24、ADR-0023)。
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct TasteProfile {
+    /// 味と特徴のまとめ。
+    pub summary: String,
+    /// 味の表現の候補。
+    pub flavor_notes: Vec<String>,
+    /// 酸味の特徴。推測できないときは None。
+    pub acidity: Option<String>,
+    /// 甘みの特徴。推測できないときは None。
+    pub sweetness: Option<String>,
+    /// 苦味の特徴。推測できないときは None。
+    pub bitterness: Option<String>,
+    /// ボディ (口当たり) の特徴。推測できないときは None。
+    pub body: Option<String>,
+    /// 香りの特徴。推測できないときは None。
+    pub aroma: Option<String>,
+    /// おすすめの淹れ方。推測できないときは None。
+    pub brewing_method: Option<String>,
+    /// おすすめの挽き目。推測できないときは None。
+    pub grind_setting: Option<String>,
+    /// 精製方法の説明。推測できないときは None。
+    pub process_description: Option<String>,
+    /// 地域の特色。推測できないときは None。
+    pub region_characteristics: Option<String>,
+}
+
+impl TasteProfile {
+    /// JSON のオブジェクトから組み立てる。まとめは必須で、特徴は null を None にする。
+    pub fn from_json(json: &Map<String, Value>) -> Result<Self, RecordError> {
+        Ok(Self {
+            summary: string_field(json, "summary")?,
+            flavor_notes: string_list(json, "flavor_notes")?,
+            acidity: optional_string(json, "acidity")?,
+            sweetness: optional_string(json, "sweetness")?,
+            bitterness: optional_string(json, "bitterness")?,
+            body: optional_string(json, "body")?,
+            aroma: optional_string(json, "aroma")?,
+            brewing_method: optional_string(json, "brewing_method")?,
+            grind_setting: optional_string(json, "grind_setting")?,
+            process_description: optional_string(json, "process_description")?,
+            region_characteristics: optional_string(json, "region_characteristics")?,
         })
     }
 }

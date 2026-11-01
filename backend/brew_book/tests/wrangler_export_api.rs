@@ -95,6 +95,7 @@ const TABLES: &[Table] = &[
             "created_at",
             "updated_at",
             "favorited_at",
+            "taste_profile",
         ],
     },
     Table {
@@ -265,14 +266,15 @@ fn records(seed: &mut Seed, user: &str, prefix: &str) {
     }
 
     // 購入。商品の項目も購入が持つ (ADR-0022)。添字 0 は全列を埋め、添字 1 は店と任意の列を
-    // NULL にし、添字 2 は店を参照する。
+    // NULL にし、添字 2 は店を参照する。添字 0 は AI の推定も持つ (FR-24)。
     seed.raw(&format!(
-        "INSERT INTO purchases (id, user_id, shop_id, purchased_on, roast, roast_date, \
-         price_amount, price_currency, weight_grams, photo_key, name, producer, origin, region, \
-         process, variety, created_at, updated_at, favorited_at) \
-         VALUES ('{}', '{user}', '{}', '{D21}', '中煎り', '{D19}', 1200, 'JPY', 200, '{}', \
-          '{prefix} の商品 0', '{prefix} の生産者 0', 'エチオピア', 'イルガチェフェ', \
-          'ウォッシュト', '在来種', '{T21}', '{T21}', '{T21}')",
+        r#"INSERT INTO purchases (id, user_id, shop_id, purchased_on, roast, roast_date,
+         price_amount, price_currency, weight_grams, photo_key, name, producer, origin, region,
+         process, variety, created_at, updated_at, favorited_at, taste_profile)
+         VALUES ('{}', '{user}', '{}', '{D21}', '中煎り', '{D19}', 1200, 'JPY', 200, '{}',
+          '{prefix} の商品 0', '{prefix} の生産者 0', 'エチオピア', 'イルガチェフェ',
+          'ウォッシュト', '在来種', '{T21}', '{T21}', '{T21}',
+          '{{"summary":"エクスポートの推定","flavor_notes":["甘い"],"acidity":null,"sweetness":null,"bitterness":null,"body":null,"aroma":null,"brewing_method":"V60","grind_setting":"中細","process_description":"ナチュラル精製。","region_characteristics":"花の香り。"}}')"#,
         row_id(prefix, "purchase", 0),
         row_id(prefix, "shop", 0),
         photo_key(user, prefix, 0)
