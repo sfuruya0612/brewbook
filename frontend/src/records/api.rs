@@ -1,4 +1,4 @@
-//! 記録の API (FR-6 から FR-13) の呼び出し。
+//! 記録の API (FR-6 から FR-13) と、豆の情報からの味と特徴の推定 (FR-24) の呼び出し。
 //!
 //! 経路の組み立てと、応答の型への変換だけを行い、状態は持たない。一覧はカーソル方式で、
 //! 1 ページの件数は既定の 50 件とする (PRD の性能)。Flutter の
@@ -10,7 +10,7 @@ use serde_json::json;
 use super::inputs::{BrewInput, PurchaseInput, ShopInput};
 use super::models::{
     items_field, next_cursor_field, optional_string, Brew, DeleteImpact, PhotoUploadTarget,
-    PlaceCandidate, Purchase, PurchaseSuggestion, RecordPage, Shop,
+    PlaceCandidate, Purchase, PurchaseSuggestion, RecordPage, Shop, TasteProfile,
 };
 use super::RecordError;
 
@@ -362,6 +362,21 @@ impl RecordsApi {
             .post_bytes("/purchase-suggestions", image.to_vec(), "image/jpeg")
             .await?;
         PurchaseSuggestion::from_json(&json)
+    }
+
+    /// 購入の豆の情報から、AI が推定した味と特徴を引く (FR-24、ADR-0023)。
+    ///
+    /// UI の言語を `lang` に渡し、まとめと特徴をその言語で受け取る。推定は保存しない。
+    /// AI の呼び出しに失敗したときは API が 500 を返し、[`RecordError::Api`] になる。
+    pub async fn taste_profile(&self, id: &str, lang: &str) -> Result<TasteProfile, RecordError> {
+        let json = self
+            .api
+            .post_empty_json(&format!(
+                "/purchases/{id}/taste-profile?lang={}",
+                encode_query(lang)
+            ))
+            .await?;
+        TasteProfile::from_json(&json)
     }
 
     /// 自由記述の項目の過去の入力値の候補を引く (FR-13)。

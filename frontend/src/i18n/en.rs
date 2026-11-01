@@ -244,4 +244,20 @@ pub(super) const EN: [&str; KEY_COUNT] = [
     "This shop will be deleted. The shop will be cleared from {count} purchases. This cannot be undone.", // deleteShopConfirmMessageWithPurchases
     "Deleted.",                                   // recordDeletedMessage
     "Register from this purchase",                // duplicatePurchaseLabel
+    "Taste and character from AI",                 // tasteProfileTitle
+    "AI estimates the taste and character from the bean information.", // tasteProfileDescription
+    "Ask AI",                                     // tasteProfileButton
+    "Ask again",                                  // tasteProfileRefreshButton
+    "AI is estimating",                           // tasteProfileLoading
+    "Could not estimate the taste and character. Please try again.", // tasteProfileFailed
+    "Estimated by AI. The actual taste may differ.", // tasteProfileDisclaimer
+    "Acidity",                                    // tasteAcidity
+    "Sweetness",                                  // tasteSweetness
+    "Bitterness",                                 // tasteBitterness
+    "Body",                                       // tasteBody
+    "Aroma",                                      // tasteAroma
+    "Recommended brewing method",                 // tasteBrewingMethod
+    "Recommended grind",                          // tasteGrindSetting
+    "About the process",                          // tasteProcessDescription
+    "Regional character",                         // tasteRegionCharacteristics
 ];

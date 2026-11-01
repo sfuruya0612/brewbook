@@ -241,6 +241,7 @@ async fn authenticated_route(
         "stats_purchases" => records::stats::purchases(req, env, session).await,
         "stats_brew_ratings" => records::stats::brew_ratings(req, env, session).await,
         "purchases_rating_history" => records::stats::rating_history(env, session, id).await,
+        "purchases_taste_profile" => records::purchase_taste::profile(req, env, session, id).await,
         "export_get" => export::get(env, session).await,
         "account_delete" => account::delete(env, session).await,
         _ => Ok(not_implemented()),

@@ -73,6 +73,8 @@ struct PurchaseRow {
     updated_at: String,
     /// お気に入りにした日時。未設定のときは null (FR-21)。
     favorited_at: Option<String>,
+    /// AI が推定した味と特徴の JSON 文字列。未生成のときは null (FR-24)。
+    taste_profile: Option<String>,
 }
 
 /// エクスポートの購入の行。テーブルの列に写真取得 API のパスを加える (ADR-0003)。

@@ -22,6 +22,7 @@ fn purchase(id: &str) -> Purchase {
         process: None,
         variety: None,
         flavor_notes: Vec::new(),
+        taste_profile: None,
         purchased_on: "2026-10-01".to_string(),
         roast: None,
         roast_date: None,

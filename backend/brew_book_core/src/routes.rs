@@ -397,6 +397,18 @@ pub const ROUTES: &[Route] = &[
         ok_test: OkTest::Staging,
     },
     Route {
+        // 購入の豆の情報から味と特徴を推定する (FR-24、ADR-0023)。
+        name: "purchases_taste_profile",
+        method: Method::Post,
+        pattern: "/api/purchases/:id/taste-profile",
+        auth_required: true,
+        // 言語 (`lang`) のクエリパラメータを読む。
+        has_input: true,
+        // 正常系は Workers AI の推論を要するため、CI では実行せず、staging へのデプロイで
+        // 実在の購入を指定して確認する (PRD の成功指標の測定方法)。
+        ok_test: OkTest::Staging,
+    },
+    Route {
         name: "stats_brews",
         method: Method::Get,
         pattern: "/api/stats/brews",

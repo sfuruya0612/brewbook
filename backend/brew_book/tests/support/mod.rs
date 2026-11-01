@@ -75,12 +75,14 @@ pub struct SuiteEntry {
 /// 0010 が統計と評価の推移の 4 経路、0011 がエクスポートの 1 経路、
 /// 0012 がアカウント削除の 1 経路、0034 が写真からの推測の 1 経路、
 /// 0051 がお気に入りの 8 経路、0055 が住所の補完と地図の設定の 2 経路、
-/// 0056 が記録の削除の 7 経路を追加し、0057 が商品の 8 経路 (0006 の 5 経路、0051 の 2 経路、
-/// 0056 の 1 経路) を消す (ADR-0022)。
+/// 0056 が記録の削除の 7 経路、0059 が味と特徴の推定の 1 経路を追加し、0057 が商品の 8 経路
+/// (0006 の 5 経路、0051 の 2 経路、0056 の 1 経路) を消す (ADR-0022)。
 /// 写真からの推測の正常系は Workers AI の推論を要するため CI では実行せず、staging への
 /// デプロイで実写真を送って確認する (PRD の成功指標の測定方法。FR-19)。
 /// 住所の補完の正常系も Google の呼び出しを要するため CI では実行せず、staging への
 /// デプロイで実在の店名で確認する (FR-22)。
+/// 味と特徴の推定の正常系も Workers AI の推論を要するため CI では実行せず、staging への
+/// デプロイで実在の購入を指定して確認する (FR-24)。
 pub const SUITE: &[SuiteEntry] = &[
     SuiteEntry {
         route: "auth_register_begin",
@@ -244,6 +246,11 @@ pub const SUITE: &[SuiteEntry] = &[
         kinds: &[KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
     },
     SuiteEntry {
+        // 正常系は CI で実行できない (Workers AI の推論を要する。FR-24)。
+        route: "purchases_taste_profile",
+        kinds: &[KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
+    },
+    SuiteEntry {
         route: "stats_brews",
         kinds: &[KIND_OK, KIND_UNAUTHENTICATED_401, KIND_INVALID_INPUT_400],
     },
@@ -287,7 +294,7 @@ pub fn suite_covers_ledger() -> Result<(), String> {
 ///
 /// 台帳の全経路が同じ名前のスイートの項目を持ち、スイートの種別が必要な種別 (正常系、
 /// 未認証 401、入力不正 400) と過不足なく一致することを確認する。
-/// 正常系を CI で実行できない経路 (`OkTest::Staging`) は正常系の種別を要求しない (FR-19)。
+/// 正常系を CI で実行できない経路 (`OkTest::Staging`) は正常系の種別を要求しない (FR-19、FR-22、FR-24)。
 pub fn covers(
     routes: &[brew_book_core::routes::Route],
     suite: &[SuiteEntry],

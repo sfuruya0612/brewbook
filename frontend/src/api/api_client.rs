@@ -178,6 +178,12 @@ impl ApiClient {
         decode_json(&response)
     }
 
+    /// `POST` を呼び、本文を送らずに JSON のオブジェクトを返す (FR-24 の味と特徴の推定)。
+    pub async fn post_empty_json(&self, path: &str) -> Result<Map<String, Value>, ApiCallError> {
+        let response = self.send(Method::Post, path, None, Vec::new()).await?;
+        decode_json(&response)
+    }
+
     /// `POST` を呼び、バイト列を本文として送り、JSON のオブジェクトを返す (FR-19 の写真の送信)。
     pub async fn post_bytes(
         &self,

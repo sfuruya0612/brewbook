@@ -21,7 +21,10 @@ use super::{clear_notice_after, mark_records_changed, retryable_banner, DeleteCo
 #[component]
 pub fn BrewDetailScreen(id: String) -> Element {
     rsx! {
-        BrewDetail { id }
+        // 1 件の一覧として鍵を付け、ID が変わったら詳細を作り直す。
+        for current in [id] {
+            BrewDetail { key: "{current}", id: current }
+        }
     }
 }
 

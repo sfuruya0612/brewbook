@@ -33,6 +33,7 @@ fn purchase(with_shop: bool) -> Purchase {
         process: Some("ウォッシュド".to_string()),
         variety: Some("在来種".to_string()),
         flavor_notes: Vec::new(),
+        taste_profile: None,
         purchased_on: "2026-10-01".to_string(),
         roast: None,
         roast_date: None,

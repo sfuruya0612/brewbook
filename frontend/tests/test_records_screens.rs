@@ -218,7 +218,7 @@ fn the_purchase_detail_has_the_rating_history_line_chart() {
         "the purchase detail must render the rating history chart with the loaded entries"
     );
     assert!(
-        source.contains("rating_history(&id)"),
+        source.contains(".rating_history("),
         "the purchase detail must load the rating history for the purchase"
     );
     // 折れ線の部品の型が存在すること (型の確認)。

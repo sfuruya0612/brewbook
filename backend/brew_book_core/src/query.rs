@@ -473,11 +473,12 @@ pub const SHOP_COLUMNS: &str = "id, user_id, name, address, created_at, updated_
 /// 購入のテーブル名。
 pub const PURCHASES_TABLE: &str = "purchases";
 /// 購入の列の並び。応答の JSON の項目と同じ。商品の項目 (商品名、Producer、Origin、Region、
-/// Process、Variety) も購入が持つ (ADR-0022)。
+/// Process、Variety) も購入が持つ (ADR-0022)。`taste_profile` は AI が推定した味と特徴の
+/// JSON 文字列で、購入の応答ではオブジェクトに戻す (FR-24)。
 pub const PURCHASE_COLUMNS: &str = "id, user_id, shop_id, purchased_on, roast, roast_date, \
                                     price_amount, price_currency, weight_grams, photo_key, name, \
                                     producer, origin, region, process, variety, created_at, \
-                                    updated_at, favorited_at";
+                                    updated_at, favorited_at, taste_profile";
 /// 抽出のテーブル名。
 pub const BREWS_TABLE: &str = "brews";
 /// 抽出の列の並び。応答の JSON の項目と同じ。
@@ -611,6 +612,9 @@ const BREW_UPDATE_COLUMNS: &[&str] = &[
 ];
 /// 購入の写真の `UPDATE` の列 (0009)。`photo_key` は付け外しの両方がある。
 const PHOTO_KEY_COLUMNS: &[&str] = &["photo_key", "updated_at"];
+/// 購入の味と特徴の推定の `UPDATE` の列 (FR-24)。推定は保存だけを行い、購入の
+/// `updated_at` は変えない。
+const TASTE_PROFILE_COLUMNS: &[&str] = &["taste_profile"];
 
 /// 店の入力の値。NULL は None で表す。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -834,6 +838,23 @@ pub fn purchase_set_photo_key(
         table: PURCHASES_TABLE,
         columns: PHOTO_KEY_COLUMNS,
         values: vec![optional_text(photo_key), Value::Text(updated_at.to_owned())],
+        id,
+        user_id,
+    })
+}
+
+/// 購入の味と特徴の推定を保存する SQL を組み立てる (FR-24)。
+///
+/// 推定は購入の `updated_at` を変えない。更新する行は `id` と `user_id` の両方で絞る。
+pub fn purchase_set_taste_profile(
+    id: &str,
+    user_id: &str,
+    profile: &str,
+) -> Result<Statement, QueryError> {
+    update(&UpdateQuery {
+        table: PURCHASES_TABLE,
+        columns: TASTE_PROFILE_COLUMNS,
+        values: vec![Value::Text(profile.to_owned())],
         id,
         user_id,
     })

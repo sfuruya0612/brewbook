@@ -106,11 +106,15 @@ pub fn HomeScreen() -> Element {
         } else {
             selected().map(|id| {
                 rsx! {
-                    BrewDetail {
-                        id,
-                        embedded: true,
-                        on_edit: EventHandler::new(move |_| creating.set(true)),
-                        on_deleted: EventHandler::new(move |_| selected.set(None)),
+                    // 1 件の一覧として鍵を付け、別の抽出を選んだら詳細を作り直す。
+                    for current in [id] {
+                        BrewDetail {
+                            key: "{current}",
+                            id: current,
+                            embedded: true,
+                            on_edit: EventHandler::new(move |_| creating.set(true)),
+                            on_deleted: EventHandler::new(move |_| selected.set(None)),
+                        }
                     }
                 }
             })

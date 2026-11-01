@@ -86,6 +86,7 @@ fn purchase() -> impl Strategy<Value = Purchase> {
             process,
             variety,
             flavor_notes,
+            taste_profile: None,
             purchased_on: "2026-10-01".to_string(),
             roast,
             roast_date,

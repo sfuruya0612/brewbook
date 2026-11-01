@@ -45,7 +45,7 @@ pub use list::{PageRequest, RecordList, LOAD_MORE_THRESHOLD};
 pub use maps::map_embed_url;
 pub use models::{
     Brew, DeleteImpact, PhotoUploadTarget, PlaceCandidate, Purchase, PurchaseSuggestion,
-    RecordPage, Shop,
+    RecordPage, Shop, TasteProfile,
 };
 #[cfg(target_arch = "wasm32")]
 pub use photo::{create_image_converter, create_photo_picker};

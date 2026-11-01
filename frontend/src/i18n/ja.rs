@@ -242,6 +242,22 @@ pub(super) const JA: [&str; KEY_COUNT] = [
     "店を削除",                             // deleteShopConfirmTitle
     "この店を削除します。取り消せません。", // deleteShopConfirmMessage
     "この店を削除します。購入 {count} 件の店の指定が外れます。取り消せません。", // deleteShopConfirmMessageWithPurchases
-    "削除しました。",       // recordDeletedMessage
-    "この購入をもとに登録", // duplicatePurchaseLabel
+    "削除しました。",                            // recordDeletedMessage
+    "この購入をもとに登録",                      // duplicatePurchaseLabel
+    "AI による味と特徴",                         // tasteProfileTitle
+    "豆の情報から、AI が味と特徴を推定します。", // tasteProfileDescription
+    "AI に聞く",                                 // tasteProfileButton
+    "もう一度聞く",                              // tasteProfileRefreshButton
+    "AI が推定中",                               // tasteProfileLoading
+    "味と特徴を推定できませんでした。もう一度お試しください。", // tasteProfileFailed
+    "AI の推定です。実際の味とは異なる場合があります。", // tasteProfileDisclaimer
+    "酸味",                                      // tasteAcidity
+    "甘み",                                      // tasteSweetness
+    "苦味",                                      // tasteBitterness
+    "ボディ",                                    // tasteBody
+    "香り",                                      // tasteAroma
+    "おすすめの淹れ方",                          // tasteBrewingMethod
+    "おすすめの挽き目",                          // tasteGrindSetting
+    "精製方法の説明",                            // tasteProcessDescription
+    "地域の特色",                                // tasteRegionCharacteristics
 ];
