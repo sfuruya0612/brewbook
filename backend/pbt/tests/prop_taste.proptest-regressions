@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 6fc6f878fdc1ce8a6b53964ddd236d4f4c16466ac413877f9edfafb1d6ea860b # shrinks to bean = Bean { name: "", producer: None, origin: None, region: None, process: None, variety: None, flavor_notes: ["A¡¡¡\0¡¡¡ ¡¡¡aAA¡\0¡¡A¡A¡¡ ! AaA¡¡\0AA¡ !¡<¡"], roast: None }

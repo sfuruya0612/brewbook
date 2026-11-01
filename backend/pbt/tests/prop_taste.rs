@@ -7,9 +7,10 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use brew_book_core::taste::{
-    parse_response, TasteProfile, MAX_BREWING_METHOD_CHARS, MAX_GRIND_SETTING_CHARS, MAX_NOTES,
-    MAX_NOTE_CHARS, MAX_PROCESS_DESCRIPTION_CHARS, MAX_REGION_CHARACTERISTICS_CHARS,
-    MAX_SUMMARY_CHARS, MAX_TRAIT_CHARS,
+    parse_response, user_prompt, BeanInfo, TasteProfile, MAX_BREWING_METHOD_CHARS,
+    MAX_GRIND_SETTING_CHARS, MAX_NOTES, MAX_NOTE_CHARS, MAX_PROCESS_DESCRIPTION_CHARS,
+    MAX_PROMPT_FIELD_CHARS, MAX_PROMPT_NOTES, MAX_PROMPT_NOTE_CHARS,
+    MAX_REGION_CHARACTERISTICS_CHARS, MAX_SUMMARY_CHARS, MAX_TRAIT_CHARS,
 };
 use proptest::prelude::*;
 
@@ -152,6 +153,84 @@ fn valid_profile() -> impl Strategy<Value = TasteProfile> {
         )
 }
 
+/// 任意のテキスト。
+fn any_text() -> impl Strategy<Value = String> {
+    proptest::collection::vec(any::<char>(), 0..300)
+        .prop_map(|characters| characters.into_iter().collect())
+}
+
+/// 任意のテキストからなる豆の情報。`BeanInfo` は参照を取るため、所有する値として持つ。
+#[derive(Debug)]
+struct Bean {
+    name: String,
+    producer: Option<String>,
+    origin: Option<String>,
+    region: Option<String>,
+    process: Option<String>,
+    variety: Option<String>,
+    flavor_notes: Vec<String>,
+    roast: Option<String>,
+}
+
+impl Bean {
+    /// 豆の情報を借用した形にする。
+    fn as_info(&self) -> BeanInfo<'_> {
+        BeanInfo {
+            name: &self.name,
+            producer: self.producer.as_deref(),
+            origin: self.origin.as_deref(),
+            region: self.region.as_deref(),
+            process: self.process.as_deref(),
+            variety: self.variety.as_deref(),
+            flavor_notes: &self.flavor_notes,
+            roast: self.roast.as_deref(),
+        }
+    }
+}
+
+/// 任意の豆の情報。
+fn any_bean() -> impl Strategy<Value = Bean> {
+    (
+        any_text(),
+        prop::option::of(any_text()),
+        prop::option::of(any_text()),
+        prop::option::of(any_text()),
+        prop::option::of(any_text()),
+        prop::option::of(any_text()),
+        proptest::collection::vec(any_text(), 0..15),
+        prop::option::of(any_text()),
+    )
+        .prop_map(
+            |(name, producer, origin, region, process, variety, flavor_notes, roast)| Bean {
+                name,
+                producer,
+                origin,
+                region,
+                process,
+                variety,
+                flavor_notes,
+                roast,
+            },
+        )
+}
+
+/// プロンプトに埋め込まれた豆の情報を、`<bean_data>` で囲まれた JSON として読む。
+fn bean_data(user: &str) -> serde_json::Value {
+    let body = user
+        .split_once("<bean_data>\n")
+        .expect("the user message must open the bean data")
+        .1
+        .split_once("\n</bean_data>")
+        .expect("the user message must close the bean data")
+        .0;
+    serde_json::from_str(body).expect("the bean data must be JSON")
+}
+
+/// プロンプトのデータの範囲を壊す文字か。
+fn breaks_prompt_data(character: char) -> bool {
+    character.is_control() || matches!(character, '<' | '>' | '`')
+}
+
 proptest! {
     /// 任意のテキストを解析しても、結果は検証の条件を満たす。
     #[test]
@@ -170,5 +249,52 @@ proptest! {
     fn a_valid_profile_round_trips(profile in valid_profile()) {
         let json = serde_json::to_string(&profile).expect("the profile must be JSON");
         prop_assert_eq!(parse_response(&json), profile);
+    }
+
+    /// 任意の豆の情報から組み立てた user メッセージは、データの境界を壊さず、項目の上限を守る。
+    #[test]
+    fn any_bean_builds_a_bounded_user_prompt(bean in any_bean()) {
+        let user = user_prompt(&bean.as_info());
+        // 入力の文字列からタグを作り出せないため、データを囲むタグはちょうど 1 組になる。
+        prop_assert_eq!(user.matches("<bean_data>").count(), 1);
+        prop_assert_eq!(user.matches("</bean_data>").count(), 1);
+        let data = bean_data(&user);
+        prop_assert!(data.is_object());
+        let mut total = 0;
+        for key in [
+            "name",
+            "producer",
+            "origin",
+            "region",
+            "process",
+            "variety",
+            "roast",
+        ] {
+            let Some(value) = data[key].as_str() else {
+                prop_assert!(data[key].is_null());
+                continue;
+            };
+            prop_assert!(value.chars().count() <= MAX_PROMPT_FIELD_CHARS);
+            prop_assert_eq!(value, value.trim());
+            prop_assert!(!value.chars().any(breaks_prompt_data));
+            prop_assert!(!value.contains("  "));
+            total += value.chars().count();
+        }
+        let notes = data["flavor_notes"]
+            .as_array()
+            .expect("the flavor notes must be an array");
+        prop_assert!(notes.len() <= MAX_PROMPT_NOTES);
+        for note in notes {
+            let note = note.as_str().expect("a flavor note must be a string");
+            prop_assert!(!note.is_empty());
+            prop_assert!(note.chars().count() <= MAX_PROMPT_NOTE_CHARS);
+            prop_assert_eq!(note, note.trim());
+            prop_assert!(!note.chars().any(breaks_prompt_data));
+            prop_assert!(!note.contains("  "));
+            total += note.chars().count();
+        }
+        prop_assert!(
+            total <= MAX_PROMPT_FIELD_CHARS * 7 + MAX_PROMPT_NOTE_CHARS * MAX_PROMPT_NOTES
+        );
     }
 }

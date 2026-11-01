@@ -42,12 +42,12 @@ const TEMPERATURE: f32 = 0.2;
 /// Workers AI の chat 形式の入力 (テキストだけ)。
 #[derive(serde::Serialize)]
 struct AiInput {
-    messages: [AiMessage; 1],
+    messages: [AiMessage; 2],
     max_tokens: u32,
     temperature: f32,
 }
 
-/// 1 つのメッセージ。役割は常に `user` にする。
+/// 1 つのメッセージ。指示は system、豆の情報は user に分ける。
 #[derive(serde::Serialize)]
 struct AiMessage {
     role: &'static str,
@@ -95,10 +95,16 @@ pub async fn profile(
         model
     };
     let input = AiInput {
-        messages: [AiMessage {
-            role: "user",
-            content: taste::prompt(&info, language),
-        }],
+        messages: [
+            AiMessage {
+                role: "system",
+                content: taste::system_prompt(language),
+            },
+            AiMessage {
+                role: "user",
+                content: taste::user_prompt(&info),
+            },
+        ],
         max_tokens: MAX_TOKENS,
         temperature: TEMPERATURE,
     };
